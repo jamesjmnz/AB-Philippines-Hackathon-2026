@@ -23,7 +23,7 @@ As coded in `modules/pulse-peer/ios/PeerService.swift`; never run on a device.
 | Peer-to-peer | `includePeerToPeer` enabled, so devices can connect without shared infrastructure Wi-Fi (UNVERIFIED) |
 | Payload | Length-framed opaque bytes |
 | First frame | A hello `{ v: 1, deviceId }` from each side. It only names the device and proves nothing. |
-| Lifecycle | Foreground only; no lifecycle handling exists (see Lifecycle) |
+| Lifecycle | Foreground only; discovery stops on background and restarts on foreground (see Lifecycle) |
 
 Which radio path a connection actually uses (infrastructure Wi-Fi or peer-to-peer link) will be observed and recorded during device tests, not assumed.
 
@@ -59,9 +59,9 @@ PeerTransport:
 
 ## Framing
 
-`modules/pulse-peer/ios/Core/FrameCodec.swift` (unit-tested): each message is a 4-byte big-endian length followed by that many opaque bytes. Empty frames and frames over 256 KiB (`maxFrameLength`) are refused. The decoder reassembles frames that arrive split or coalesced.
+`modules/pulse-peer/ios/Core/FrameCodec.swift` (unit-tested): each message is a 4-byte big-endian length followed by that many opaque bytes. Empty frames and frames over 1 MiB (`maxFrameLength`) are refused. The decoder reassembles frames that arrive split or coalesced.
 
-The sync layer refuses to build or accept a packet larger than 512 KiB (`MAX_PACKET_BYTES`). **These two limits disagree:** a packet between 256 KiB and 512 KiB passes the TypeScript check and would be refused by the Swift module. Never exercised; packet sizes have not been measured.
+The sync layer refuses to build or accept a packet larger than 512 KiB (`MAX_PACKET_BYTES`). The native cap was 256 KiB until `a355eb2` and is kept above the packet cap by a Swift test. A pending packet that would exceed the cap, or a section over 1000 events, is not sent and marks the incident view with `sendFailure: packet_too_large`.
 
 ## Packet format (`src/sync/packet.ts`)
 
@@ -169,17 +169,17 @@ A -> B  pair_hello   { material, name }
 B -> A  pair_hello   { material, name }
 both    verifyPeerPairing(peer material) -> the same six-digit code
 human   compares the codes and confirms on their own phone
-X -> Y  pair_confirm { signature }      signEvent(transcript | "confirmed-by" | own device id)
+X -> Y  pair_confirm { signature, answer? }  signEvent(transcript | "confirmed-by" | own device id)
 ```
 
 The transcript is `pulse-pair-v1|<both devices' id:signKey:agreeKey, sorted>|<code>`. A device stores the peer as trusted only when its own human confirmed **and** a confirmation that verifies against the peer's key arrived. Pairing fails if the material's device id is not the id of the link it arrived on, if `verifyPeerPairing` rejects it, if the material changes mid-session, or if a confirmation does not verify. A new peer starts at the `trusted` disclosure level.
 
-Known gap: if the last `pair_confirm` is lost, one side trusts and the other does not. Nothing retransmits it; the people have to pair again.
+A side that confirmed and is still waiting re-sends its `pair_confirm` on every retry tick and when the link comes back. A side that already finished verifies a repeated confirmation against the stored key material and replies with its own, marked `answer: true`; an answer is never answered. Either device may dial: when both dial at once, each keeps the link dialed by the lower device id (`LinkArbiter`). The sync layer waits for the `connected` state, bounded at 6 s, before it sends the hello. A phone that receives a pairing request opens the code comparison by itself.
 
 ## Lifecycle
 
 - Foreground only for the first demonstration. Discovery and connections are not expected to work while the app is suspended.
-- **Not implemented:** nothing observes app state. The plan is, on background: stop discovery, close connections, keep the outbox; on foreground: restart discovery, reconnect, flush the outbox. Today the outbox survives because it is in SQLite, and a reconnect flushes it when a trusted peer connects, but nothing stops or restarts discovery.
+- `createLiveApp` subscribes to `AppState` (`7ecee25`): on background it stops discovery and leaves the setting untouched; on foreground it restarts discovery when the setting is on, which reconnects trusted peers, and kicks a flush. The outbox is in SQLite and survives either way. Jest only (`lifecycle.test.ts`, `live.test.ts`); timing against iOS teardown is unverified on a device.
 
 ## Error states surfaced to the UI
 

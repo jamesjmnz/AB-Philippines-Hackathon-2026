@@ -25,7 +25,7 @@ A device id is derived from the device's two public keys (`dev-` plus 20 hex cha
 
 Known gaps:
 
-- If the last `pair_confirm` is lost, pairing ends one-sided: one phone trusts and the other does not. Nothing retransmits.
+- A lost `pair_confirm` is re-sent on the retry tick and on reconnect; a phone that already trusts the peer verifies a repeated confirmation against the stored key material and answers with its own, storing nothing new. A repeat with different key material or a bad signature creates no trust (Jest: `pairing.test.ts`, "a lost confirmation"). Not observed on devices.
 - Revocation is local only. Removing a peer deletes the local record and disconnects; the other phone is not told. The native `resetIdentity` exists but no screen or service calls it.
 
 ## Key handling
@@ -115,7 +115,7 @@ Not controlled in this prototype:
 | `hops` is outside the signature | A relay can understate it. The signed `hopLimit` still bounds honest hops, and a relay never forwards to another relay. |
 | Ordering trusts the author's `lamport` value | A device can make its event sort earlier, for example to win a concurrent task acceptance. |
 | An event id reused with different content is not detected | Each device keeps the copy it stored first; two devices could diverge. |
-| Pairing can end one-sided | See Pairing. |
+| Pairing ends one-sided after a lost confirmation | Re-sent and answered; see Pairing. |
 
 ## Threat model
 

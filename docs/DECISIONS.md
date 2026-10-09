@@ -83,3 +83,12 @@ Append a row with the date, the decision in one sentence, the reason and the sta
 Known gaps accepted for the prototype: event ordering trusts the author's Lamport value; an event id reused with different content is not detected; quarantined bodies have no retention rule.
 
 | D-NAME | 2026-10-10: the product is named **SAGIP**. README, app display name, slug, URL scheme, bundle id (`com.jamesjmnz.sagip`), EAS project (`@jamesjimenezzz/sagip`) and Bonjour service (`_sagip-sos._tcp`) use it. Swift module names (`pulse-peer`, `pulse-crypto`), the branch name and the design export keep the working name. | Owner decision. |
+
+## Recorded during the overnight run (2026-10-10)
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| D-25 | Either device may dial; a simultaneous dial is settled by keeping the link dialed by the lower device id. Supersedes the "only the lower id dials" rule in `PeerService`. | With the old rule, pairing started on the higher-id phone never connected (seen in the two-simulator run). |
+| D-26 | Native frame cap is 1 MiB; the sync packet cap stays 512 KiB. Answers the open part of Q-06. | The native cap was below the packet cap. |
+| D-27 | `pair_confirm` carries an optional `answer: true`, and confirmations are re-sent until both sides trust. | A lost confirmation left pairing one-sided. |
+| D-28 | Overnight work is on `feat/pulse-2-overnight`, cut from `feat/pulse-2`; no pull request is opened and nothing is merged without the owner. | Owner's instruction before the run. |

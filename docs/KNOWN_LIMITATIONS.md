@@ -47,7 +47,7 @@ From the Phase 2 and Phase 7 handoffs ([P2-domain](agent-handoffs/P2-domain.md),
 
 - **The whole ledger is resent every time.** The reporter's device puts the whole eligible ledger in every packet, so traffic grows with the square of the event count. Sync cursors exist in the repository and are unused.
 - **A large incident stops syncing silently.** A packet over 512 KiB is not built, and a section with more than 1000 events fails the receiver's schema. Either way the outbox row stays pending and nothing tells the user.
-- **The native frame limit is smaller than the packet limit.** `modules/pulse-peer` rejects frames over 256 KiB (`FrameCodec.maxFrameLength`), while `src/sync/packet.ts` allows packets up to 512 KiB. A packet between the two sizes would pass the TypeScript check and be refused by the Swift module. Never exercised; packet sizes have not been measured.
+- The native frame cap is 1 MiB (`FrameCodec.maxFrameLength`) and the sync packet cap is 512 KiB (`src/sync/packet.ts`). They disagreed until `a355eb2` (256 KiB native). An incident whose packet would exceed the cap does not sync; the incident view carries `sendFailure: packet_too_large` so a screen can say so.
 - **Ordering trusts the author's `lamport` value.** A device can pick a low value so its event sorts earlier, for example to win a concurrent task acceptance. Nothing checks `lamport` against `parents`.
 - **Same id, different content is not detected.** Each device keeps whichever copy of an event id it stored first, so two devices could diverge.
 - **Tightening a disclosure policy recalls nothing.** Content already delivered stays on the recipient's device; only what the screens show changes.
@@ -86,7 +86,7 @@ Answered since 2026-10-09: `@react-native-ai/apple` 0.12.0 does build on React N
 - The design has had no external security review.
 - **Events are not signed individually.** An event is authenticated only by the envelope it arrived in. A receiver accepts an event if its author is the device that sealed the envelope, or if the sealing device is the incident's reporter, who passes on everyone's events. A malicious reporter can therefore forge a responder's event, for example an acknowledgment. A responder cannot forge the reporter's events or another responder's.
 - **`hops` is not signed.** A relay can understate it. The signed `hopLimit` still bounds honest hops.
-- **Pairing can end one-sided.** If the last `pair_confirm` is lost, one phone trusts and the other does not. Nothing retransmits; the people have to pair again.
+- A lost `pair_confirm` is re-sent on the retry tick and when the link returns, and a phone that already finished answers a repeated valid confirmation (`7ecee25`, Jest only). If both phones never reconnect, pairing still stays one-sided until they do.
 - Removing a trusted peer is local. The other phone is not told and keeps its own record.
 - The domain does not verify receipt signatures itself; it relies on the sync layer having done so before the receipt is recorded.
 - No forward secrecy. A compromised device key exposes capsules addressed to that device.

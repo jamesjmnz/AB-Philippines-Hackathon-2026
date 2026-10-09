@@ -65,7 +65,7 @@ Test paths are relative to `src/`. Counts are from `npx jest` on 2026-10-10.
 | Transport | App-level receipts | IMPLEMENTED, UNIT-TESTED | No | P5 | `services/__tests__/delivery.test.ts`, `disclosure.test.ts` (in-memory radio, simulated crypto). |
 | Transport | Reconnect flush and dedupe | IMPLEMENTED, UNIT-TESTED | No | P5 | `services/__tests__/delivery.test.ts` (same doubles). |
 | Transport | Store-and-forward relay with hop limit | IMPLEMENTED, UNIT-TESTED | No | P5 / P7 | `services/__tests__/relay.test.ts` (same doubles). One relay hop only. |
-| Transport | Foreground/background lifecycle handling | NOT STARTED | No | P5 | Nothing stops or restarts discovery on app state changes. |
+| Transport | Foreground/background lifecycle handling | IMPLEMENTED, UNIT-TESTED | No | P5 | `services/__tests__/lifecycle.test.ts`, `live.test.ts`. `AppState` behaviour on a phone not observed. |
 | Crypto | `modules/pulse-crypto` (CryptoKit, Keychain) | IMPLEMENTED, UNIT-TESTED, BUILT | No | P6 | `swift test`: 15 passed with software keys on macOS. Keychain and Secure Enclave paths are compiled in `fbc85457` and have never run. |
 | Crypto | Pairing with human-compared short code | IMPLEMENTED, UNIT-TESTED | No | P6 | `services/__tests__/pairing.test.ts` (simulated crypto); pairing-code case in the Swift suite. |
 | Crypto | Per-recipient capsule encryption, signed envelope | IMPLEMENTED, UNIT-TESTED | No | P6 | Swift suite (seal/open, tamper, wrong key, expiry, relay-only). The JS adapter `crypto/NativeCapsuleCrypto.ts` has no test and has never run. |
