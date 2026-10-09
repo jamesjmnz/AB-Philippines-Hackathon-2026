@@ -23,6 +23,8 @@ pipeline around it: prompts, output shape, evidence and grounding checks, and th
 4. **Held-out is looked at once** per prompt version. Prompts are tuned on `development` and chosen on
    `validation`. Scoring a second held-out run for the same prompt version requires a written reason, kept in
    `benchmarks/held-out-log.json`. Failure analysis for held-out prints counts only, never the cases.
+   A held-out scenario that anyone has seen while changing the pipeline is listed in
+   `datasets/EXPOSED.json` with the reason and is excluded from every held-out score.
 5. **English and Taglish are reported apart.** There is no pooled headline number.
 6. **Sample sizes are printed beside every rate.** The sets are small; differences of a few cases are noise.
 7. **Failed experiments stay in the record**, in `experiments/` and `RESULTS.md`, with the reason.

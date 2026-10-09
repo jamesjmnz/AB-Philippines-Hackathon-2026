@@ -5,8 +5,8 @@
     "split": "validation",
     "inputsSha256": "1afd491c1b92415a19cc978f0ee5462eac7f17fb3ed8e58dad20044f6604deb5",
     "promptVersion": "none",
-    "commit": "db0d35b",
-    "startedAt": "2026-10-09T23:27:16.409Z",
+    "commit": "8ffd1be",
+    "startedAt": "2026-10-09T23:53:12.854Z",
     "device": {
       "model": "Mac (Node)",
       "osVersion": "v22.23.2",
@@ -18,17 +18,7 @@
   "records": [
     {
       "scenarioId": "ext-en-004",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -44,17 +34,7 @@
     },
     {
       "scenarioId": "ext-en-005",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -75,17 +55,7 @@
     },
     {
       "scenarioId": "ext-tl-003",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -101,17 +71,7 @@
     },
     {
       "scenarioId": "ext-tl-004",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -132,44 +92,7 @@
     },
     {
       "scenarioId": "delta-en-004",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s4",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -227,44 +150,7 @@
     },
     {
       "scenarioId": "delta-en-005",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 2,
-          "kept": 2
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s4",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -329,44 +215,7 @@
     },
     {
       "scenarioId": "delta-tl-004",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 2,
-          "kept": 2
-        },
-        {
-          "op": "extract",
-          "statementId": "s4",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -434,44 +283,7 @@
     },
     {
       "scenarioId": "delta-tl-005",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        },
-        {
-          "op": "extract",
-          "statementId": "s4",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -527,35 +339,7 @@
     },
     {
       "scenarioId": "con-en-003",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 1,
-          "kept": 1
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -568,12 +352,7 @@
         },
         {
           "statementId": "s2",
-          "fields": {
-            "floor": {
-              "value": "First floor",
-              "evidence": "first floor"
-            }
-          }
+          "fields": {}
         },
         {
           "statementId": "s3",
@@ -588,10 +367,8 @@
       "deltas": [
         {
           "statementId": "s2",
-          "overall": "possible_contradiction",
-          "fields": {
-            "floor": "possible_contradiction"
-          }
+          "overall": "not_assessed",
+          "fields": {}
         },
         {
           "statementId": "s3",
@@ -601,15 +378,7 @@
           }
         }
       ],
-      "conflicts": [
-        {
-          "field": "floor",
-          "statementIds": [
-            "s1",
-            "s2"
-          ]
-        }
-      ],
+      "conflicts": [],
       "clarification": {
         "field": "building",
         "question": ""
@@ -617,26 +386,7 @@
     },
     {
       "scenarioId": "con-tl-003",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 2,
-          "kept": 2
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 2,
-          "kept": 2
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -680,35 +430,7 @@
     },
     {
       "scenarioId": "adv-en-002",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 2,
-          "kept": 2
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        },
-        {
-          "op": "extract",
-          "statementId": "s3",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",
@@ -749,26 +471,7 @@
     },
     {
       "scenarioId": "adv-tl-003",
-      "calls": [
-        {
-          "op": "extract",
-          "statementId": "s1",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        },
-        {
-          "op": "extract",
-          "statementId": "s2",
-          "state": "ready",
-          "source": "rules",
-          "latencyMs": 0,
-          "proposed": 0,
-          "kept": 0
-        }
-      ],
+      "calls": [],
       "extraction": [
         {
           "statementId": "s1",

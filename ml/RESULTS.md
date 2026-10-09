@@ -6,8 +6,8 @@ committed under `ml/benchmarks/`. Nothing in that section is typed by hand. A se
 
 How to read the numbers:
 
-- Each rate is `hits/total (percent)`. The sets are small (18 development, 12 validation, 18 held-out
-  scenarios, half English and half Taglish), so a difference of one or two cases is not a finding.
+- Each rate is `hits/total (percent)`. The sets are small (18 development, 12 validation, 16 scored
+  held-out scenarios, half English and half Taglish), so a difference of one or two cases is not a finding.
 - English and Taglish are separate columns. There is no pooled number.
 - A failed model call counts against the pipeline: a field it never produced is a miss.
 - "Deterministic baseline" rows involve no language model. They are the app's own wording rules
@@ -43,7 +43,7 @@ Run under Node on the development Mac. These involve no language model and are n
 
 ### mac-baseline · rules · development
 
-Source file `benchmarks/mac-results/baseline-rules-development.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `db0d35b`, prompt version `none`, started 2026-10-09T23:27:16.384Z.
+Source file `benchmarks/mac-results/baseline-rules-development.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `8ffd1be`, prompt version `none`, started 2026-10-09T23:53:12.824Z.
 Conditions: Deterministic rules only, no model, run under Node on the development Mac.
 
 | metric | English (9 scenarios) | Taglish (9 scenarios) |
@@ -58,9 +58,9 @@ Conditions: Deterministic rules only, no model, run under Node on the developmen
 | Conflict recall | 2/2 (100.0%) | 2/2 (100.0%) |
 | Clarification relevant | 7/9 (77.8%) | 4/9 (44.4%) |
 | Scenarios leaking forbidden content | 0/1 (0.0%) | 0/1 (0.0%) |
-| Schema validation passed | 20/20 (100.0%) | 20/20 (100.0%) |
-| Evidence check passed (of proposed fields) | 22/22 (100.0%) | 19/19 (100.0%) |
-| Calls completed | 20/20 (100.0%) | 20/20 (100.0%) |
+| Schema validation passed | n/a (0) | n/a (0) |
+| Evidence check passed (of proposed fields) | n/a (0) | n/a (0) |
+| Calls completed | n/a (0) | n/a (0) |
 | Failures by state | none | none |
 
 | field | English | Taglish |
@@ -96,7 +96,7 @@ Delta confusion, Taglish:
 
 ### mac-baseline · rules · validation
 
-Source file `benchmarks/mac-results/baseline-rules-validation.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `db0d35b`, prompt version `none`, started 2026-10-09T23:27:16.409Z.
+Source file `benchmarks/mac-results/baseline-rules-validation.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `8ffd1be`, prompt version `none`, started 2026-10-09T23:53:12.854Z.
 Conditions: Deterministic rules only, no model, run under Node on the development Mac.
 
 | metric | English (6 scenarios) | Taglish (6 scenarios) |
@@ -105,15 +105,15 @@ Conditions: Deterministic rules only, no model, run under Node on the developmen
 | Unknown kept unknown | 9/9 (100.0%) | 9/9 (100.0%) |
 | Unsupported-fact rate (of proposed values) | 0/6 (0.0%) | 0/5 (0.0%) |
 | Delta class accuracy | 4/10 (40.0%) | 3/8 (37.5%) |
-| Delta macro-F1 | 0.528 | 0.444 |
+| Delta macro-F1 | 0.556 | 0.444 |
 | Delta field-level accuracy | 4/8 (50.0%) | 6/10 (60.0%) |
-| Conflict precision | 1/2 (50.0%) | n/a (0) |
+| Conflict precision | 1/1 (100.0%) | n/a (0) |
 | Conflict recall | 1/2 (50.0%) | 0/2 (0.0%) |
 | Clarification relevant | 2/6 (33.3%) | 3/6 (50.0%) |
 | Scenarios leaking forbidden content | 0/1 (0.0%) | 0/1 (0.0%) |
-| Schema validation passed | 16/16 (100.0%) | 14/14 (100.0%) |
-| Evidence check passed (of proposed fields) | 11/11 (100.0%) | 11/11 (100.0%) |
-| Calls completed | 16/16 (100.0%) | 14/14 (100.0%) |
+| Schema validation passed | n/a (0) | n/a (0) |
+| Evidence check passed (of proposed fields) | n/a (0) | n/a (0) |
+| Calls completed | n/a (0) | n/a (0) |
 | Failures by state | none | none |
 
 | field | English | Taglish |
@@ -134,7 +134,7 @@ Delta confusion, English:
 | correction | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 |
 | possible_contradiction | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |
 | unrelated | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 |
-| no_meaningful_change | 0 | 0 | 0 | 1 | 0 | 0 | 2 | 0 |
+| no_meaningful_change | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 |
 
 Delta confusion, Taglish:
 
@@ -183,3 +183,39 @@ Validation and held-out cases were not looked at for them.
   reported speech or a return. 31 reproduced false positives became tests.
 - Near-duplicate matching marked statements with new or opposite meaning as "nothing new". Duplicates are
   now exact repeats only.
+
+### Defects found by the second independent review, before any model was scored
+
+None of these came from a split. All were reproduced by the reviewer and fixed with tests.
+
+- A paired responder device could record its own assessment of a statement and so replace the owner's
+  "differs from what was reported" row with "nothing new". Only the owner's device may now record one, and
+  an assessment can add to the rules' reading but never weaken it.
+- A responder's guess about the place could become the requester's displayed place detail, attributed to
+  the requester. Causes: "what was known" was taken from logical-clock order, a proposal was attributed
+  to the device that ran the model, and a differing reading was stored as the field's proposal. All three
+  changed.
+- A statement containing its own closing tag could end the data fence in the assessment prompt.
+- A question could be raised again on a detail the person had skipped.
+- Model-written question and task wording reached the screen (the reviewer got "An ambulance was called"
+  through a fake provider). Both now use fixed wording; the model only chooses the field or task kind.
+- In the value-plus-evidence arm a half-invented value ("stroke dizzy" for "dizzy") passed grounding.
+  Every content word of a value must now be in its phrase.
+- The severity filter was described as more than the short word list it is. The documents now say so.
+
+### Held-out exposure (2026-10-10)
+
+While tightening where the rules read a floor from, an agent ran a scratch script over every dataset
+string without filtering by split, and adjusted the rules for sentences it surfaced. Two of them were
+held-out scenarios: `delta-en-008` and `delta-tl-007`. Both adjustments are general, but they were prompted
+by held-out text, so those two scenarios are listed in `datasets/EXPOSED.json` and are excluded from every
+held-out score, for every runner. Held-out is therefore 16 scenarios, not 18. No held-out result of any
+kind had been produced at that point, and none has been looked at since.
+
+### Scorer changes after the freeze, before any model was scored
+
+Reference answers are unchanged (the freeze still verifies). The scorer changed in three ways, none of
+which can raise a pipeline's score: a free-text value longer than 12 words no longer matches (copying the
+whole statement into every field had scored 80 to 84 percent on field correctness in the reviewer's
+probe); a failed clarification call is a miss instead of being left out; and the rules baseline no longer
+reports call-completion or validation rates, since it makes no calls.

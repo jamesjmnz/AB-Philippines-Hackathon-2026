@@ -14,6 +14,7 @@ import {
   loadScenarios,
   readJson,
   renderFixtures,
+  scoredScenarios,
   sha256,
   verify,
   type Frozen,
@@ -145,20 +146,19 @@ switch (command) {
     const run = loadRun(file);
     const reasonAt = args.indexOf('--reason');
     recordHeldOutLook(run, file, reasonAt >= 0 ? args[reasonAt + 1] : undefined);
-    const scenarios = loadScenarios().filter((s) => s.split === run.header.split);
+    const scenarios = scoredScenarios(run.header.split);
     console.log(renderRun(scenarios, run, relative(ML_ROOT, file)));
     console.log(`\n${renderFailures(scenarios, run)}`);
     break;
   }
   case 'report': {
     requireVerified();
-    const all = loadScenarios();
     const section = (title: string, intro: string, files: string[], place: 'device' | 'mac') => {
       const body = files.map((file) => {
         const run = loadRun(file);
         requirePlacement(run, file, place);
         requireLogged(run, file);
-        return renderRun(all.filter((s) => s.split === run.header.split), run, relative(ML_ROOT, file));
+        return renderRun(scoredScenarios(run.header.split), run, relative(ML_ROOT, file));
       });
       return [`## ${title}`, '', intro, '', body.length > 0 ? body.join('\n\n') : '_No result file yet. Unverified._'].join('\n');
     };

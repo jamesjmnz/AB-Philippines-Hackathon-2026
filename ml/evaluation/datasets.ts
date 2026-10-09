@@ -33,7 +33,18 @@ export function loadScenarios(): Scenario[] {
   return scenarios;
 }
 
-export const scenariosOf = (split: Split): Scenario[] => loadScenarios().filter((s) => s.split === split);
+/** Held-out scenarios someone has seen while changing the pipeline. They are never scored. */
+export function exposedIds(): Set<string> {
+  const path = join(ML_ROOT, 'datasets', 'EXPOSED.json');
+  if (!existsSync(path)) return new Set();
+  return new Set((readJson(path) as { scenarios: { id: string }[] }).scenarios.map((s) => s.id));
+}
+
+/** The scenarios a split is scored on: all of it, minus exposed held-out scenarios. */
+export function scoredScenarios(split: Split): Scenario[] {
+  const exposed = exposedIds();
+  return loadScenarios().filter((s) => s.split === split && !(split === 'held_out' && exposed.has(s.id)));
+}
 
 /** The two files a split is published as. Inputs carry no reference answer, tag or note. */
 export function renderFixtures(split: Split, scenarios: readonly Scenario[]): { inputs: string; reference: string } {
