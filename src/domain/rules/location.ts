@@ -418,17 +418,28 @@ export function extractFloorTransition(text: string): FloorTransition | null {
 }
 
 /**
- * The floor a statement puts its author on, for use as a claim: the destination of a transition,
- * otherwise the single floor the text names. Null when the text names none, names two, or names
- * one floor next to a bare ordinal on another level ("I was at the 3rd. Now I am on the 2nd
- * floor"), where the single full mention may be the place the person left.
+ * The floor a report puts its writer on, for use as a claim: the destination of a transition,
+ * otherwise the single floor the text names once mentions that are not about where the writer is
+ * have been left out (`isNotWriterLocation`). Null when nothing is left, when two different
+ * floors are left, or when one floor is left next to a bare ordinal on another level ("I was at
+ * the 3rd. Now I am on the 2nd floor"), where the full mention may be the place the person left.
  */
 export function extractStatedFloor(text: string): FloorMatch | null {
   const transition = extractFloorTransition(text);
   if (transition) return transition.to;
-  const floor = extractFloor(text);
-  if (!floor) return null;
-  return elidedFloors(text).some((e) => e.level !== floor.level) ? null : floor;
+  const about = (m: FloorMatch): boolean => !isNotWriterLocation(text, m.span);
+  const mentions = extractFloors(text).filter(about);
+  const first = mentions[0];
+  if (!first || !mentions.every((m) => m.level === first.level)) return null;
+  return elidedFloors(text).filter(about).some((e) => e.level !== first.level) ? null : first;
+}
+
+/** The building a report puts its writer in, or null. See `extractStatedFloor`. */
+export function extractStatedBuilding(text: string): LocationMatch | null {
+  const mentions = extractBuildings(text).filter((m) => !isNotWriterLocation(text, m.span));
+  const first = mentions[0];
+  if (!first) return null;
+  return mentions.every((m) => m.value === first.value) ? first : null;
 }
 
 /**
@@ -512,7 +523,7 @@ export function isFirstPersonLocation(text: string, span: Pick<TextSpan, 'start'
  */
 export function extractObservedFloor(text: string): FloorMatch | null {
   if (extractFloorTransition(text)) return null;
-  const about = (m: FloorMatch): boolean => !isFirstPersonLocation(text, m.span);
+  const about = (m: FloorMatch): boolean => !isFirstPersonLocation(text, m.span) && !isNotRequesterLocation(text, m.span);
   const mentions = extractFloors(text).filter(about);
   const first = mentions[0];
   if (!first || !mentions.every((m) => m.level === first.level)) return null;
@@ -521,8 +532,163 @@ export function extractObservedFloor(text: string): FloorMatch | null {
 
 /** The building an observation puts the person who asked for assistance in, or null. See `extractObservedFloor`. */
 export function extractObservedBuilding(text: string): LocationMatch | null {
-  const mentions = extractBuildings(text).filter((m) => !isFirstPersonLocation(text, m.span));
+  const mentions = extractBuildings(text).filter(
+    (m) => !isFirstPersonLocation(text, m.span) && !isNotRequesterLocation(text, m.span),
+  );
   const first = mentions[0];
   if (!first) return null;
   return mentions.every((m) => m.value === first.value) ? first : null;
+}
+
+/**
+ * Mentions that are not where the person is. A report says many things besides the writer's own
+ * location: where the fire is, where somebody else is, where the writer was, where nobody should
+ * go. A wrong floor is worse than no floor, so those mentions yield no claim.
+ */
+interface Clause {
+  /** `before` in its original letter case. */
+  rawBefore: string;
+  before: string;
+  after: string;
+  /** The character that ended the clause, or '' at the end of the text. */
+  terminator: string;
+}
+
+function clauseAround(text: string, span: Pick<TextSpan, 'start' | 'end'>): Clause {
+  const normalized = text.replace(/[‘’]/g, "'").toLowerCase();
+  let start = span.start;
+  while (start > 0 && !CLAUSE_END.test(normalized.charAt(start - 1))) start -= 1;
+  let end = span.end;
+  while (end < normalized.length && !CLAUSE_END.test(normalized.charAt(end))) end += 1;
+  return {
+    rawBefore: text.slice(start, span.start),
+    before: normalized.slice(start, span.start),
+    after: normalized.slice(span.end, end),
+    terminator: normalized.charAt(end),
+  };
+}
+
+const WORD_END = '(?![\\p{L}\\p{N}])';
+const WORD_START = '(?<![\\p{L}\\p{N}])';
+
+/** A clause that ends with "?", opens with an auxiliary or a question word, or carries the Tagalog "ba". */
+const ASKS_OPENING = new RegExp(
+  `^\\s*(?:is|are|was|were|am|do|does|did|can|could|should|would|will|where|what|which|who|nasaan|nasan|saan|ano|alin|sino)${WORD_END}`,
+  'u',
+);
+const ASKS_PARTICLE = new RegExp(`${WORD_START}(?:ba|bang)${WORD_END}`, 'u');
+
+function isQuestion(clause: Clause): boolean {
+  return (
+    clause.terminator === '?' ||
+    ASKS_OPENING.test(clause.before) ||
+    ASKS_PARTICLE.test(clause.before) ||
+    ASKS_PARTICLE.test(clause.after)
+  );
+}
+
+/** "I left the ...", "came from the ...", "umalis na ako sa ...", "galing ako sa ...": where the person was. */
+const LEFT_BEFORE = new RegExp(
+  `(?:${WORD_START}(?:left|leaving|leave|exited|evacuated|escaped|fled)(?:\\s+from)?|${WORD_START}(?:came|come|coming|got|get|getting|ran|went)\\s+(?:out\\s+)?(?:from|of)|${WORD_START}out\\s+of|${WORD_START}(?:galing|umalis|lumabas|nakaalis|nakalabas)(?:\\s+(?:na|po|ako|kami|tayo))*(?:\\s+(?:sa|ng))?)\\s+${TO_MENTION}`,
+  'u',
+);
+
+/** "go to the ...", "I am going up to the ...", "pumunta kayo sa ...": somewhere to go, not where anyone is. */
+const GO_TO_BEFORE = new RegExp(
+  `(?:${WORD_START}(?:go|going|get|head|heading)(?:\\s+(?:up|down|back|over))*\\s+to` +
+    // Future and "on the way" forms: not there yet.
+    `|${WORD_START}(?:pupunta|papunta|aakyat|paakyat|bababa|pababa)(?:\\s+(?:na|po|ako|kami|tayo|kayo|ka))*\\s+sa` +
+    // An imperative addressed to others. "Umakyat na ako sa ..." (I went up) is not one.
+    `|${WORD_START}(?:pumunta|punta|umakyat|akyat|bumaba|baba)(?:\\s+(?:na|po))*\\s+(?:kayo|ka)(?:\\s+(?:na|po))*\\s+sa)\\s+${TO_MENTION}`,
+  'u',
+);
+
+/** "do not come to ...", "huwag kayong pumunta sa ...": an instruction to others. */
+const TOLD_NOT_TO = new RegExp(
+  `${WORD_START}(?:do\\s+not|don'?t|never|huwag|wag)${WORD_END}.*${WORD_START}(?:come|go|enter|use|send|bring|take|climb|pumunta|punta|pasok|pumasok|akyat|umakyat|baba|bumaba|dumaan|daan)${WORD_END}`,
+  'u',
+);
+
+/** "fire exit", "water station", "smoke detector" name a place or a thing, not a hazard that is somewhere. */
+const NOT_A_FIXTURE =
+  '(?!\\s+(?:exit|escape|alarm|station|extinguisher|hose|hydrant|detector|door|truck|drill|tank|fountain|dispenser|cooler|bottle|pipe|meter))';
+const HAZARD = `(?:fire|flames?|smoke|water|flood|flooding|gas|explosion|blast|noise|sound|alarm|sunog|apoy|usok|tubig|baha|ingay)${NOT_A_FIXTURE}`;
+const SOMEBODY_ELSE =
+  '(?:he|she|they|them|someone|somebody|people|everyone|everybody|nobody|others?|son|daughter|mother|father|mom|mum|mama|dad|papa|wife|husband|child|children|kids?|baby|friends?|brother|sister|neighbou?rs?|classmates?|teacher|guard|rescuers?|patient|siya|sila|nila|niya|anak|nanay|tatay|asawa|kapatid|kapitbahay|lola|lolo|kaibigan|kasama)';
+const HAZARD_BEFORE = new RegExp(`${WORD_START}${HAZARD}${WORD_END}`, 'u');
+const OTHER_ENTITY_BEFORE = new RegExp(`${WORD_START}(?:${HAZARD}|${SOMEBODY_ELSE})${WORD_END}`, 'u');
+/** "nasa 3rd floor ang apoy", "nasa 2nd floor si Mika", "nasa 3rd floor sila" */
+const TAGALOG_OTHER_AFTER = new RegExp(`^\\s+(?:(?:na|pa|po|daw|raw)\\s+)*(?:ang|yung|'yung|si|sina|sila|siya)${WORD_END}`, 'u');
+const TAGALOG_HAZARD_AFTER = new RegExp(`^\\s+(?:(?:na|pa|po|daw|raw)\\s+)*(?:ang|yung|'yung)\\s+(?:mga\\s+)?${HAZARD}${WORD_END}`, 'u');
+
+/** "... is on the", "... are at the": the last one before the mention, with what precedes it. */
+const BE_VERB = new RegExp(`${WORD_START}(?:is|are|was|were|isn't|aren't|wasn't|weren't)${WORD_END}|${WORD_START}(?:he|she|there|who)'s${WORD_END}`, 'gu');
+/** "Alex is on ...", "Mika and Noah are on ...": a name with no article or possessive before it. */
+const NAMED_SUBJECT = /(?:^|\s)(?!(?:The|My|Our|This|That|These|Those|A|An|It|Here|I|We)\s*$)\p{Lu}[\p{L}'-]*\s*$/u;
+const DETERMINED_SUBJECT = /(?:^|\s)(?:the|my|our|this|that|these|those|a|an)\s+(?:[\p{L}\p{N}'-]+\s+){0,3}[\p{L}\p{N}'-]+\s*$/iu;
+const FP_BE_ANYWHERE = new RegExp(`\\b${FP_BE}\\b`, 'g');
+
+/** "I am ... <mention>" with nobody else named in between, or the Tagalog first-person forms. */
+function writerGoverns(clause: Clause): boolean {
+  FP_BE_ANYWHERE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = FP_BE_ANYWHERE.exec(clause.before)) !== null) {
+    if (!OTHER_SUBJECT.test(clause.before.slice(m.index + m[0].length))) return true;
+  }
+  const tagalog = FP_TAGALOG_BEFORE.exec(clause.before);
+  if (tagalog && !OTHER_SUBJECT.test(clause.before.slice(tagalog.index + tagalog[0].length))) return true;
+  if (FP_TAGALOG_AKO_NASA.test(clause.before)) return true;
+  return FP_TAGALOG_AKO_AFTER.test(clause.after);
+}
+
+/**
+ * True when, in a report, the mention at `span` is not a statement of where the writer is:
+ *
+ * - its clause is a question ("Is this the 3rd floor?", "Ito ba ang 3rd floor?");
+ * - it is a place the writer left with no destination given ("I left the 3rd floor already",
+ *   "umalis na ako sa 3rd floor", "galing ako sa 3rd floor"), or a place to go or not to go
+ *   ("go to the 3rd floor", "do not come to the 3rd floor", "huwag kayong pumunta sa 3rd floor");
+ * - its clause has an explicit subject other than the writer: a hazard, another person or a name
+ *   ("The fire is on the 3rd floor", "My son is on the 3rd floor", "Alex is on the 3rd floor",
+ *   "nasa 3rd floor ang apoy", "nasa 2nd floor si Mika"). A place as the subject ("the shower
+ *   area is on the second floor") is not excluded.
+ *
+ * False for a first-person mention ("I am on the second floor", "nasa 2nd floor ako", "I'm stuck
+ * on the 4th floor", "My son and I are on the 3rd floor") and for a bare mention with no subject
+ * ("Building B, second floor", "2nd floor near the canteen", "sa 3rd floor ng Building A").
+ */
+export function isNotWriterLocation(text: string, span: Pick<TextSpan, 'start' | 'end'>): boolean {
+  const clause = clauseAround(text, span);
+  if (isQuestion(clause)) return true;
+  if (LEFT_BEFORE.test(clause.before) || GO_TO_BEFORE.test(clause.before) || TOLD_NOT_TO.test(clause.before)) return true;
+  if (writerGoverns(clause)) return false;
+  if (TAGALOG_OTHER_AFTER.test(clause.after)) return true;
+
+  BE_VERB.lastIndex = 0;
+  let lastBe: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = BE_VERB.exec(clause.before)) !== null) lastBe = m;
+  if (lastBe) {
+    if (lastBe[0].endsWith("'s")) return true;
+    // Who or what "is" there. A hazard, another person or a name is not the writer. A place
+    // ("the shower area is on the second floor", "my room is on the 2nd floor") is left alone:
+    // it is most often the place the writer is describing because they are in it.
+    const subject = clause.before.slice(0, lastBe.index);
+    // "My son and I are on ...": the writer is part of the subject.
+    if (/(?:^|\s)(?:i|we)\s*$/.test(subject)) return false;
+    if (OTHER_ENTITY_BEFORE.test(subject)) return true;
+    const rawSubject = clause.rawBefore.slice(0, lastBe.index);
+    return NAMED_SUBJECT.test(rawSubject) && !DETERMINED_SUBJECT.test(rawSubject);
+  }
+  return OTHER_ENTITY_BEFORE.test(clause.before);
+}
+
+/**
+ * The same test for an observation, narrower: there a third person is usually the requester, so
+ * only a question and a hazard as the subject ("the fire is on the 3rd floor") are left out.
+ */
+function isNotRequesterLocation(text: string, span: Pick<TextSpan, 'start' | 'end'>): boolean {
+  const clause = clauseAround(text, span);
+  if (isQuestion(clause)) return true;
+  return HAZARD_BEFORE.test(clause.before) || TAGALOG_HAZARD_AFTER.test(clause.after);
 }

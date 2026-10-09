@@ -7,9 +7,9 @@ import { newOutboxMessage, type PacketReceipt } from '../outbox';
 import type { TextSpan } from '../primitives';
 import { detectFieldConflicts } from '../rules/conflicts';
 import {
-  extractBuilding,
   extractObservedBuilding,
   extractObservedFloor,
+  extractStatedBuilding,
   extractStatedFloor,
 } from '../rules/location';
 import type { IncidentState } from '../state';
@@ -51,7 +51,7 @@ function statementClaims(input: StatementInput, kind: 'report' | 'observation'):
     if (floor && !explicit.has('floor')) {
       claims.push({ field: 'floor', value: floor.value, extraction: 'rule', evidence: floor.span });
     }
-    const building = observed ? extractObservedBuilding(input.text) : extractBuilding(input.text);
+    const building = observed ? extractObservedBuilding(input.text) : extractStatedBuilding(input.text);
     if (building && !explicit.has('building')) {
       claims.push({ field: 'building', value: building.value, extraction: 'rule', evidence: building.span });
     }

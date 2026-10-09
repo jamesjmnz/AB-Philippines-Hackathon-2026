@@ -167,6 +167,33 @@ describe('unknown stays unknown (invariant 4)', () => {
     expect(s.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_confirmed' });
   });
 
+  it.each([
+    'The fire is on the 3rd floor',
+    'My son is on the 3rd floor, I am outside',
+    'Is this the 3rd floor? I do not know',
+    'I left the 3rd floor already',
+    'Do not come to the 3rd floor',
+    'Fire at 2nd floor. I am not on the 2nd floor',
+    'Nasa 3rd floor ang apoy',
+    'Umalis na ako sa 3rd floor',
+    'Huwag kayong pumunta sa 3rd floor',
+    'Ito ba ang 3rd floor? Hindi ko alam',
+  ])('a report saying %j leaves the floor unknown', (text) => {
+    const world = makeWorld();
+    const s = addReport(sosWithPeers(world).state, world.as(ALEX), { text }).state;
+    expect(s.reports[0]?.text).toBe(text);
+    expect(s.claims.floor).toMatchObject({ value: null, tag: 'unknown', revisions: [] });
+  });
+
+  it('a report with an excluded mention and a valid one states the valid one', () => {
+    const world = makeWorld();
+    const s = addReport(sosWithPeers(world).state, world.as(ALEX), {
+      text: 'My son is on the 3rd floor, I am on the 2nd floor',
+    }).state;
+    expect(s.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported' });
+    expect(s.claims.floor.revisions[0]).toMatchObject({ extraction: 'rule', evidence: { text: '2nd floor' } });
+  });
+
   it('a report that names two floors does not pick one', () => {
     const world = makeWorld();
     const s = addReport(sosWithPeers(world).state, world.as(ALEX), {

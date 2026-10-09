@@ -59,7 +59,7 @@ function input(reportId: string, patch: Partial<AssessmentInput> = {}): Assessme
 function assessedEvent(): Extract<DomainEvent, { type: 'STATEMENT_ASSESSED' }> {
   const { world, state, reportId, floorRevisionId } = reported();
   const start = TEXT.indexOf('second floor');
-  const event = recordAssessment(state, world.as(MIKA), input(reportId, {
+  const event = recordAssessment(state, world.as(ALEX), input(reportId, {
     overall: 'confirmation',
     items: [
       { field: 'floor', class: 'confirmation', againstRevisionId: floorRevisionId, evidence: { start, end: start + 12, text: 'second floor' } },
@@ -126,32 +126,121 @@ describe('assessmentIdFor', () => {
     expect(assessmentIdFor('rpt-1', 'p2')).not.toBe(assessmentIdFor('rpt-1', 'p1'));
     expect(assessmentIdFor('r'.repeat(128), 'p'.repeat(64))).toHaveLength(128);
   });
+
+  it('does not collide when the report id is long', () => {
+    const reportId = 'r'.repeat(120);
+    const a = assessmentIdFor(reportId, 'delta-v1');
+    const b = assessmentIdFor(reportId, 'delta-v2');
+    expect(a).not.toBe(b);
+    // The old id was the first 128 characters of the plain form, the same for both versions.
+    expect(`assess:${reportId}:delta-v1`.slice(0, 128)).toBe(`assess:${reportId}:delta-v2`.slice(0, 128));
+    for (const id of [a, b]) {
+      expect(id.length).toBeLessThanOrEqual(128);
+      expect(id).toMatch(/^assess~r+~[0-9a-f]{16}$/);
+    }
+    // Deterministic, and the same on every device: no clock, no randomness, integer arithmetic only.
+    expect(assessmentIdFor(reportId, 'delta-v1')).toBe(a);
+    expect(a).toBe(`assess~${'r'.repeat(104)}~${a.slice(-16)}`);
+  });
+
+  it('keeps ids distinct across many long ids and versions, and across the two forms', () => {
+    const ids = new Set<string>();
+    let count = 0;
+    for (let i = 0; i < 40; i += 1) {
+      for (let v = 0; v < 40; v += 1) {
+        ids.add(assessmentIdFor(`${'x'.repeat(118)}${String(i).padStart(2, '0')}`, `prompt-${v}`));
+        ids.add(assessmentIdFor(`rpt-${i}`, `prompt-${v}`));
+        count += 2;
+      }
+    }
+    expect(ids.size).toBe(count);
+    // A report id with ":" in it cannot be mistaken for another id and version.
+    expect(assessmentIdFor('a:b', 'c')).not.toBe(assessmentIdFor('a', 'b:c'));
+    expect(assessmentIdFor('a', 'b:c')).toBe('assess:a:b:c');
+    expect(assessmentIdFor('a:b', 'c')).toMatch(/^assess~a:b~[0-9a-f]{16}$/);
+  });
 });
 
 describe('authorization', () => {
-  it('any participant may record one while the incident is open; a stranger may not', () => {
+  it('only the incident owner may record an assessment or an AI proposal', () => {
     const { world, state, reportId } = reported();
-    for (const actor of [ALEX, MIKA, NOAH, JORDAN]) {
-      expect(canRecordAssessment(state, actor)).toEqual({ ok: true });
-      expect(canRecordAssessment(state, actor)).toEqual(canRecordAIProposal(state, actor));
+    expect(canRecordAssessment(state, ALEX)).toEqual({ ok: true });
+    expect(canRecordAIProposal(state, ALEX)).toEqual({ ok: true });
+    for (const actor of [MIKA, NOAH, JORDAN, STRANGER]) {
+      expect(canRecordAssessment(state, actor)).toEqual({ ok: false, code: 'not_reporter' });
+      expect(canRecordAIProposal(state, actor)).toEqual({ ok: false, code: 'not_reporter' });
+      expect(codeOf(() => recordAssessment(state, world.as(actor), input(reportId)))).toBe('not_reporter');
+      expect(
+        codeOf(() => recordAIProposal(state, world.as(actor), { provider: 'synthetic-test-model', findings: [{ field: 'floor', value: 'Fifth floor' }] })),
+      ).toBe('not_reporter');
     }
-    expect(canRecordAssessment(state, STRANGER)).toEqual({ ok: false, code: 'not_participant' });
-    expect(codeOf(() => recordAssessment(state, world.as(STRANGER), input(reportId)))).toBe('not_participant');
+  });
 
-    const forged = forgeEvent(state, world.as(STRANGER), {
+  it('a responder-authored assessment is stored but not applied, and does not block the owner’s', () => {
+    const { world, state: base, reportId } = reported();
+    // A real disagreement the owner should see.
+    const state = addObservation(base, world.as(MIKA), { text: 'I think Alex is on the first floor.' }).state;
+    const observationId = state.reports[1]!.id;
+    const id = assessmentIdFor(observationId, 'delta-test-1');
+
+    // A paired responder device claims there is nothing to see, under the owner's deterministic id.
+    const forged = forgeEvent(state, world.as(MIKA), {
       type: 'STATEMENT_ASSESSED',
-      payload: { assessmentId: 'assess:forged', reportId, provider: 'synthetic-test-model', overall: 'unrelated', items: [] },
+      payload: { assessmentId: id, reportId: observationId, provider: 'synthetic-test-model', overall: 'no_meaningful_change', items: [] },
+    });
+    const withForged = applyEvents(state, [forged]);
+    expect(withForged.events.map((e) => e.id)).toContain(forged.id);
+    expect(withForged.notApplied).toEqual([
+      { eventId: forged.id, type: 'STATEMENT_ASSESSED', actorDeviceId: MIKA.deviceId, code: 'not_reporter' },
+    ]);
+    expect(withForged.assessments).toEqual([]);
+    expect(withForged.timeline.map((t) => t.eventId)).not.toContain(forged.id);
+
+    // The owner's own assessment, same id, made after the forged one, is applied.
+    const owned = recordAssessment(withForged, world.as(ALEX), {
+      reportId: observationId,
+      promptVersion: 'delta-test-1',
+      provider: 'synthetic-test-model',
+      overall: 'possible_contradiction',
+      items: [{ field: 'floor', class: 'possible_contradiction' }],
+    });
+    expect(owned.state.assessments).toHaveLength(1);
+    expect(owned.state.assessments[0]).toMatchObject({ id, recordedBy: ALEX, overall: 'possible_contradiction' });
+    expect(owned.state.notApplied.map((n) => n.code)).toEqual(['not_reporter']);
+
+    // Whatever order the events arrive in, including the forged one first, the result is the same.
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      expect(replay(state.incidentId, shuffled(owned.state.events, seed))).toEqual(owned.state);
+    }
+    expect(replay(state.incidentId, [forged, ...owned.state.events.filter((e) => e.id !== forged.id)])).toEqual(owned.state);
+    // And a forged event that sorts before the owner's in replay order still loses.
+    const early = { ...forged, id: 'evt-0000-forged-early' };
+    const earlyState = replay(state.incidentId, [early, ...owned.state.events.filter((e) => e.id !== forged.id)]);
+    expect(earlyState.assessments).toEqual(owned.state.assessments);
+    expect(earlyState.claims).toEqual(owned.state.claims);
+    expect(reportId).toBe(state.reports[0]!.id);
+  });
+
+  it('a responder-authored AI proposal is stored but not applied and changes no field', () => {
+    const { world, state } = reported();
+    const forged = forgeEvent(state, world.as(MIKA), {
+      type: 'AI_PROPOSAL_CREATED',
+      payload: { proposalId: 'prop-forged', provider: 'synthetic-test-model', findings: [{ findingId: 'find-forged', field: 'symptom', value: 'Something nobody said' }] },
     });
     const after = applyEvents(state, [forged]);
-    expect(after.notApplied.map((n) => n.code)).toEqual(['not_participant']);
-    expect(after.assessments).toEqual([]);
+    expect(after.notApplied).toEqual([
+      { eventId: forged.id, type: 'AI_PROPOSAL_CREATED', actorDeviceId: MIKA.deviceId, code: 'not_reporter' },
+    ]);
+    expect(after.aiFindings).toEqual([]);
+    expect(after.claims).toEqual(state.claims);
+    expect(after.claims.symptom).toMatchObject({ value: null, tag: 'unknown' });
   });
 
   it('is refused once the incident is resolved or cancelled', () => {
     const { world, state, reportId } = reported();
     for (const closed of [resolveIncident(state, world.as(ALEX)).state, cancelIncident(state, world.as(ALEX)).state]) {
-      expect(canRecordAssessment(closed, MIKA)).toEqual({ ok: false, code: 'incident_closed' });
-      expect(codeOf(() => recordAssessment(closed, world.as(MIKA), input(reportId)))).toBe('incident_closed');
+      expect(canRecordAssessment(closed, ALEX)).toEqual({ ok: false, code: 'incident_closed' });
+      expect(codeOf(() => recordAssessment(closed, world.as(ALEX), input(reportId)))).toBe('incident_closed');
     }
   });
 });
@@ -169,7 +258,7 @@ describe('reducer', () => {
     const observation = before.reports[1]!;
     const against = before.claims.floor.revisions[0]!;
 
-    const result = recordAssessment(before, world.as(MIKA), {
+    const result = recordAssessment(before, world.as(ALEX), {
       reportId: observation.id,
       promptVersion: 'delta-test-1',
       provider: 'synthetic-test-model',
@@ -189,7 +278,7 @@ describe('reducer', () => {
         items: [
           { field: 'floor', class: 'possible_contradiction', againstRevisionId: against.id, evidence: null, evidenceVerified: null },
         ],
-        recordedBy: MIKA,
+        recordedBy: ALEX,
         eventId: result.events[0]!.id,
         wallClockMs: result.events[0]!.clock.wallClockMs,
       },
@@ -217,23 +306,25 @@ describe('reducer', () => {
     expect(after.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported' });
   });
 
-  it('two devices assessing the same statement with the same prompt give one assessment', () => {
+  it('the same statement assessed twice with the same prompt gives one assessment', () => {
     const { world, state, reportId } = reported();
-    const onMika = recordAssessment(state, world.as(MIKA), input(reportId));
-    const onNoah = recordAssessment(state, world.as(NOAH), input(reportId, { overall: 'unrelated', items: [] }));
-    expect(onMika.events[0]!.id).not.toBe(onNoah.events[0]!.id);
+    // Two runs on the owner's device that both started from the same state.
+    const first = recordAssessment(state, world.as(ALEX), input(reportId));
+    const second = recordAssessment(state, world.as(ALEX), input(reportId, { overall: 'unrelated', items: [] }));
+    expect(first.events[0]!.id).not.toBe(second.events[0]!.id);
 
-    const merged = replay(state.incidentId, [...state.events, ...onNoah.events, ...onMika.events]);
+    const merged = replay(state.incidentId, [...state.events, ...second.events, ...first.events]);
     expect(merged.assessments).toHaveLength(1);
-    // First in replay order (lamport, deviceId, id) is kept: dev-mika sorts before dev-noah.
-    expect(merged.assessments[0]).toMatchObject({ recordedBy: MIKA, overall: 'new_information' });
+    // First in replay order (lamport, deviceId, id) is kept.
+    expect(merged.assessments[0]).toMatchObject({ recordedBy: ALEX, overall: 'new_information', eventId: first.events[0]!.id });
     expect(merged.notApplied).toEqual([
-      { eventId: onNoah.events[0]!.id, type: 'STATEMENT_ASSESSED', actorDeviceId: NOAH.deviceId, code: 'duplicate_entity' },
+      { eventId: second.events[0]!.id, type: 'STATEMENT_ASSESSED', actorDeviceId: ALEX.deviceId, code: 'duplicate_entity' },
     ]);
 
     // Locally, a repeat is refused; a new prompt version is a new assessment.
-    expect(codeOf(() => recordAssessment(onMika.state, world.as(MIKA), input(reportId)))).toBe('duplicate_entity');
-    const again = recordAssessment(onMika.state, world.as(MIKA), input(reportId, { promptVersion: 'delta-test-2' })).state;
+    const onMika = first;
+    expect(codeOf(() => recordAssessment(onMika.state, world.as(ALEX), input(reportId)))).toBe('duplicate_entity');
+    const again = recordAssessment(onMika.state, world.as(ALEX), input(reportId, { promptVersion: 'delta-test-2' })).state;
     expect(again.assessments.map((a) => a.id)).toEqual([assessmentIdFor(reportId, 'delta-test-1'), assessmentIdFor(reportId, 'delta-test-2')]);
   });
 
@@ -290,7 +381,7 @@ describe('replay', () => {
   function history() {
     const { world, state: base, reportId, floorRevisionId } = reported();
     let s = addObservation(base, world.as(MIKA), { text: 'Alex is on the 2nd floor.' }).state;
-    s = recordAssessment(s, world.as(MIKA), input(s.reports[1]!.id, {
+    s = recordAssessment(s, world.as(ALEX), input(s.reports[1]!.id, {
       overall: 'confirmation',
       items: [{ field: 'floor', class: 'confirmation', againstRevisionId: floorRevisionId, evidence: { start: 15, end: 24, text: '2nd floor' } }],
     })).state;

@@ -5,9 +5,11 @@ import {
   extractFloors,
   extractObservedBuilding,
   extractObservedFloor,
+  extractStatedBuilding,
   extractStatedFloor,
   floorLabel,
   isFirstPersonLocation,
+  isNotWriterLocation,
 } from '../rules';
 
 describe('floor extraction, English and Tagalog', () => {
@@ -309,7 +311,19 @@ describe('first-person location in an observation describes the responder', () =
   ])('%j states no floor for the requester', (text) => {
     expect(extractFloors(text).length).toBeGreaterThan(0);
     expect(extractObservedFloor(text)).toBeNull();
-    // In a report the same words are the requester's own, and nothing changes.
+  });
+
+  it.each([
+    "I'm on the first floor, coming up to you.",
+    'I am on the first floor',
+    "We're at the 3rd floor lobby",
+    "I'm here at the 2nd floor",
+    "I'm near the stairs on the 2nd floor",
+    'Nasa first floor ako',
+    'nasa 1st floor na ako',
+    'Andito ako sa 2nd floor',
+    'nandito na ako sa ikalawang palapag',
+  ])('in a report %j is the requester speaking and still states a floor', (text) => {
     expect(extractStatedFloor(text)).not.toBeNull();
   });
 
@@ -358,5 +372,123 @@ describe('first-person location in an observation describes the responder', () =
     const [mine, theirs] = extractFloors(text);
     expect(isFirstPersonLocation(text, mine!.span)).toBe(true);
     expect(isFirstPersonLocation(text, theirs!.span)).toBe(false);
+  });
+});
+
+describe('in a report, a mention that is not where the writer is states no floor', () => {
+  it.each([
+    // Another subject.
+    'The fire is on the 3rd floor',
+    'My son is on the 3rd floor, I am outside',
+    'There is smoke on the 2nd floor',
+    "There's water on the ground floor",
+    'He is on the 3rd floor',
+    'Alex is on the 3rd floor',
+    'Mika and Noah are on the 2nd floor',
+    'They are trapped on the fourth floor',
+    'I saw fire on the 3rd floor',
+    'Fire at 2nd floor. I am not on the 2nd floor',
+    'Nasa 3rd floor ang apoy',
+    'Nasa 3rd floor ang anak ko, nasa labas ako',
+    'Nasa 2nd floor si Mika',
+    'Nasa ikatlong palapag sila',
+    'May sunog sa 2nd floor. Wala ako sa 2nd floor',
+    // A question.
+    'Is this the 3rd floor? I do not know',
+    'Is this the 3rd floor',
+    'Am I on the 2nd floor?',
+    'Ito ba ang 3rd floor? Hindi ko alam',
+    'Nasa 3rd floor ba ako',
+    // A place the writer left, with no destination.
+    'I left the 3rd floor already',
+    'I got out of the 2nd floor',
+    'We came from the 3rd floor',
+    'Umalis na ako sa 3rd floor',
+    'Galing ako sa 3rd floor',
+    'Lumabas na kami sa 2nd floor',
+    // An instruction, or somewhere to go.
+    'Do not come to the 3rd floor',
+    "Don't use the 2nd floor stairs, go to the 3rd floor",
+    'Go to the 3rd floor',
+    'I am going to the 3rd floor',
+    'Huwag kayong pumunta sa 3rd floor',
+    'Wag kayo umakyat sa 2nd floor',
+    'Pumunta kayo sa 3rd floor',
+  ])('%j', (text) => {
+    expect(extractFloors(text).length).toBeGreaterThan(0);
+    expect(extractStatedFloor(text)).toBeNull();
+  });
+
+  it.each([
+    // Bare mentions with no subject.
+    ['Building B, second floor', 'Second floor'],
+    ['2nd floor near the canteen', 'Second floor'],
+    ['sa 3rd floor ng Building A', 'Third floor'],
+    ['third floor, east wing', 'Third floor'],
+    ['Stuck on the 4th floor', 'Fourth floor'],
+    ['Help, 5/F pantry', 'Fifth floor'],
+    // First person.
+    ['I am on the second floor', 'Second floor'],
+    ["I'm stuck on the 4th floor", 'Fourth floor'],
+    ['I slipped on the stairs on the 2nd floor', 'Second floor'],
+    ['We are on the 3rd floor', 'Third floor'],
+    ['My son and I are on the 3rd floor', 'Third floor'],
+    ['I am with my son on the 3rd floor', 'Third floor'],
+    ['I am on the 3rd floor with my son', 'Third floor'],
+    ['The water is rising and I am on the 2nd floor', 'Second floor'],
+    ['This is the 3rd floor', 'Third floor'],
+    ['My room is on the 2nd floor', 'Second floor'],
+    ['The shower area is on the second floor', 'Second floor'],
+    ['Umakyat na ako sa 2nd floor, may bench dito', 'Second floor'],
+    ['Na-stuck ako sa fire exit ng Building C, 5th floor', 'Fifth floor'],
+    ['I am by the fire exit on the 3rd floor', 'Third floor'],
+    ['nasa 2nd floor ako', 'Second floor'],
+    ['Nasa ikalawang palapag kami', 'Second floor'],
+    ['Nandito ako sa 3rd floor', 'Third floor'],
+    ['Nadulas ako sa hagdan sa 2nd floor', 'Second floor'],
+    // An excluded mention beside a valid one: the valid one is used.
+    ['My son is on the 3rd floor, I am on the 2nd floor', 'Second floor'],
+    ['The fire is on the 3rd floor. I am on the 2nd floor', 'Second floor'],
+    ['I left the 3rd floor, I am on the 2nd floor', 'Second floor'],
+    ['Nasa 3rd floor ang anak ko, nasa 2nd floor ako', 'Second floor'],
+    ['Nasa 3rd floor ang apoy. Nasa 2nd floor ako', 'Second floor'],
+    ['Do not come to the 3rd floor, I am on the 2nd floor', 'Second floor'],
+    // Movement still wins where it is stated.
+    ['I moved from the first floor to the second floor', 'Second floor'],
+    ['galing ako sa 1st floor, nasa 2nd floor na ako', 'Second floor'],
+  ] as const)('%j -> %s', (text, expected) => {
+    expect(extractStatedFloor(text)?.value ?? null).toBe(expected);
+  });
+
+  it('applies to buildings where the same clause test fits', () => {
+    expect(extractStatedBuilding('Nadulas ako sa hagdan sa Building B. Masakit paa ko at kailangan ko ng tulong.')?.value).toBe('Building B');
+    expect(extractStatedBuilding('Building B, second floor')?.value).toBe('Building B');
+    expect(extractStatedBuilding('sa 3rd floor ng Building A')?.value).toBe('Building A');
+    expect(extractStatedBuilding("I'm at Building A, where are you?")?.value).toBe('Building A');
+    expect(extractStatedBuilding('im at building c, hurry')?.value).toBe('Building C');
+    expect(extractStatedBuilding('My son is in Building B, I am in Building A')?.value).toBe('Building A');
+    expect(extractStatedBuilding('The fire is in Building B')).toBeNull();
+    expect(extractStatedBuilding('Na-stuck ako sa fire exit ng Building C, 5th floor')?.value).toBe('Building C');
+    expect(extractStatedBuilding('Is this Building B?')).toBeNull();
+    expect(extractStatedBuilding('I left Building B already')).toBeNull();
+    expect(extractStatedBuilding('Huwag kayong pumunta sa Building B')).toBeNull();
+    // extractBuilding itself is unchanged.
+    expect(extractBuilding('The fire is in Building B')?.value).toBe('Building B');
+  });
+
+  it('judges each mention by its own clause', () => {
+    const text = 'My son is on the 3rd floor, I am on the 2nd floor';
+    const [his, mine] = extractFloors(text);
+    expect(isNotWriterLocation(text, his!.span)).toBe(true);
+    expect(isNotWriterLocation(text, mine!.span)).toBe(false);
+  });
+
+  it('in an observation a third person is the requester, but a hazard and a question still state nothing', () => {
+    expect(extractObservedFloor('He is on the 3rd floor')?.value).toBe('Third floor');
+    expect(extractObservedFloor('Nasa 3rd floor sila')?.value).toBe('Third floor');
+    expect(extractObservedFloor('The fire is on the 3rd floor')).toBeNull();
+    expect(extractObservedFloor('Nasa 3rd floor ang apoy')).toBeNull();
+    expect(extractObservedFloor('Are you on the 2nd floor?')).toBeNull();
+    expect(extractObservedFloor('Nasa 2nd floor ka ba')).toBeNull();
   });
 });
