@@ -1,6 +1,6 @@
-# PULSE 2.0 documentation
+# SAGIP documentation
 
-PULSE 2.0 is an iOS-first, camera-free, offline assistance-coordination prototype built for the AppBuildersPH 2026 hackathon (theme: Local AI). It is not an emergency service, a medical device or a guaranteed rescue channel.
+SAGIP (working name PULSE 2.0, still used in older documents and in code identifiers) is an iOS-first, camera-free, offline assistance-coordination prototype built for the AppBuildersPH 2026 hackathon (theme: Local AI). It is not an emergency service, a medical device or a guaranteed rescue channel.
 
 **Current state (2026-10-10):** the code for phases P2 to P7 is committed and unit-tested (typecheck and lint clean; 42 Jest suites, 450 tests passed; `swift test` 6 passed in `modules/pulse-peer` and 15 in `modules/pulse-crypto`). An EAS development build for devices finished (`fbc85457`), and an EAS simulator build (`66901962`) runs in the iOS 26.3 simulator, where the app has been looked at in Demo mode only. **Nothing has run on a physical iPhone.** No LIVE-mode behaviour, real model inference, real radio link or real Keychain use has been observed, and no gate other than G0 is passed. Each document says which of its sections describe code that exists and which are still a plan; a plan is written as "will" or marked planned, and an unchecked technical claim is marked `UNVERIFIED`. Start with [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 

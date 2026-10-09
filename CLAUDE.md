@@ -1,4 +1,7 @@
-# PULSE 2.0
+# SAGIP
+
+SAGIP is the product name. Code identifiers, Swift modules, storage keys and wire strings keep the
+working name Pulse (decision D-NAME in `docs/DECISIONS.md`); do not rename them.
 
 Offline, camera-free assistance coordination for iPhone. A person raises a manual SOS, optionally
 describes what happened, on-device AI structures the report, and an encrypted Rescue Capsule goes to
@@ -49,9 +52,11 @@ src/crypto/       CapsuleCrypto interface, native adapter, capsule sections
 src/sync/         packet codec, SyncEngine (outbox, receipts, relay), pairing
 src/services/     PulseApp contract (api.ts), PulseCore, LIVE wiring, provider hooks
 src/demo/         SIMULATED adapters and scenarios
+src/eval/         in-memory evaluation runs; the only app code that may import from ml/
 src/ui/           theme tokens and primitives
 src/components/   feature components
 modules/          Swift Expo modules
+ml/               evaluation datasets, scoring, baseline and measured results (not bundled, except inputs)
 design/           Claude Design export the UI is ported from (reference, not bundled)
 docs/             all documentation; index in docs/README.md
 ```
