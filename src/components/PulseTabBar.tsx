@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, Press, colors, tabBarHeight, type IconName } from '@/ui';
+import { Backdrop, Icon, Press, backdropBlurAvailable, colors, tabBarHeight, type IconName } from '@/ui';
 
 export type TabKey = 'index' | 'network' | 'activity' | 'settings';
 
@@ -40,8 +40,8 @@ function Tab({ item, selected, onPress }: { item: Item; selected: boolean; onPre
  * Tab bar (design 661–671): 94px tall in the design frame (60pt above the home-indicator inset), five
  * equal columns, padding 8/6/0, a #EEEEF0 top hairline, and the raised 62pt coral SOS
  * button (4pt white border, margin-top -22, shadow 0 4px 12px rgba(237,98,94,.22), scale .94 on press).
- * The design is white at 94% over a 20px backdrop blur; there is no blur module in the build, so the
- * bar is opaque instead of letting sharp content show through.
+ * The design is white at 94% over a 20px backdrop blur. A build without the blur module keeps the
+ * bar opaque instead of letting sharp content show through.
  */
 export function PulseTabBar({ active, onSelect, onSOS }: Props) {
   const insets = useSafeAreaInsets();
@@ -59,10 +59,11 @@ export function PulseTabBar({ active, onSelect, onSOS }: Props) {
         alignItems: 'flex-start',
         paddingTop: 8,
         paddingHorizontal: 6,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: backdropBlurAvailable ? 'rgba(255,255,255,0.94)' : '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: colors.line,
       }}>
+      <Backdrop />
       {LEFT.map((item) => (
         <Tab key={item.key} item={item} selected={active === item.key} onPress={() => onSelect(item.key)} />
       ))}

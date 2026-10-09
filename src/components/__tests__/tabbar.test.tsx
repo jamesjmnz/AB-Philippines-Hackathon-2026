@@ -34,10 +34,11 @@ describe('tab bar', () => {
     render(<PulseTabBar active="network" onSelect={jest.fn()} onSOS={jest.fn()} />);
 
     const bar = StyleSheet.flatten(screen.getByTestId('tab-bar').props.style);
-    // 60pt of content above the bottom inset (94px in the design frame, whose inset is 34).
-    expect(bar).toMatchObject({ position: 'absolute', bottom: 0, height: 70, paddingTop: 8, paddingHorizontal: 6, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEF0' });
+    // 60pt of content above the bottom inset (94px in the design frame, whose inset is 34). White at 94%
+    // over the backdrop blur, as in the design; the blur layer is the bar's first child.
+    expect(bar).toMatchObject({ position: 'absolute', bottom: 0, height: 70, paddingTop: 8, paddingHorizontal: 6, backgroundColor: 'rgba(255,255,255,0.94)', borderTopWidth: 1, borderTopColor: '#EEEEF0' });
     expect(tabBarHeight(34)).toBe(94);
-    expect(screen.getByTestId('tab-bar').props.children).toHaveLength(3);
+    expect(screen.getByTestId('tab-bar').props.children).toHaveLength(4);
     for (const key of ['index', 'network', 'activity', 'settings']) {
       expect(StyleSheet.flatten(screen.getByTestId(`tab-${key}`).props.style)).toMatchObject({ flex: 1 });
     }
