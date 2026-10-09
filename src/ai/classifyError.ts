@@ -23,6 +23,11 @@ export function classifyAIError(error: unknown): { state: AIFailureState; messag
   if (code === 'MODEL_UNAVAILABLE' || /model is not available|not available on this platform|not supported on this device/i.test(text)) {
     return { state: 'unavailable', message };
   }
+  // Before the timeout test: Apple's wording may mention the window "limit", never a time-out, but an
+  // overflow is a property of the input and retrying the same call cannot succeed.
+  if (/exceed\w*\s+(?:the\s+)?(?:model'?s?\s+)?(?:maximum\s+)?context|context\s*window|context\s+(?:size|length|limit)|exceededcontextwindowsize|too many tokens|token limit/i.test(text)) {
+    return { state: 'context_overflow', message };
+  }
   if (/abort|timed? ?out/i.test(text)) return { state: 'timeout', message };
   if (/guardrail|unsafe|safety|refus|sensitive content|may be harmful/i.test(text)) return { state: 'guardrail_refusal', message };
   if (/unsupported language|language or locale|locale not supported|unsupportedlanguage|failed to create nlcontextualembedding/i.test(text)) {

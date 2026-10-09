@@ -237,6 +237,7 @@ export const EVENT_LOOK: Record<EventType, EventLook> = {
   INCIDENT_CREATED: { label: 'Request saved on this device', icon: 'sos', tone: 'coral' },
   REPORT_ADDED: { label: 'Statement added', icon: 'description', tone: 'neutral' },
   AI_PROPOSAL_CREATED: { label: 'AI proposal recorded', icon: 'auto_awesome', tone: 'indigo', meta: 'A proposal, not a fact' },
+  STATEMENT_ASSESSED: { label: 'AI compared an update', icon: 'auto_awesome', tone: 'indigo', meta: 'A proposal, not a fact' },
   CLARIFICATION_REQUESTED: { label: 'Clarification requested', icon: 'help', tone: 'indigo' },
   CLARIFICATION_SKIPPED: { label: 'Clarification skipped', icon: 'help', tone: 'gray' },
   CLAIM_CONFIRMED: { label: 'Detail confirmed', icon: 'check', tone: 'green' },
@@ -305,6 +306,14 @@ export function presentAIState(state: AIState): { label: string; tone: Tone } {
       return { label: 'Invalid output', tone: 'amber' };
     case 'native_error':
       return { label: 'Error', tone: 'amber' };
+    case 'cancelled':
+      return { label: 'Cancelled', tone: 'amber' };
+    case 'queue_full':
+      return { label: 'Busy', tone: 'amber' };
+    case 'context_overflow':
+      return { label: 'Report too long', tone: 'amber' };
+    case 'superseded':
+      return { label: 'Replaced by a newer request', tone: 'amber' };
   }
 }
 
