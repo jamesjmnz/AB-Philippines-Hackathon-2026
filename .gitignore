@@ -1,0 +1,53 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# generated native folders (CNG: configure via app.config.ts and config plugins)
+/ios
+/android
+
+# native build output inside local modules
+modules/*/ios/build/
+modules/*/.build/
+.build/
+
+# signing and credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*.cer
+credentials.json
+
+# env (ship .env.example only)
+.env
+.env.*
+!.env.example
+
+# Metro / debug / logs
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# OS / editor
+.DS_Store
+*.orig.*
+.kotlin/
+.vscode/
+.idea/
+
+# typescript / test
+*.tsbuildinfo
+coverage/
+
+# private demo captures
+demo-recordings/
