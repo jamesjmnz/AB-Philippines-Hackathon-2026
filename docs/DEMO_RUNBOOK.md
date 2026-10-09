@@ -1,12 +1,12 @@
 # Demo runbook
 
-Status (2026-10-10): script only. **No scene has been rehearsed.** The code behind every scene is written and unit-tested, and a device build exists (EAS `fbc85457`), but it has not been installed on any phone: nothing in this script has run live. The only thing that has been run and looked at is Demo mode in the iOS 26.3 simulator. Each scene carries its own status line. A scene is presented as live only after it has been run on the physical devices and recorded in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md).
+Status (2026-10-10): script only. **No scene has been rehearsed.** The code behind every scene is written and unit-tested, and a device build exists (EAS `512bf15c`; the older `fbc85457` lacks the pairing fixes), but it has not been installed on any phone: nothing in this script has run live. What has been run and looked at is the iOS 26.3 simulator only: Demo mode, and on 2026-10-10 LIVE mode in two simulators on one Mac (pairing and the SOS to resolved chain; see the evidence log). A simulator run is not a rehearsal and is never shown as a live scene. Each scene carries its own status line. A scene is presented as live only after it has been run on the physical devices and recorded in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md).
 
 ## What can be shown today
 
 | What | State |
 | --- | --- |
-| Demo Lab scenarios (Normal SOS; CareChain Intelligence; Multi-Responder Assistance; Rescue Capsule Privacy; Offline Network Recovery; Complete PULSE Experience) | `MOCKED`. Run in Jest to their end states (`src/demo/__tests__/demoApp.test.ts`). The app has been opened in the simulator in Demo mode; the scenarios themselves have not been stepped through and recorded there. Always under the SIMULATED bar. |
+| Demo Lab scenarios (Normal SOS; CareChain Intelligence; Multi-Responder Assistance; Rescue Capsule Privacy; Offline Network Recovery; Complete PULSE Experience) | `MOCKED`. Run in Jest to their end states (`src/demo/__tests__/demoApp.test.ts`). In the simulator, Demo mode was opened and "Complete PULSE Experience" was started and seen to advance; the other five have not been stepped through there. Always under the SIMULATED bar. |
 | Any live scene A to F | `BLOCKED`: no build installed on a phone. Human steps are in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), Blocked. |
 | Recorded test output (Jest, `swift test`) | Available in the evidence log. It is test output, not a demonstration. |
 
@@ -58,7 +58,7 @@ Status (2026-10-10): script only. **No scene has been rehearsed.** The code behi
 - **Goal:** show an encrypted packet A→B over local transport, a receipt, and visibility by permission.
 - **Steps:** On A, review recipients and send the capsule to B. Show A moving from queued to delivered only when the receipt arrives. On B, show the summary. Then B's human taps Acknowledge; show that as a separate timeline entry on A. Show a relay-only view that contains routing data and ciphertext only.
 - **Say:** "Delivered means B's phone stored it and signed a receipt. Acknowledged means Mika tapped."
-- **Status:** not yet rehearsed. Code: unit-tested with an in-memory radio and simulated crypto; no packet has passed between two phones.
+- **Status:** not yet rehearsed. Code: unit-tested with an in-memory radio and simulated crypto. Observed between two simulators on one Mac (2026-10-10, real Swift transport and CryptoKit module): queued, then delivered on the signed receipt, then "Seen" as a separate entry. No packet has passed between two phones.
 - **Honest fallback:** if transport fails, show A's capsule as `QUEUED` and explain that this is the correct state when no peer is reachable. Show the encryption tests' recorded output instead of a live transfer.
 
 ## Scene D — CareChain handoff
@@ -88,7 +88,7 @@ Status (2026-10-10): script only. **No scene has been rehearsed.** The code behi
 
 | Item | Status |
 | --- | --- |
-| Build installed on phone A | BLOCKED (build `fbc85457` exists; install failed, phone locked) |
+| Build installed on phone A | BLOCKED (build `512bf15c` exists; install failed twice on 2026-10-10, phone locked) |
 | Builds installed on phones B and C | BLOCKED (phones not on iOS 26, not paired with the Mac, not registered for internal distribution) |
 | `preview` build for offline runs | NOT STARTED |
 | 60 to 90 second backup recording of real steps | NOT STARTED |
