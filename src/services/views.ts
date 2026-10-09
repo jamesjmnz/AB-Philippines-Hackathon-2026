@@ -65,11 +65,16 @@ export function ownerFacts(state: IncidentState, nameOf: NameOf): FactView[] {
  * is shown instead, and is still only a proposal.
  */
 export function statementUpdates(state: IncidentState, nameOf: NameOf): UpdateView[] {
-  return state.reports.slice(1).flatMap((report) => {
+  // The requester's first report is what later statements are updates to. Replay order is not arrival
+  // order: an observation can sort ahead of a report this device received later, so position is not used.
+  const first = state.reports.find((r) => r.kind === 'report') ?? null;
+  // "Needs a check" is about now: once nothing on that field is open, the person has settled it.
+  const open = (field: ClaimField) =>
+    state.contradictions.some((c) => c.field === field && c.status === 'open') || state.questions.some((q) => q.field === field && q.status === 'open' && q.origin === 'ai');
+  return state.reports.filter((r) => r !== first).flatMap((report) => {
     const rules = analyzeWithRules(state, report.id);
     if (!rules) return [];
     const assessed = [...state.assessments].reverse().find((a) => a.reportId === report.id);
-    const disputed = (field: ClaimField) => state.contradictions.some((c) => c.field === field && c.status === 'open') || state.questions.some((q) => q.field === field && q.status === 'open' && q.origin === 'ai');
     return [
       {
         reportId: report.id,
@@ -77,7 +82,7 @@ export function statementUpdates(state: IncidentState, nameOf: NameOf): UpdateVi
         kind: report.kind,
         overall: assessed?.overall ?? rules.overall,
         basis: assessed ? ('model' as const) : ('rules' as const),
-        needsVerification: rules.items.some((i) => i.needsVerification) || (assessed?.items.some((i) => i.class === 'possible_contradiction' && disputed(i.field)) ?? false),
+        needsVerification: rules.items.some((i) => i.needsVerification && open(i.field)) || (assessed?.items.some((i) => i.class === 'possible_contradiction' && open(i.field)) ?? false),
         fields: (assessed?.items ?? rules.items).map((i) => ({ field: i.field, class: i.class })),
       },
     ];

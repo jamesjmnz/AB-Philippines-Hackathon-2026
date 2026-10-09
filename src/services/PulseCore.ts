@@ -225,6 +225,12 @@ function randomHex(length: number): string {
 /** Same bound as a stored report's text. */
 const MAX_DIAGNOSTIC_TEXT = 4_000;
 
+/** True when this statement already has a model proposal with this value for the field, so it is not recorded twice. */
+function alreadyProposed(state: IncidentState, reportId: string, field: ClaimField, value: string): boolean {
+  const key = normalizeValue(value);
+  return state.claims[field].revisions.some((r) => r.source.kind === 'ai_proposal' && r.evidence?.reportId === reportId && normalizeValue(r.value) === key);
+}
+
 /** Statements analysed per pass, and the most that may wait at once. */
 const MAX_PENDING_ANALYSES = 4;
 const DELTA_PRIORITY = ['possible_contradiction', 'correction', 'new_information', 'confirmation', 'no_meaningful_change'] as const;
@@ -848,6 +854,8 @@ export class PulseCore implements PulseApp {
       const findings = (Object.keys(proposal.fields) as ProposalField[]).flatMap((field) => {
         const proposed = proposal.fields[field];
         if (!proposed) return [];
+        // The background analysis may already have proposed this exact value from this statement.
+        if (alreadyProposed(state, reportId, field, proposed.value)) return [];
         const evidence = locateEvidence(report.text, proposed.evidence);
         return [{ field, value: proposed.value.slice(0, 500), ...(evidence ? { evidence } : {}) }];
       });
@@ -904,7 +912,7 @@ export class PulseCore implements PulseApp {
       if (state.closure || state.assessments.some((a) => a.id === id)) return { events: [], outbox: [], state };
       const fresh = (field: ClaimField) => basisStillHolds(state, analysis, field);
       const items = analysis.items.filter((i) => fresh(i.field));
-      const findings = analysis.findings.filter((f) => fresh(f.field));
+      const findings = analysis.findings.filter((f) => fresh(f.field) && !alreadyProposed(state, reportId, f.field, f.value));
       const overall = items.length === analysis.items.length ? analysis.overall : (DELTA_PRIORITY.find((c) => items.some((i) => i.class === c)) ?? 'not_assessed');
       if (overall === 'not_assessed') return { events: [], outbox: [], state };
 

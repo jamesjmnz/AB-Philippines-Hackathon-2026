@@ -3,7 +3,7 @@ import { NoObjectGeneratedError, Output, generateText } from 'ai';
 import { z } from 'zod';
 
 import type { OutputProbeLine } from '../types';
-import { EXTRACTION_SYSTEM, extractionModelSchema } from './prompts';
+import { EXTRACTION_SYSTEM, QUOTE_SYSTEM, extractionModelSchema, fenceReport, quoteModelSchema } from './prompts';
 
 /**
  * Device probe: the same built-in sentence through several output shapes, to see which of them the
@@ -12,7 +12,7 @@ import { EXTRACTION_SYSTEM, extractionModelSchema } from './prompts';
  */
 
 const PROBE_REPORT = 'I slipped near the canteen in Building C, third floor. My ankle hurts and I need help.';
-const PROMPT = `Report:\n"""${PROBE_REPORT}"""`;
+const PROMPT = fenceReport(PROBE_REPORT);
 
 const FLAT_KEYS = ['incidentType', 'building', 'floor', 'locationText', 'symptom', 'assistanceRequested'] as const;
 const flatSchema = z.object(
@@ -24,7 +24,8 @@ const listSchema = z.object({ items: z.array(z.object({ field: z.string(), value
 const JSON_SYSTEM = `${EXTRACTION_SYSTEM}
 Answer with one JSON object only, no other text, with exactly these keys: ${FLAT_KEYS.join(', ')}. Each key holds an object {"value": string, "evidence": string}.`;
 
-const base = { temperature: 0, maxOutputTokens: 500, maxRetries: 0 } as const;
+// The same limit the app's own calls use, so a shape that returns here returns there.
+const base = { temperature: 0, maxOutputTokens: 1500, maxRetries: 0 } as const;
 
 function shape(text: string | undefined): string {
   const body = (text ?? '').trim();
@@ -60,8 +61,8 @@ async function line(variant: string, run: () => Promise<string | undefined>): Pr
   }
 }
 
-const structured = (schema: z.ZodType) => async () => {
-  const result = await generateText({ model: apple(), system: EXTRACTION_SYSTEM, prompt: PROMPT, output: Output.object({ schema }), ...base });
+const structured = (schema: z.ZodType, system = EXTRACTION_SYSTEM) => async () => {
+  const result = await generateText({ model: apple(), system, prompt: PROMPT, output: Output.object({ schema }), ...base });
   return result.text;
 };
 
@@ -73,7 +74,8 @@ export async function probeOutputShapes(): Promise<OutputProbeLine[]> {
     await line('text, JSON asked in prompt', async () => (await generateText({ model: apple(), system: JSON_SYSTEM, prompt: PROMPT, ...base })).text),
     await line('schema: 2 strings', structured(tinySchema)),
     await line('schema: 12 flat strings', structured(flatSchema)),
-    await line('schema: 6 nested objects (current)', structured(extractionModelSchema)),
+    await line('schema: 6 phrases (in use)', structured(quoteModelSchema, QUOTE_SYSTEM)),
+    await line('schema: 6 nested objects (original)', structured(extractionModelSchema)),
     await line('schema: array of objects', structured(listSchema)),
   ];
 }
