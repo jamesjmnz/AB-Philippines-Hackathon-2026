@@ -33,9 +33,16 @@ function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-export type StatusPresentation = { title: string; chip: string; tone: Tone; sub: string };
+/**
+ * `ring` is the design's status colour (map-card dot, step bar) and `icon` its Activity glyph
+ * (design `st()`, line 1041): coral while nobody has the request, amber while it waits to be taken,
+ * green once a role is held, grey when cancelled.
+ */
+export type StatusPresentation = { title: string; chip: string; tone: Tone; sub: string; ring: string; icon: IconName };
 
-export function presentStatus(state: IncidentState, me: Me): StatusPresentation {
+const RING = { coral: '#ED625E', amber: '#F4B860', green: '#27A878', gray: '#C7C7CC' } as const;
+
+function statusWords(state: IncidentState, me: Me): { title: string; chip: string; sub: string } & { tone: Tone } {
   const reporterId = state.incident?.reporter.deviceId ?? null;
   const held = state.tasks.filter((t) => t.assignee !== null && t.assignee.deviceId !== reporterId);
   const who = (deviceId: string, userName: string) => displayName(me, deviceId, firstName(userName));
@@ -123,6 +130,30 @@ export function presentStatus(state: IncidentState, me: Me): StatusPresentation 
         tone: 'amber',
         sub: 'Saved on this device · waiting for a trusted device. Nobody has received it yet.',
       };
+  }
+}
+
+/** Status wording (above) plus the design's colour and glyph for that state. */
+export function presentStatus(state: IncidentState, me: Me): StatusPresentation {
+  const words = statusWords(state, me);
+  const reporterId = state.incident?.reporter.deviceId ?? null;
+  switch (state.status.status) {
+    case 'cancelled':
+      return { ...words, tone: 'gray', ring: RING.gray, icon: 'block' };
+    case 'resolved':
+      return { ...words, tone: 'green', ring: RING.green, icon: 'verified' };
+    case 'in_progress':
+    case 'role_taken':
+      return { ...words, tone: 'green', ring: RING.green, icon: 'volunteer_activism' };
+    case 'acknowledged':
+      return { ...words, tone: 'amber', ring: RING.amber, icon: 'visibility' };
+    case 'delivered':
+      return { ...words, tone: 'amber', ring: RING.amber, icon: 'hourglass_top' };
+    case 'queued':
+      // A responder's own copy is waiting on them (amber); the requester's unsent request is the urgent one.
+      return reporterId !== null && reporterId !== me.deviceId
+        ? { ...words, tone: 'amber', ring: RING.amber, icon: 'hourglass_top' }
+        : { ...words, tone: 'coral', ring: RING.coral, icon: 'emergency' };
   }
 }
 
@@ -331,4 +362,97 @@ export function incidentPlace(view: IncidentView): string | null {
   };
   const parts = [get('building'), get('floor'), get('locationText')].filter((p): p is string => p !== null);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+
+/** User-visible product name. Data that still says the old name (demo scenario titles) is shown with the new one. */
+export const BRAND = 'SAGIP';
+export function brand(text: string): string {
+  return text.replace(/PULSE(?!-)/g, BRAND);
+}
+
+/** "Today", "Yesterday" or "Oct 3" (design `dayOf`, line 959). */
+export function dayLabel(ms: number, nowMs: number = Date.now()): string {
+  const d = new Date(ms);
+  const n = new Date(nowMs);
+  const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, n)) return 'Today';
+  const y = new Date(n);
+  y.setDate(n.getDate() - 1);
+  if (sameDay(d, y)) return 'Yesterday';
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+  return `${MONTHS[d.getMonth()] ?? ''} ${d.getDate()}`;
+}
+
+/** "Today, 9:41 AM" */
+export function whenLabel(ms: number, nowMs: number = Date.now()): string {
+  return `${dayLabel(ms, nowMs)}, ${timeLabel(ms)}`;
+}
+
+/** Tag pill colours from the design's TAGC table (line 953), keyed by the ledger's provenance tags. */
+export const TAG_LOOK: Record<ProvenanceTag, { fg: string; bg: string }> = {
+  user_confirmed: { fg: '#1E7F5B', bg: '#E6F5EE' },
+  user_reported: { fg: '#151515', bg: '#F2F2F4' },
+  responder_reported: { fg: '#151515', bg: '#F2F2F4' },
+  ai_proposed: { fg: '#46508A', bg: '#E9EBF6' },
+  unresolved: { fg: '#C8433F', bg: '#FDECEB' },
+  unknown: { fg: '#86868B', bg: '#F2F2F4' },
+};
+
+/** Task pill colours from the design's TS table (line 955). */
+export const TASK_LOOK: Record<TaskStatus, { fg: string; bg: string }> = {
+  unassigned: { fg: '#86868B', bg: '#F2F2F4' },
+  offered: { fg: '#9A6210', bg: '#FDF3E2' },
+  accepted: { fg: '#1E7F5B', bg: '#E6F5EE' },
+  in_progress: { fg: '#1E7F5B', bg: '#E6F5EE' },
+  completion_reported: { fg: '#46508A', bg: '#E9EBF6' },
+  completion_confirmed: { fg: '#FFFFFF', bg: '#27A878' },
+};
+
+/** Capsule / delivery pill colours from the design's CAPS table (line 956). */
+export const DELIVERY_LOOK: Record<DeliveryState, { fg: string; bg: string }> = {
+  none: { fg: '#86868B', bg: '#F2F2F4' },
+  queued: { fg: '#9A6210', bg: '#FDF3E2' },
+  send_attempted: { fg: '#9A6210', bg: '#FDF3E2' },
+  delivered: { fg: '#1E7F5B', bg: '#E6F5EE' },
+};
+
+export type ReadinessFact = { key: 'text_model' | 'trusted_device' | 'reachable_now'; label: string; ok: boolean };
+
+export type Readiness = {
+  facts: ReadinessFact[];
+  count: number;
+  /** "2 of 3 ready": a count of the three facts, never a safety verdict. */
+  title: string;
+  /** The design's sub-line, built from the same three facts. */
+  line: string;
+  progress: number;
+};
+
+/**
+ * The three capability facts behind the Home ring and the last onboarding step: the on-device text
+ * model is ready, at least one trusted device is paired, at least one trusted device is reachable now.
+ */
+export function presentReadiness(snapshot: Pick<PulseSnapshot, 'capabilities' | 'peers'>): Readiness {
+  const caps = snapshot.capabilities;
+  const trusted = snapshot.peers.filter((p) => p.trusted);
+  const reachable = trusted.filter((p) => p.reach === 'connected');
+  const textReady = caps?.text.state === 'ready';
+  const facts: ReadinessFact[] = [
+    { key: 'text_model', label: 'On-device text model ready', ok: textReady },
+    { key: 'trusted_device', label: 'At least one trusted device', ok: trusted.length > 0 },
+    { key: 'reachable_now', label: 'At least one reachable now', ok: reachable.length > 0 },
+  ];
+  const count = facts.filter((f) => f.ok).length;
+  const ai = !caps ? 'Local AI checking' : caps.source === 'simulated' ? (textReady ? 'Local AI simulated' : 'Local AI off (simulated)') : textReady ? 'Local AI ready' : 'Local AI unavailable';
+  const line = [ai, `${trusted.length} trusted`, reachable.length > 0 ? `${reachable.length} reachable now` : 'No reachable peer'].join(' · ');
+  return { facts, count, title: `${count} of 3 ready`, line, progress: count / 3 };
+}
+
+/** One line for the "On-Device Intelligence" overview row. */
+export function presentIntelligenceLine(caps: CapabilityMatrix | null): string {
+  if (!caps) return 'Checking this iPhone…';
+  if (caps.source === 'simulated') return caps.text.state === 'ready' ? 'Simulation · no cloud AI' : 'Simulation off · manual SOS still works';
+  if (caps.text.state === 'ready') return 'Ready offline · no cloud AI needed';
+  return `${presentAIState(caps.text.state).label} · manual SOS still works`;
 }

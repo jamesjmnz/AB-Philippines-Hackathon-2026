@@ -4,156 +4,209 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { ActivityScreen } from '../activity/ActivityScreen';
 import { useAppMode } from '../appMode';
-import { OnboardingScreen } from '../onboarding/OnboardingScreen';
+import { useSafetySession } from '../demo/safetySession';
 import { DemoLabScreen } from '../settings/DemoLabScreen';
 import { LocalAIDiagnosticsScreen } from '../settings/LocalAIDiagnosticsScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
-import { capabilities, createFakePulseApp, DEFAULT_SETTINGS, viewOf } from '../testing/fakePulseApp';
+import { capabilities, createFakePulseApp, DEFAULT_SETTINGS, peer, viewOf } from '../testing/fakePulseApp';
 import { renderWithApp } from '../testing/render';
-import { MIKA, sosFloorConflict, sosQueued, sosResolved } from '../testing/scenarios';
+import { MIKA, sosCancelled, sosFloorConflict, sosQueued, sosResolved, sosRoleTaken } from '../testing/scenarios';
 
-const notOnboarded = { deviceId: 'dev-alex', name: '', onboarded: false, hardwareBackedKeys: null };
+const demoState = {
+  viewingAs: 'alex' as const,
+  aiReady: true,
+  links: { mika: true, noah: false },
+  runningScenario: null,
+  scenarios: ['normal', 'intelligence', 'multi', 'privacy', 'recovery', 'complete'].map((key, i) => ({ key, title: i === 5 ? 'Complete PULSE Experience' : `Scenario ${i + 1}`, description: 'Simulated' })),
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  act(() => useAppMode.setState({ mode: 'live' }));
-});
-
-describe('onboarding', () => {
-  it('asks for a name, explains permissions without requesting them, and completes with the name', async () => {
-    const app = createFakePulseApp({ me: notOnboarded, capabilities: capabilities('unavailable') });
-    renderWithApp(<OnboardingScreen />, app);
-
-    expect(screen.getByText(/Not an emergency service/)).toBeTruthy();
-    fireEvent.press(screen.getByTestId('get-started'));
-
-    // A name is required before continuing.
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-    expect(screen.getByText('What should people call you?')).toBeTruthy();
-    fireEvent.changeText(screen.getByTestId('name-input'), '  Alex Rivera ');
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-
-    expect(screen.getByText('Local Network')).toBeTruthy();
-    expect(screen.getByText('Microphone')).toBeTruthy();
-    expect(screen.getByText(/does not ask for anything now/)).toBeTruthy();
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-
-    // Per-capability facts from the snapshot; never a combined "ready" claim.
-    expect(screen.getByTestId('capability-text')).toHaveTextContent(/Unavailable/);
-    expect(screen.getByTestId('capability-embeddings')).toHaveTextContent(/Ready offline/);
-    expect(screen.getByTestId('capability-transcription')).toHaveTextContent(/Unsupported locale/);
-    expect(screen.queryByText(/of 4 ready|safety circle is ready/i)).toBeNull();
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-
-    expect(screen.getByText('Not an emergency service')).toBeTruthy();
-    expect(app.actions.completeOnboarding).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-    await waitFor(() => expect(app.actions.completeOnboarding).toHaveBeenCalledWith({ name: 'Alex Rivera' }));
-  });
-
-  it('says capabilities are still being checked rather than inventing a result', () => {
-    const app = createFakePulseApp({ me: { ...notOnboarded, name: 'Alex' }, capabilities: null });
-    renderWithApp(<OnboardingScreen />, app);
-    fireEvent.press(screen.getByTestId('get-started'));
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-    fireEvent.press(screen.getByTestId('onboarding-next'));
-    expect(screen.getByTestId('onboarding-capabilities-pending')).toBeTruthy();
-    expect(screen.queryByText('Ready offline')).toBeNull();
+  act(() => {
+    useAppMode.setState({ mode: 'live' });
+    useSafetySession.getState().reset();
   });
 });
 
 describe('activity', () => {
-  it('shows the empty state with no incidents and no delete control', () => {
+  it('shows the empty state with no incidents', () => {
     renderWithApp(<ActivityScreen />, createFakePulseApp());
     expect(screen.getByTestId('activity-empty')).toHaveTextContent(/No incidents found/);
+    expect(screen.getByTestId('activity-empty')).toHaveTextContent(/kept on this device/);
+    // Deleting moved to Settings → Privacy, as in the design.
     expect(screen.queryByTestId('delete-all')).toBeNull();
   });
 
-  it('filters, searches and opens an incident', () => {
+  it('filters with the design’s five filters, searches and opens an incident', () => {
     const open = viewOf(sosQueued().state);
     const closed = { ...viewOf(sosResolved().state), id: 'inc-closed', shortId: 'PULSE-0002' };
-    renderWithApp(<ActivityScreen />, createFakePulseApp({ incidents: [open, closed] }));
+    const cancelled = { ...viewOf(sosCancelled().state), id: 'inc-cancelled', shortId: 'PULSE-0003' };
+    const taken = { ...viewOf(sosRoleTaken().state), id: 'inc-taken', shortId: 'PULSE-0004' };
+    renderWithApp(<ActivityScreen />, createFakePulseApp({ incidents: [open, closed, cancelled, taken] }));
 
+    expect(['all', 'active', 'awaiting', 'resolved', 'cancelled'].map((k) => screen.getByTestId(`filter-${k}`).props.accessibilityLabel)).toEqual(['All', 'Active', 'Awaiting Response', 'Resolved', 'Cancelled']);
     expect(screen.getByTestId(`incident-${open.id}`)).toHaveTextContent(/Queued/);
+    expect(screen.getByTestId(`incident-${open.id}`)).toHaveTextContent(/Location not stated/);
     expect(screen.getByTestId('incident-inc-closed')).toHaveTextContent(/Resolved/);
-    fireEvent.press(screen.getByTestId('filter-closed'));
+    expect(screen.getByTestId('incident-inc-taken')).toHaveTextContent(/You → Mika Santos/);
+    expect(screen.getByTestId('incident-inc-taken')).toHaveTextContent(/1 role taken/);
+
+    fireEvent.press(screen.getByTestId('filter-active'));
+    expect(screen.getByTestId(`incident-${open.id}`)).toBeTruthy();
+    expect(screen.getByTestId('incident-inc-taken')).toBeTruthy();
+    expect(screen.queryByTestId('incident-inc-closed')).toBeNull();
+    expect(screen.queryByTestId('incident-inc-cancelled')).toBeNull();
+    fireEvent.press(screen.getByTestId('filter-awaiting'));
+    expect(screen.getByTestId(`incident-${open.id}`)).toBeTruthy();
+    expect(screen.queryByTestId('incident-inc-taken')).toBeNull();
+    fireEvent.press(screen.getByTestId('filter-resolved'));
+    expect(screen.getByTestId('incident-inc-closed')).toBeTruthy();
     expect(screen.queryByTestId(`incident-${open.id}`)).toBeNull();
+    fireEvent.press(screen.getByTestId('filter-cancelled'));
+    expect(screen.getByTestId('incident-inc-cancelled')).toBeTruthy();
+    expect(screen.queryByTestId('incident-inc-closed')).toBeNull();
+
     fireEvent.press(screen.getByTestId('filter-all'));
     fireEvent.changeText(screen.getByTestId('activity-search'), 'pulse-0002');
     expect(screen.queryByTestId(`incident-${open.id}`)).toBeNull();
     fireEvent.press(screen.getByTestId('incident-inc-closed'));
     expect(mockRouter.push).toHaveBeenCalledWith('/incident/inc-closed');
     fireEvent.changeText(screen.getByTestId('activity-search'), 'nothing matches this');
-    expect(screen.getByTestId('activity-empty')).toHaveTextContent(/Nothing matches/);
+    expect(screen.getByTestId('activity-empty')).toHaveTextContent(/Try a different search or filter/);
+  });
+
+  it('never words a queued request as sent, alerted or on the way', () => {
+    renderWithApp(<ActivityScreen />, createFakePulseApp({ incidents: [viewOf(sosQueued().state)] }));
+    expect(screen.queryByText(/\bSent\b|alerted|notified|on the way/i)).toBeNull();
+  });
+});
+
+describe('settings', () => {
+  it('shows the device, real AI state and writes settings from the design’s rows', () => {
+    const app = createFakePulseApp({ me: { deviceId: 'device-0123456789abcdef', name: 'Alex Rivera', onboarded: true, hardwareBackedKeys: true }, peers: [peer(MIKA)] });
+    renderWithApp(<SettingsScreen />, app);
+    expect(screen.getByTestId('device-id')).toHaveTextContent('iPhone 16 Pro · Device ID devi…cdef');
+    expect(screen.getByTestId('profile-pill')).toHaveTextContent('This iPhone');
+    expect(screen.getByTestId('row-name')).toHaveTextContent(/Alex Rivera/);
+    expect(screen.getByTestId('open-intelligence')).toHaveTextContent(/Ready on-device/);
+    expect(screen.getByTestId('row-keys')).toHaveTextContent(/Secure Enclave/);
+    expect(screen.getByTestId('row-trusted-devices')).toHaveTextContent(/1/);
+    expect(screen.getByTestId('settings-footer')).toHaveTextContent(/SAGIP prototype · Not an emergency service/);
+    expect(screen.queryByText(/PULSE|battery|Emergency information|fall detection/i)).toBeNull();
+    // Simulation-only rows stay out of Live.
+    expect(screen.queryByTestId('row-session')).toBeNull();
+    expect(screen.queryByTestId('reset-mock')).toBeNull();
+    expect(screen.queryByTestId('seg-mika')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('toggle-discovery'));
+    expect(app.actions.setDiscovery).toHaveBeenCalledWith(false);
+    fireEvent.press(screen.getByTestId('toggle-relay'));
+    expect(app.actions.updateSettings).toHaveBeenCalledWith({ relayEnabled: false });
+    fireEvent.press(screen.getByTestId('toggle-technical'));
+    expect(app.actions.updateSettings).toHaveBeenCalledWith({ showTechnicalDetails: true });
+    fireEvent.press(screen.getByTestId('seg-10'));
+    expect(app.actions.updateSettings).toHaveBeenCalledWith({ sosCountdownSeconds: 10 });
+    fireEvent.press(screen.getByTestId('seg-fil-PH'));
+    expect(app.actions.updateSettings).toHaveBeenCalledWith({ reportLocale: 'fil-PH' });
+    fireEvent.press(screen.getByTestId('open-demo-lab'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/demo-lab');
+    fireEvent.press(screen.getByTestId('row-trusted-devices'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/pair');
+    fireEvent.press(screen.getByTestId('row-trusted-contacts'));
+    expect(mockRouter.navigate).toHaveBeenCalledWith('/network');
+  });
+
+  it('opens the per-capability sheet from "Model availability"', () => {
+    renderWithApp(<SettingsScreen />, createFakePulseApp({ capabilities: capabilities('unavailable') }));
+    expect(screen.getByTestId('open-intelligence')).toHaveTextContent(/Unavailable/);
+    expect(screen.queryByTestId('intelligence-sheet')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-intelligence'));
+    expect(screen.getByTestId('intelligence-provider')).toHaveTextContent(/Callstack Apple/);
+    expect(screen.getByTestId('intelligence-text')).toHaveTextContent(/Unavailable/);
+    expect(screen.getByTestId('intelligence-transcription')).toHaveTextContent(/Unsupported locale/);
+    expect(screen.getByTestId('intelligence-sos-note')).toHaveTextContent(/Manual SOS works without it/);
   });
 
   it('deletes only after a confirmation that says other devices keep their copies', () => {
     const app = createFakePulseApp({ incidents: [viewOf(sosQueued().state)] });
-    renderWithApp(<ActivityScreen />, app);
+    renderWithApp(<SettingsScreen />, app);
     fireEvent.press(screen.getByTestId('delete-all'));
     expect(app.actions.deleteAllIncidents).not.toHaveBeenCalled();
     expect(screen.getByText(/Copies already delivered to other devices are not deleted/)).toBeTruthy();
     fireEvent.press(screen.getByTestId('dialog-confirm'));
     expect(app.actions.deleteAllIncidents).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('settings', () => {
-  it('shows the short device id, per-capability AI status and writes settings', () => {
-    const app = createFakePulseApp({ me: { deviceId: 'device-0123456789abcdef', name: 'Alex Rivera', onboarded: true, hardwareBackedKeys: true } });
+  it('offers no delete row when there is nothing to delete', () => {
+    renderWithApp(<SettingsScreen />, createFakePulseApp());
+    expect(screen.queryByTestId('delete-all')).toBeNull();
+  });
+
+  it('adds the simulated rows only in Demo', () => {
+    const app = createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated') });
     renderWithApp(<SettingsScreen />, app);
-    expect(screen.getByTestId('device-id')).toHaveTextContent('Device ID devi…cdef');
-    expect(screen.getByTestId('capability-text')).toHaveTextContent(/Ready offline/);
-    expect(screen.getByTestId('capability-transcription')).toHaveTextContent(/Unsupported locale/);
-    expect(screen.getByText('Held in the Secure Enclave')).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId('toggle-discovery'));
-    expect(app.actions.setDiscovery).toHaveBeenCalledWith(false);
-    fireEvent.press(screen.getByTestId('toggle-relay'));
-    expect(app.actions.updateSettings).toHaveBeenCalledWith({ relayEnabled: false });
-    fireEvent.press(screen.getByTestId('countdown-10'));
-    expect(app.actions.updateSettings).toHaveBeenCalledWith({ sosCountdownSeconds: 10 });
-    fireEvent.press(screen.getByTestId('locale-fil-PH'));
-    expect(app.actions.updateSettings).toHaveBeenCalledWith({ reportLocale: 'fil-PH' });
-    fireEvent.press(screen.getByTestId('open-demo-lab'));
-    expect(mockRouter.push).toHaveBeenCalledWith('/demo-lab');
+    expect(screen.getByTestId('profile-pill')).toHaveTextContent('Simulated');
+    expect(screen.getByTestId('open-intelligence')).toHaveTextContent(/Simulation/);
+    expect(screen.getByTestId('settings-footer')).toHaveTextContent(/All data, AI output and networking are simulated/);
+    fireEvent.press(screen.getByTestId('seg-mika'));
+    expect(app.actions.demo.viewAs).toHaveBeenCalledWith('mika');
+    fireEvent.press(screen.getByTestId('toggle-link-mika'));
+    expect(app.actions.demo.setLink).toHaveBeenCalledWith('mika', false);
+    fireEvent.press(screen.getByTestId('row-session'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/demo-lab/session');
+    fireEvent.press(screen.getByTestId('reset-mock'));
+    expect(app.actions.demo.reset).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('dialog-confirm'));
+    expect(app.actions.demo.reset).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('demo lab', () => {
-  const demo = {
-    viewingAs: 'alex' as const,
-    aiReady: true,
-    links: { mika: true, noah: false },
-    runningScenario: null,
-    scenarios: ['normal', 'intelligence', 'multi', 'privacy', 'recovery', 'complete'].map((key, i) => ({ key, title: `Scenario ${i + 1}`, description: 'Simulated' })),
-  };
-
   it('switches the single live/demo mode store and hides scenario controls in live mode', () => {
     renderWithApp(<DemoLabScreen />, createFakePulseApp());
+    expect(screen.getByText('SAGIP Demo Lab')).toBeTruthy();
     expect(screen.getByTestId('demo-off')).toBeTruthy();
     expect(screen.queryByTestId('demo-reset')).toBeNull();
+    expect(screen.queryByTestId('trigger-anomaly')).toBeNull();
+    expect(screen.queryByTestId('trigger-session')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-local-ai'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/demo-lab/local-ai');
     fireEvent.press(screen.getByTestId('seg-demo'));
     expect(useAppMode.getState().mode).toBe('demo');
     fireEvent.press(screen.getByTestId('seg-live'));
     expect(useAppMode.getState().mode).toBe('live');
   });
 
-  it('drives the simulated devices, links, AI toggle, six scenarios and reset', () => {
-    const app = createFakePulseApp({ mode: 'demo', demo, settings: DEFAULT_SETTINGS });
+  it('drives the simulated devices, links, AI toggle, six scenarios, triggers and reset', () => {
+    const app = createFakePulseApp({ mode: 'demo', demo: demoState, settings: DEFAULT_SETTINGS });
     renderWithApp(<DemoLabScreen />, app);
 
+    expect(screen.getByText('Alex · iPhone 17 Pro Max')).toBeTruthy();
+    expect(screen.getByTestId('view-as-alex')).toHaveProp('accessibilityState', { selected: true });
     fireEvent.press(screen.getByTestId('view-as-mika'));
     expect(app.actions.demo.viewAs).toHaveBeenCalledWith('mika');
     fireEvent.press(screen.getByTestId('link-noah'));
     expect(app.actions.demo.setLink).toHaveBeenCalledWith('noah', true);
+    fireEvent.press(screen.getByTestId('link-mika'));
+    expect(app.actions.demo.setLink).toHaveBeenCalledWith('mika', false);
     fireEvent.press(screen.getByTestId('ai-ready'));
     expect(app.actions.demo.setAIReady).toHaveBeenCalledWith(false);
+    fireEvent.press(screen.getByTestId('demo-technical'));
+    expect(app.actions.updateSettings).toHaveBeenCalledWith({ showTechnicalDetails: true });
+
     expect(screen.getAllByLabelText(/^Run scenario \d:/)).toHaveLength(6);
+    expect(screen.getByText('Complete SAGIP Experience')).toBeTruthy();
     fireEvent.press(screen.getByTestId('scenario-privacy'));
     expect(app.actions.demo.runScenario).toHaveBeenCalledWith('privacy');
+
+    fireEvent.press(screen.getByTestId('trigger-session'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/demo-lab/session');
+    fireEvent.press(screen.getByTestId('trigger-anomaly'));
+    expect(useSafetySession.getState().anomalyOpen).toBe(true);
+
     fireEvent.press(screen.getByTestId('demo-reset'));
     expect(app.actions.demo.reset).toHaveBeenCalledTimes(1);
+    expect(useSafetySession.getState().anomalyOpen).toBe(false);
   });
 });
 

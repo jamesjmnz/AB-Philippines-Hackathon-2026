@@ -11,6 +11,8 @@ export const routes = {
   pair: '/pair' as Href,
   demoLab: '/demo-lab' as Href,
   localAI: '/demo-lab/local-ai' as Href,
+  /** Simulation only; the screen refuses to render outside Demo mode. */
+  session: '/demo-lab/session' as Href,
   incident: (id: string) => `/incident/${encodeURIComponent(id)}` as Href,
   report: (id: string) => `/incident/${encodeURIComponent(id)}/report` as Href,
 };

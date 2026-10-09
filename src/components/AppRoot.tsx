@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppMode, PulseApp } from '@/services/api';
 import { PulseProvider, usePulse } from '@/services/PulseProvider';
-import { ToastHost } from '@/ui';
+import { OverlayHost, ToastHost } from '@/ui';
 
 import { useAppMode } from './appMode';
+import { AnomalySheet } from './demo/AnomalySheet';
+import { Splash } from './onboarding/Splash';
 import { SimulatedBar } from './SimulatedBar';
 
 type Factory = () => PulseApp | Promise<PulseApp>;
@@ -30,13 +32,11 @@ function loadFactory(mode: AppMode): Factory | null {
   }
 }
 
+/** The design's splash, shown while storage, identity and capabilities load. Never shows data. */
 export function StartingScreen({ message }: { message?: string }) {
   return (
-    <View testID="starting-screen" className="flex-1 items-center justify-center gap-2 bg-page px-8">
-      <Text accessibilityRole="header" accessibilityLiveRegion="polite" className="text-[20px] font-bold text-ink">
-        Starting…
-      </Text>
-      {message ? <Text className="text-center text-[14px] leading-[20px] text-gray-1">{message}</Text> : null}
+    <View accessible={false} accessibilityLabel="Starting" style={{ flex: 1 }}>
+      <Splash testID="starting-screen" message={message} />
     </View>
   );
 }
@@ -45,7 +45,15 @@ function ShellBody({ children }: { children: ReactNode }) {
   const snapshot = usePulse();
   const insets = useSafeAreaInsets();
   const demo = snapshot.mode === 'demo';
-  const body = snapshot.ready ? children : <StartingScreen />;
+  // Sheets, dialogs and toasts live inside this area, so in Demo they are always under the SIMULATED bar.
+  const body = (
+    <>
+      {snapshot.ready ? children : <StartingScreen />}
+      <OverlayHost />
+      {demo ? <AnomalySheet /> : null}
+      <ToastHost />
+    </>
+  );
   return (
     <View className="flex-1 bg-page">
       {demo ? <SimulatedBar /> : null}
@@ -57,7 +65,6 @@ function ShellBody({ children }: { children: ReactNode }) {
           body
         )}
       </View>
-      <ToastHost />
     </View>
   );
 }
