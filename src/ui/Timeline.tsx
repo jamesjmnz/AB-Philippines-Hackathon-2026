@@ -1,7 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from './Icon';
 import { colors, tones, type Tone } from './theme';
+import { Text } from './Text';
 
 export type TimelineEntry = {
   id: string;
@@ -28,10 +29,10 @@ export function TimelineItem({ entry, last }: { entry: TimelineEntry; last?: boo
       </View>
       <View className="flex-1 pb-4">
         <View className="flex-row items-start justify-between gap-2">
-          <Text className="flex-1 text-[14.5px] font-semibold text-ink">{entry.label}</Text>
+          <Text className="flex-1 text-[14px] font-semibold text-ink">{entry.label}</Text>
           <Text className="text-[12px] text-gray-1">{entry.time}</Text>
         </View>
-        {entry.meta ? <Text className="mt-0.5 text-[12.5px] text-gray-1">{entry.meta}</Text> : null}
+        {entry.meta ? <Text className="mt-0.5 text-[13px] text-gray-1">{entry.meta}</Text> : null}
       </View>
     </View>
   );

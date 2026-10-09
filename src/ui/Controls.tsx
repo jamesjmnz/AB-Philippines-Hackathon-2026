@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Icon, type IconName } from './Icon';
 import { EASE } from './Motion';
 import { colors } from './theme';
+import { Text } from './Text';
 
 type SegOption<T extends string> = { key: T; label: string; icon?: IconName };
 

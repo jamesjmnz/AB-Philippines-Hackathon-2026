@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IncidentView } from '@/services/api';
@@ -10,6 +10,7 @@ import { Enter, Icon, colors, tabBarHeight, tones, type IconName } from '@/ui';
 import { useActor } from '../incident/useMe';
 import { routes } from '../nav';
 import { displayName, incidentHeadline, incidentPlace, presentStatus, whenLabel } from '../present';
+import { Text, TextInput } from '@/ui/Text';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -60,7 +61,7 @@ export function ActivityScreen() {
     <View testID="activity-screen" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
         <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 16 }}>
-          <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink, paddingTop: 6 }}>
+          <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, paddingTop: 6 }}>
             Activity
           </Text>
 
@@ -137,9 +138,9 @@ export function ActivityScreen() {
                         {view.shortId} · {incidentPlace(view) ?? 'Location not stated'}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 9 }}>
-                        <Text style={{ flex: 1, fontSize: 12.5, color: colors.gray2 }}>{helpers.length > 0 ? `${reporterName} → ${helpers.join(', ')}` : reporterName}</Text>
+                        <Text style={{ flex: 1, fontSize: 13, color: colors.gray2 }}>{helpers.length > 0 ? `${reporterName} → ${helpers.join(', ')}` : reporterName}</Text>
                         <View style={{ backgroundColor: tone.bg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9 }}>
-                          <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '700', color: tone.fg }}>
+                          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: tone.fg }}>
                             {status.chip}
                           </Text>
                         </View>
@@ -149,7 +150,7 @@ export function ActivityScreen() {
                           {chips.map((c) => (
                             <View key={c.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.bg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 8 }}>
                               <Icon name={c.icon} size={14} color={c.fg} />
-                              <Text style={{ fontSize: 11.5, fontWeight: '600', color: c.fg }}>{c.label}</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: c.fg }}>{c.label}</Text>
                             </View>
                           ))}
                         </View>

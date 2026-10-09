@@ -1,9 +1,10 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Pill, Sheet, colors } from '@/ui';
 
 import { presentAIState } from '../present';
+import { Text } from '@/ui/Text';
 
 /**
  * Opened from Home → Overview → "On-Device Intelligence" and Settings → "Model availability".
@@ -30,25 +31,25 @@ export function IntelligenceSheet({ visible, onClose }: { visible: boolean; onCl
   return (
     <Sheet testID="intelligence-sheet" visible={visible} onClose={onClose}>
       <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray1 }}>{caps?.source === 'simulated' ? 'SIMULATED · no model is running' : 'Runs on this iPhone · no cloud model'}</Text>
-      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink, marginTop: 4 }}>
+      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, marginTop: 4 }}>
         On-Device Intelligence
       </Text>
       <View style={{ marginTop: 6 }}>
         {caps ? (
           rows.map((r) => (
             <View key={r.key} testID={`intelligence-${r.key}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
-              <Text style={{ fontSize: 14.5, color: colors.gray1 }}>{r.l}</Text>
-              <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
+              <Text style={{ fontSize: 14, color: colors.gray1 }}>{r.l}</Text>
+              <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
             </View>
           ))
         ) : (
-          <Text testID="intelligence-pending" style={{ fontSize: 14.5, color: colors.gray1, paddingVertical: 12 }}>
+          <Text testID="intelligence-pending" style={{ fontSize: 14, color: colors.gray1, paddingVertical: 12 }}>
             Still checking this iPhone.
           </Text>
         )}
       </View>
       <View style={{ backgroundColor: colors.page, borderRadius: 16, padding: 14, marginTop: 16 }}>
-        <Text testID="intelligence-sos-note" style={{ fontSize: 15, lineHeight: 21.75, color: colors.ink }}>
+        <Text testID="intelligence-sos-note" style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>
           Manual SOS works without it. A request is saved and queued whether or not any of these are ready.
         </Text>
       </View>

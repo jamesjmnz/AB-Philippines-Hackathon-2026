@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Text, View, type LayoutChangeEvent } from 'react-native';
+import { View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { Icon, type IconName } from './Icon';
 import { EASE, PulseRing } from './Motion';
 import { colors, design } from './theme';
+import { Text } from './Text';
 
 /**
  * The 17:9 campus map from the design (lines 179–216, repeated at 238 and 427), ported shape for shape.
@@ -241,7 +242,7 @@ export function CampusMap({ radius = 20, fills, pins = [], label = null, veil = 
         <View testID="map-veil" pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(248,244,236,0.7)', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 }}>
             <Icon name={veilIcon} size={15} />
-            <Text style={{ fontSize: 12.5, fontWeight: '600', color: colors.ink }}>{veil}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.ink }}>{veil}</Text>
           </View>
         </View>
       ) : null}
@@ -270,7 +271,7 @@ export function CampusMap({ radius = 20, fills, pins = [], label = null, veil = 
             shadowOffset: { width: 0, height: 1 },
           }}>
           <Icon name="location_on" size={14} />
-          <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 11.5, fontWeight: '600', color: colors.ink }}>
+          <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 12, fontWeight: '600', color: colors.ink }}>
             {label}
           </Text>
         </View>

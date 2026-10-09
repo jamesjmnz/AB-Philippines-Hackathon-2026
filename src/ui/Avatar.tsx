@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { colors } from './theme';
+import { Text } from './Text';
 
 /** The design's avatar tints (design line 943–950). */
 const PALETTE = [

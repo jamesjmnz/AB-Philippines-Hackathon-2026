@@ -1,5 +1,12 @@
 import '../global.css';
 
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  useFonts,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
@@ -10,6 +17,9 @@ import { colors } from '@/ui/theme';
 export default function RootLayout() {
   // Demo draws the ink SIMULATED bar under the status bar, so its text has to be light there.
   const demo = useAppMode((s) => s.mode) === 'demo';
+  // The faces register under the family named in `@/ui/Text`. If loading fails the system font is used.
+  const [fontsLoaded, fontsError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
+  if (!fontsLoaded && !fontsError) return null;
   return (
     <>
       <StatusBar style={demo ? 'light' : 'dark'} />

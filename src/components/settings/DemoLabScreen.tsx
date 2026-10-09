@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppMode, DemoDevice } from '@/services/api';
@@ -11,6 +11,7 @@ import { useAppMode } from '../appMode';
 import { useSafetySession } from '../demo/safetySession';
 import { routes } from '../nav';
 import { BRAND, brand } from '../present';
+import { Text } from '@/ui/Text';
 
 const MODES = [
   { key: 'live', label: 'Live' },
@@ -78,15 +79,15 @@ export function DemoLabScreen() {
         </View>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, gap: 18 }}>
           <View>
-            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               {BRAND} Demo Lab
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray1, marginTop: 4 }}>Prototype and presentation controls. All data, AI output, encryption and networking here are simulated.</Text>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: colors.gray1, marginTop: 4 }}>Prototype and presentation controls. All data, AI output, encryption and networking here are simulated.</Text>
           </View>
 
           <View style={{ gap: 8 }}>
             <SegmentedControl<AppMode> options={MODES} value={requested} onChange={setMode} accessibilityLabel="Live or Demo" />
-            <Text testID="mode-note" accessibilityLiveRegion="polite" style={{ fontSize: 12.5, lineHeight: 17, color: colors.gray1, paddingHorizontal: 4 }}>
+            <Text testID="mode-note" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 17, color: colors.gray1, paddingHorizontal: 4 }}>
               {snapshot.mode === 'demo' ? 'Demo is on. The SIMULATED bar stays on every screen until you switch back to Live.' : 'Live is on. Only measured state from this iPhone is shown.'}
             </Text>
           </View>
@@ -95,7 +96,7 @@ export function DemoLabScreen() {
             <>
               <View testID="demo-off" style={{ flexDirection: 'row', gap: 10, backgroundColor: colors.hairline, borderRadius: 16, padding: 14 }}>
                 <Icon name="info" size={18} color={colors.gray2} />
-                <Text style={{ flex: 1, fontSize: 13, lineHeight: 18.85, color: colors.gray2 }}>Scenario controls appear after you switch to Demo. Switching does not touch your live requests or pairings.</Text>
+                <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: colors.gray2 }}>Scenario controls appear after you switch to Demo. Switching does not touch your live requests or pairings.</Text>
               </View>
               <Group>
                 <TriggerRow first testID="open-local-ai" icon="memory" label="Local AI diagnostics" onPress={() => router.push(routes.localAI)} />
@@ -167,7 +168,7 @@ export function DemoLabScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>{brand(s.title)}</Text>
-                          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 2 }}>{brand(s.description)}</Text>
+                          <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>{brand(s.description)}</Text>
                         </View>
                         <Icon name="play_circle" size={22} filled />
                       </Pressable>

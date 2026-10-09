@@ -1,7 +1,8 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop, Icon, Press, backdropBlurAvailable, colors, tabBarHeight, type IconName } from '@/ui';
+import { Text } from '@/ui/Text';
 
 export type TabKey = 'index' | 'network' | 'activity' | 'settings';
 
@@ -29,7 +30,7 @@ function Tab({ item, selected, onPress }: { item: Item; selected: boolean; onPre
       onPress={onPress}
       style={{ flex: 1, minHeight: 52, alignItems: 'center', gap: 4, paddingVertical: 6 }}>
       <Icon name={item.icon} size={25} color={color} filled={selected} />
-      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 10.5, fontWeight: '600', color }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 11, fontWeight: '600', color }}>
         {item.label}
       </Text>
     </Pressable>
@@ -91,7 +92,7 @@ export function PulseTabBar({ active, onSelect, onSOS }: Props) {
               shadowRadius: 12,
               shadowOffset: { width: 0, height: 4 },
           }}>
-          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: '800', letterSpacing: 0.5, color: '#FFFFFF' }}>
+          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: '700', letterSpacing: 0.5, color: '#FFFFFF' }}>
             SOS
           </Text>
         </Press>

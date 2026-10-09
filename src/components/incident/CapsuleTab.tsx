@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { canPrepareCapsule, type Actor, type ClaimField, type DisclosureLevel } from '@/domain';
 import type { FactView, IncidentView, RecipientPolicyInput } from '@/services/api';
@@ -9,6 +9,7 @@ import { Avatar, Icon, Pill, SegmentedControl, Toggle, colors, type IconName } f
 import { DELIVERY_LOOK, FIELD_LABELS, LEVEL_LABELS, LEVEL_SHORT, presentDelivery } from '../present';
 import { CardBox, SectionTitle, TagPill } from './parts';
 import { useRun } from './useRun';
+import { Text } from '@/ui/Text';
 
 const ORDER: readonly (DisclosureLevel | 'off')[] = ['off', 'relay', 'trusted', 'authorized'];
 const PREVIEW_LEVELS = [
@@ -79,7 +80,7 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
   return (
     <>
       <View>
-        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.7, color: colors.ink }}>
+        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
           Privacy
         </Text>
         <Text style={{ fontSize: 14, color: colors.gray1, marginTop: 4 }}>Share what’s needed. Protect what isn’t.</Text>
@@ -89,7 +90,7 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
         <Icon name="lock" size={20} filled />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>Rescue Capsule</Text>
-          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 1 }}>{mode === 'demo' ? 'Encryption simulated · receipts confirm delivery' : 'Each recipient reads only their level · receipts confirm delivery'}</Text>
+          <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 1 }}>{mode === 'demo' ? 'Encryption simulated · receipts confirm delivery' : 'Each recipient reads only their level · receipts confirm delivery'}</Text>
         </View>
         <TagPill testID="capsule-state" label={pill.label} fg={pill.fg} bg={pill.bg} />
       </View>
@@ -98,13 +99,13 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
 
       <CardBox>
         <View style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
-          <Text testID="preview-who" style={{ fontSize: 12.5, color: colors.gray1 }}>
+          <Text testID="preview-who" style={{ fontSize: 13, color: colors.gray1 }}>
             {owner ? (holders.length > 0 ? `Seen by: ${holders.join(', ')}` : 'Nobody holds this level right now') : 'This is what your device can read'}
           </Text>
         </View>
         {preview.length === 0 ? (
           <View style={{ paddingVertical: 11, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.hairline }}>
-            <Text testID="preview-empty" style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray1 }}>
+            <Text testID="preview-empty" style={{ fontSize: 13, lineHeight: 19, color: colors.gray1 }}>
               {owner && level === 'relay' ? 'Nothing. A device that only passes along handles sealed data and cannot read any detail.' : 'Nothing readable at this level.'}
             </Text>
           </View>
@@ -172,7 +173,7 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
               if (r.ok) setDraft(null);
             }}
           />
-          <Text style={{ fontSize: 12, lineHeight: 16.8, color: colors.gray1, paddingHorizontal: 4 }}>Sending queues the update on this device. Each recipient shows Delivered only after their device returns a receipt.</Text>
+          <Text style={{ fontSize: 12, lineHeight: 17, color: colors.gray1, paddingHorizontal: 4 }}>Sending queues the update on this device. Each recipient shows Delivered only after their device returns a receipt.</Text>
         </>
       ) : (
         <Text testID="my-access" style={{ fontSize: 13, color: colors.gray1, paddingHorizontal: 4 }}>

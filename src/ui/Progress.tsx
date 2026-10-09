@@ -1,10 +1,11 @@
 import { useEffect, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { useAnimatedProps, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { EASE, type EaseName } from './Motion';
 import { colors, design } from './theme';
+import { Text } from './Text';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -83,7 +84,7 @@ export function StepBar({ steps, color = colors.green }: { steps: readonly Step[
       {steps.map((s) => (
         <View key={s.label} style={{ flex: 1, minWidth: 0 }}>
           <View style={{ height: 4, borderRadius: 2, backgroundColor: s.done ? color : colors.line }} />
-          <Text numberOfLines={1} style={{ marginTop: 6, fontSize: 9.5, fontWeight: '600', color: s.done ? colors.ink : colors.gray4 }}>
+          <Text numberOfLines={1} style={{ marginTop: 6, fontSize: 10, fontWeight: '600', color: s.done ? colors.ink : colors.gray4 }}>
             {s.label}
           </Text>
         </View>

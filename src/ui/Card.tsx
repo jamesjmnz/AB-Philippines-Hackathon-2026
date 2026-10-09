@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Icon, type IconName } from './Icon';
 import { colors } from './theme';
+import { Text } from './Text';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <View className={`rounded-card bg-card p-4 ${className}`}>{children}</View>;
@@ -43,7 +44,7 @@ export function ListRow({ title, subtitle, value, icon, iconColor, onPress, trai
         </View>
       ) : null}
       <View className="flex-1">
-        <Text className={`text-[15.5px] font-semibold ${destructive ? 'text-coral-text' : 'text-ink'}`}>{title}</Text>
+        <Text className={`text-[15px] font-semibold ${destructive ? 'text-coral-text' : 'text-ink'}`}>{title}</Text>
         {subtitle ? <Text className="mt-0.5 text-[13px] text-gray-1">{subtitle}</Text> : null}
       </View>
       {value ? <Text className="max-w-[45%] text-right text-[14px] text-gray-1">{value}</Text> : null}

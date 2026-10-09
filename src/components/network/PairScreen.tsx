@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Avatar, Banner, Button, GroupedList, Icon, Screen, TextButton, colors } from '@/ui';
@@ -8,6 +8,7 @@ import { Avatar, Banner, Button, GroupedList, Icon, Screen, TextButton, colors }
 import { useRun } from '../incident/useRun';
 import { routes } from '../nav';
 import { DISCOVERY_LABEL, presentReach } from '../present';
+import { Text } from '@/ui/Text';
 
 /** Pick a discovered device, compare the six-digit code on both phones, then confirm or reject. */
 export function PairScreen() {
@@ -35,7 +36,7 @@ export function PairScreen() {
         <View testID="pair-code" accessible accessibilityLabel={`Pairing code ${digits.join(' ')}`} className="flex-row justify-center gap-2 py-4">
           {digits.map((d, i) => (
             <View key={`${i}-${d}`} className="min-h-[60px] min-w-[44px] items-center justify-center rounded-[14px] bg-page px-2">
-              <Text className="text-[32px] font-extrabold text-ink" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text className="text-[32px] font-bold text-ink" style={{ fontVariant: ['tabular-nums'] }}>
                 {d}
               </Text>
             </View>
@@ -45,7 +46,7 @@ export function PairScreen() {
           <View className="gap-[10px]">
             <Button testID="pair-confirm" label="The codes match" disabled={busy !== null} onPress={() => void run('confirm', () => actions.confirmPairing())} />
             <Button testID="pair-reject" label="Doesn’t match" variant="secondary" onPress={() => void actions.cancelPairing()} />
-            <Text className="text-center text-[12.5px] leading-[17px] text-gray-1">If the codes differ, someone else may be in between. Do not confirm.</Text>
+            <Text className="text-center text-[13px] leading-[17px] text-gray-1">If the codes differ, someone else may be in between. Do not confirm.</Text>
           </View>
         ) : null}
         {session.stage === 'awaiting_peer' ? (
@@ -102,14 +103,14 @@ export function PairScreen() {
               <Avatar name={p.name} size={40} />
               <View className="flex-1">
                 <Text className="text-[15px] font-semibold text-ink">{p.name}</Text>
-                <Text className="mt-[1px] text-[12.5px] text-gray-1">{presentReach(p).label}</Text>
+                <Text className="mt-[1px] text-[13px] text-gray-1">{presentReach(p).label}</Text>
               </View>
               <Icon name="chevron_right" size={20} color={colors.gray5} />
             </Pressable>
           ))
         )}
       </GroupedList>
-      <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">A device becomes trusted only after both people confirm the same code. Seeing a device nearby does not make it trusted.</Text>
+      <Text className="px-1 text-[13px] leading-[17px] text-gray-1">A device becomes trusted only after both people confirm the same code. Seeing a device nearby does not make it trusted.</Text>
     </Screen>
   );
 }

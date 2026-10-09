@@ -45,8 +45,8 @@ describe('tab bar', () => {
 
     const sos = StyleSheet.flatten(screen.getByTestId('tab-sos').props.style);
     expect(sos).toMatchObject({ width: 62, height: 62, borderRadius: 31, marginTop: -22, backgroundColor: '#ED625E', borderWidth: 4, borderColor: '#FFFFFF', shadowColor: '#ED625E', shadowOpacity: 0.22, shadowRadius: 12 });
-    expect(StyleSheet.flatten(screen.getByText('SOS').props.style)).toMatchObject({ fontSize: 15, fontWeight: '800', letterSpacing: 0.5 });
-    expect(StyleSheet.flatten(screen.getByText('Network').props.style)).toMatchObject({ fontSize: 10.5, fontWeight: '600', color: '#151515' });
+    expect(StyleSheet.flatten(screen.getByText('SOS').props.style)).toMatchObject({ fontSize: 15, fontWeight: '700', letterSpacing: 0.5 });
+    expect(StyleSheet.flatten(screen.getByText('Network').props.style)).toMatchObject({ fontSize: 11, fontWeight: '600', color: '#151515' });
     expect(StyleSheet.flatten(screen.getByText('Home').props.style)).toMatchObject({ color: '#A1A1A6' });
   });
 });

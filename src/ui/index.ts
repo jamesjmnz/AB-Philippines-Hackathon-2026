@@ -16,3 +16,4 @@ export * from './Rule';
 export * from './Screen';
 export * from './Timeline';
 export * from './theme';
+export * from './Text';

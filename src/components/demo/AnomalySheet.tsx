@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Pill, Ring, Sheet, colors, useToast } from '@/ui';
@@ -8,6 +8,7 @@ import { Pill, Ring, Sheet, colors, useToast } from '@/ui';
 import { routes } from '../nav';
 import { BRAND } from '../present';
 import { useSafetySession } from './safetySession';
+import { Text } from '@/ui/Text';
 
 const SECONDS = 10;
 
@@ -70,16 +71,16 @@ function AnomalyCountdown() {
       </View>
       <View style={{ marginTop: 18 }}>
         <Ring size={96} r={42} stroke={7} progress={count / SECONDS} color={colors.amber} track={colors.amberTint} durationMs={1000} ease="linear">
-          <Text accessibilityRole="timer" accessibilityLabel={`${count} seconds to respond`} style={{ fontSize: 34, fontWeight: '800', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+          <Text accessibilityRole="timer" accessibilityLabel={`${count} seconds to respond`} style={{ fontSize: 34, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
             {count}
           </Text>
         </Ring>
       </View>
-      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink, marginTop: 18, textAlign: 'center' }}>
+      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, marginTop: 18, textAlign: 'center' }}>
         Unusual movement detected
       </Text>
       <Text style={{ fontSize: 20, fontWeight: '600', color: colors.ink, marginTop: 6, textAlign: 'center' }}>Are you okay?</Text>
-      <Text style={{ fontSize: 14, lineHeight: 20.3, color: colors.gray1, marginTop: 10, maxWidth: 300, textAlign: 'center' }}>
+      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.gray1, marginTop: 10, maxWidth: 300, textAlign: 'center' }}>
         If you don’t respond, {BRAND} will queue an unconfirmed request for your trusted circle. Simulated.
       </Text>
       <View style={{ alignSelf: 'stretch', gap: 10, marginTop: 22 }}>

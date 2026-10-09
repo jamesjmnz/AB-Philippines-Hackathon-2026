@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePulse } from '@/services/PulseProvider';
@@ -9,6 +9,7 @@ import { Enter, Icon, IconButton, Pill, PulseRing, Ring, Toggle, colors, padBott
 import { routes } from '../nav';
 import { BRAND, timeLabel } from '../present';
 import { clock, SESSION_CHECKIN_SECONDS, useSafetySession } from './safetySession';
+import { Text } from '@/ui/Text';
 
 type RowDef = { icon: IconName; label: string; value?: string; toggle?: boolean };
 
@@ -40,7 +41,7 @@ export function SafetySessionScreen() {
         </View>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, gap: 16 }}>
           <View>
-            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               Safety Session is a simulation
             </Text>
             <Text style={{ fontSize: 15, color: colors.gray1, marginTop: 4 }}>Switch to Demo in {BRAND} Demo Lab.</Text>
@@ -73,7 +74,7 @@ export function SafetySessionScreen() {
         </View>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, gap: 16 }}>
           <View>
-            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               Safety Session
             </Text>
             <Text style={{ fontSize: 15, color: colors.gray1, marginTop: 4 }}>Stay connected while you’re on the move.</Text>
@@ -83,7 +84,7 @@ export function SafetySessionScreen() {
             <View style={{ width: 200, height: 200 }}>
               <PulseRing size={156} color={colors.green} active={active} durationMs={2600} style={{ left: 22, top: 22 }} />
               <Ring size={200} r={88} stroke={12} fill="#FFFFFF" progress={active ? (elapsed % SESSION_CHECKIN_SECONDS) / SESSION_CHECKIN_SECONDS : 0} durationMs={1000} ease="linear">
-                <Text testID="session-timer" accessibilityRole="timer" style={{ fontSize: 44, fontWeight: '800', letterSpacing: -1.5, color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                <Text testID="session-timer" accessibilityRole="timer" style={{ fontSize: 44, fontWeight: '700', letterSpacing: -0.6, color: colors.ink, fontVariant: ['tabular-nums'] }}>
                   {timer}
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray1, marginTop: 2 }}>{active ? `Next check-in in ${nextIn} min` : 'Not started'}</Text>
@@ -136,7 +137,7 @@ export function SafetySessionScreen() {
             />
           )}
 
-          <Text style={{ fontSize: 12, lineHeight: 17.4, color: colors.gray1, paddingHorizontal: 4 }}>Simulation only. This prototype does not read motion sensors or monitor you continuously.</Text>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: colors.gray1, paddingHorizontal: 4 }}>Simulation only. This prototype does not read motion sensors or monitor you continuously.</Text>
         </View>
       </ScrollView>
     </Enter>

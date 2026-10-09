@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePulse } from '@/services/PulseProvider';
@@ -13,6 +13,7 @@ import { IntelligenceTab } from './IntelligenceTab';
 import { StatusCard } from './StatusCard';
 import { TimelineTab } from './TimelineTab';
 import { useActor } from './useMe';
+import { Text } from '@/ui/Text';
 
 const SEGMENTS = [
   { key: 'intelligence', label: 'Intelligence' },
@@ -56,10 +57,10 @@ export function IncidentScreen({ incidentId, initialSegment = 'intelligence' }: 
         ) : (
           <View testID="incident-missing" style={{ paddingTop: 14, paddingHorizontal: 20, gap: 14 }}>
             <View>
-              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.7, color: colors.ink }}>
+              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
                 Request not found
               </Text>
-              <Text style={{ fontSize: 14, lineHeight: 20.3, color: colors.gray1, marginTop: 4 }}>This request is not on this device. It may have been deleted here, or it has not arrived yet.</Text>
+              <Text style={{ fontSize: 14, lineHeight: 21, color: colors.gray1, marginTop: 4 }}>This request is not on this device. It may have been deleted here, or it has not arrived yet.</Text>
             </View>
             <Pill label="Go to Activity" tone="soft" h={54} size={16} onPress={() => router.replace(routes.activity)} />
           </View>

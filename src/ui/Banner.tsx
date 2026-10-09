@@ -1,7 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from './Icon';
 import type { Tone } from './theme';
+import { Text } from './Text';
 
 /** Banner colours as the design writes them (lines 712, 716, 795, 796): deep text on the tint. */
 const LOOK: Record<Tone, { fg: string; bg: string }> = {
