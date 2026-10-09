@@ -60,3 +60,5 @@ Append a row with the date, the decision in one sentence, the reason and the sta
 | D-P2-6 | Every packet between devices is a signed, encrypted capsule envelope. Events that carry the requester's own words or symptom travel only in the `detail` section; coordination events travel in `summary`. | Relay-only devices must never hold readable incident content, and trusted responders must not receive what is reserved for authorized ones. |
 
 Known gaps accepted for the prototype: event ordering trusts the author's Lamport value; an event id reused with different content is not detected; quarantined bodies have no retention rule.
+
+| D-NAME | 2026-10-10: the product is named **SAGIP**. README title and the app display name use it. "PULSE" remains as the working name in older docs and in code identifiers (module names, bundle id, design export) until a full rename is requested. | Owner decision. |

@@ -3,7 +3,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 // All native configuration lives here (CNG). The generated ios/ folder is not committed.
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'PULSE',
+  name: 'SAGIP',
   slug: 'pulse',
   version: '0.1.0',
   scheme: 'pulse',
