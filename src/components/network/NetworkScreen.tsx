@@ -400,10 +400,8 @@ export function NetworkScreen() {
                   disabled={busy !== null || selected.reach === 'unreachable'}
                   onPress={async () => {
                     const r = await run('pair', () => actions.startPairing(selected.deviceId));
-                    if (r.ok) {
-                      closeSheet();
-                      router.push(routes.pair);
-                    }
+                    // The shell opens the code comparison as soon as the session exists.
+                    if (r.ok) closeSheet();
                   }}
                 />
               ) : null}

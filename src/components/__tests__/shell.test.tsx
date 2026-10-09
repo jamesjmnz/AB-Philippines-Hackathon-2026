@@ -1,4 +1,4 @@
-import { mockRouter } from '../testing/mocks';
+import { mockPathname, mockRouter } from '../testing/mocks';
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Modal, Text } from 'react-native';
@@ -46,6 +46,43 @@ describe('PulseShell', () => {
     expect(screen.getByText('Intelligence that stays with you.')).toBeTruthy();
     expect(screen.queryByText('content')).toBeNull();
     expect(screen.queryByText(/PULSE/)).toBeNull();
+  });
+});
+
+describe('incoming pairing', () => {
+  const session = { peerDeviceId: 'dev-peer-0001', peerName: 'Mika', code: '123456', stage: 'compare' as const, error: null };
+
+  beforeEach(() => {
+    mockRouter.push.mockClear();
+    mockPathname.current = '/';
+  });
+
+  it('opens the code comparison when another device starts pairing', () => {
+    const app = createFakePulseApp({ mode: 'live' });
+    render(
+      <PulseShell app={app}>
+        <Text>content</Text>
+      </PulseShell>,
+    );
+    expect(mockRouter.push).not.toHaveBeenCalled();
+    act(() => app.setSnapshot({ pairing: session }));
+    expect(mockRouter.push).toHaveBeenCalledTimes(1);
+    expect(mockRouter.push).toHaveBeenCalledWith('/pair');
+    // A later stage of the same session does not navigate again.
+    act(() => app.setSnapshot({ pairing: { ...session, stage: 'awaiting_peer' } }));
+    expect(mockRouter.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays put when the pairing screen is already open', () => {
+    mockPathname.current = '/pair';
+    const app = createFakePulseApp({ mode: 'live' });
+    render(
+      <PulseShell app={app}>
+        <Text>content</Text>
+      </PulseShell>,
+    );
+    act(() => app.setSnapshot({ pairing: session }));
+    expect(mockRouter.push).not.toHaveBeenCalled();
   });
 });
 

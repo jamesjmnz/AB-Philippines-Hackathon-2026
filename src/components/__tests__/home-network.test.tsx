@@ -205,7 +205,6 @@ describe('Network', () => {
     fireEvent.press(screen.getByTestId('peer-pair'));
     expect(app.actions.startPairing).toHaveBeenCalledWith(NOAH.deviceId);
     await flush();
-    expect(mockRouter.push).toHaveBeenCalledWith('/pair');
 
     fireEvent.press(screen.getByTestId(`peer-${MIKA.deviceId}`));
     expect(screen.queryByTestId('peer-pair')).toBeNull();
