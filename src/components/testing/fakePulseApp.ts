@@ -1,5 +1,6 @@
 import type { AIResult, CapabilityMatrix } from '@/ai';
 import { CLAIM_FIELDS, type Actor, type IncidentState } from '@/domain';
+import { statementUpdates } from '@/services/views';
 import type { AppSettings, FactView, IncidentView, PeerView, PulseActions, PulseApp, PulseSnapshot } from '@/services/api';
 
 /** Test-only in-memory PulseApp: the snapshot is set by the test and every action is a jest.fn(). */
@@ -75,6 +76,7 @@ export function viewOf(state: IncidentState, me: Actor = ME, patch: Partial<Inci
     role: reporter ? 'reporter' : 'responder',
     access: reporter ? 'owner' : 'authorized',
     facts,
+    updates: statementUpdates(state, nameOf),
     originalReport: report?.text ?? null,
     receivedViaName: null,
     pendingOutbox: 0,
@@ -104,6 +106,7 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
     analyzeReport: async () => aiUnavailable(),
     diagnoseExtraction: async () => aiUnavailable(),
     probeLocalAI: async () => [],
+    aiDiagnostics: () => ({ stats: { total: 0, byState: {}, cacheHits: 0, dedupHits: 0, displaced: 0, queueHighWater: 0, latencyMs: { samples: 0, p50: null, p90: null, max: null } }, recent: [] }),
     runEvaluation: async () => ({ ok: false as const, reason: 'unavailable' as const }),
     attachProposal: async () => okResult,
     confirmFact: async () => okResult,
@@ -160,4 +163,4 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
 }
 
 /** Names of every action that reaches on-device AI. The SOS path must call none of them. */
-export const AI_ACTIONS = ['analyzeReport', 'diagnoseExtraction', 'suggestClarification', 'suggestTasks', 'transcribe', 'refreshCapabilities'] as const;
+export const AI_ACTIONS = ['analyzeReport', 'diagnoseExtraction', 'probeLocalAI', 'runEvaluation', 'suggestClarification', 'suggestTasks', 'transcribe', 'refreshCapabilities'] as const;

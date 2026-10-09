@@ -12,7 +12,8 @@ import {
   type IncidentState,
 } from '@/domain';
 
-import type { FactView, IncidentView, RecipientPolicyInput, SendFailureCode } from './api';
+import type { FactView, IncidentView, RecipientPolicyInput, SendFailureCode, UpdateView } from './api';
+import { analyzeWithRules } from './deltaPipeline';
 
 /** Short human reference derived from the incident id. Carries no personal data. */
 export function shortIdFor(incidentId: string): string {
@@ -55,6 +56,31 @@ export function ownerFacts(state: IncidentState, nameOf: NameOf): FactView[] {
       protected: false,
       candidates,
     };
+  });
+}
+
+/**
+ * How each statement after the first relates to what was known before it. The deterministic rules
+ * answer for every statement on every device; where the on-device model's assessment is on record it
+ * is shown instead, and is still only a proposal.
+ */
+export function statementUpdates(state: IncidentState, nameOf: NameOf): UpdateView[] {
+  return state.reports.slice(1).flatMap((report) => {
+    const rules = analyzeWithRules(state, report.id);
+    if (!rules) return [];
+    const assessed = [...state.assessments].reverse().find((a) => a.reportId === report.id);
+    const disputed = (field: ClaimField) => state.contradictions.some((c) => c.field === field && c.status === 'open') || state.questions.some((q) => q.field === field && q.status === 'open' && q.origin === 'ai');
+    return [
+      {
+        reportId: report.id,
+        by: nameOf(report.author),
+        kind: report.kind,
+        overall: assessed?.overall ?? rules.overall,
+        basis: assessed ? ('model' as const) : ('rules' as const),
+        needsVerification: rules.items.some((i) => i.needsVerification) || (assessed?.items.some((i) => i.class === 'possible_contradiction' && disputed(i.field)) ?? false),
+        fields: (assessed?.items ?? rules.items).map((i) => ({ field: i.field, class: i.class })),
+      },
+    ];
   });
 }
 
@@ -140,6 +166,7 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
       role: 'reporter',
       access: 'owner',
       facts: ownerFacts(state, nameOf),
+      updates: statementUpdates(state, nameOf),
       originalReport: own.length > 0 ? own.join('\n') : null,
       receivedViaName: null,
     };
@@ -157,6 +184,8 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
     role: 'responder',
     access,
     facts: projectionFacts(projection, state, nameOf),
+    // A responder sees only what the rules derive from statements this device was allowed to read.
+    updates: statementUpdates({ ...state, assessments: [] }, nameOf),
     originalReport: projectionReportText(projection),
   };
 }

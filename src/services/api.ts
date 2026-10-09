@@ -1,6 +1,6 @@
 import type { Split as EvaluationSplit, Variant as EvaluationVariant } from '@/eval';
-import type { AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, OutputProbeLine, ProposalField, TaskKind, TaskProposal } from '@/ai';
-import type { ClaimField, DisclosureLevel, IncidentState, ProvenanceTag } from '@/domain';
+import type { AICallRecord, AIGuardStats, AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, OutputProbeLine, ProposalField, TaskKind, TaskProposal } from '@/ai';
+import type { ClaimField, DeltaClass, DisclosureLevel, FieldDeltaClass, IncidentState, ProvenanceTag } from '@/domain';
 
 /**
  * The single contract between screens and everything underneath them.
@@ -44,6 +44,19 @@ export type FactView = {
   candidates: { value: string; by: string }[];
 };
 
+/** How one later statement relates to what was already known. Derived on every read; nothing here is a fact by itself. */
+export type UpdateView = {
+  reportId: string;
+  by: string;
+  kind: 'report' | 'observation';
+  overall: DeltaClass | 'not_assessed';
+  /** 'model' when an on-device assessment is on record for this statement; 'rules' when only the deterministic rules spoke. */
+  basis: 'rules' | 'model';
+  /** A person has to look: two people disagree, or a confirmed detail is contradicted. */
+  needsVerification: boolean;
+  fields: { field: ClaimField; class: FieldDeltaClass }[];
+};
+
 export type IncidentView = {
   id: string;
   /** Short human reference, e.g. "PULSE-7F3A". Never contains personal data. */
@@ -54,6 +67,8 @@ export type IncidentView = {
   /** What this device may read. 'relay' incidents are never listed. */
   access: 'owner' | DisclosureLevel;
   facts: FactView[];
+  /** One entry per statement after the first, oldest first. */
+  updates: UpdateView[];
   /** The requester's own words, or null if this device may not read them. */
   originalReport: string | null;
   /** How this incident reached this device: null when created here or received directly. */
@@ -159,6 +174,11 @@ export interface PulseActions {
    * creates no incident and sends nothing. Only where the real provider is loaded on a physical iPhone.
    */
   runEvaluation(input: { split: EvaluationSplit; variant: EvaluationVariant; conditions: string }, onProgress?: (done: number, total: number) => void): Promise<EvaluationOutcome>;
+  /**
+   * Diagnostics: what the model lane has done since launch. Timings, states and counts only: no report
+   * text, model output or error message is kept. Synchronous and safe to poll.
+   */
+  aiDiagnostics(): { stats: AIGuardStats; recent: readonly AICallRecord[] };
   /** Records the proposal in the ledger as AI-proposed claims. */
   attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult>;
   /** A human confirms (optionally editing) one proposed or reported field. */
