@@ -1,11 +1,12 @@
+import { assessmentIdFor } from '../assessments';
 import type { ClaimField } from '../claims';
 import type { DisclosurePolicy } from '../disclosure';
 import { DomainError } from '../errors';
-import type { ClaimInput, EventSpec, TaskKind } from '../events';
+import type { ClaimInput, EventSpec, PayloadOf, TaskKind } from '../events';
 import { newOutboxMessage, type PacketReceipt } from '../outbox';
 import type { TextSpan } from '../primitives';
 import { detectFieldConflicts } from '../rules/conflicts';
-import { extractBuilding, extractFloor, extractFloorTransition } from '../rules/location';
+import { extractBuilding, extractFloorTransition, extractStatedFloor } from '../rules/location';
 import type { IncidentState } from '../state';
 import { buildEvent, buildEvents, type CommandContext, type CommandResult } from './build';
 
@@ -28,7 +29,7 @@ export interface StatementInput {
   deriveLocation?: boolean;
 }
 
-function statementClaims(input: StatementInput): ClaimInput[] {
+function statementClaims(input: StatementInput, kind: 'report' | 'observation'): ClaimInput[] {
   const claims: ClaimInput[] = (input.claims ?? []).map((c) => ({
     field: c.field,
     value: c.value,
@@ -38,9 +39,10 @@ function statementClaims(input: StatementInput): ClaimInput[] {
   if (input.deriveLocation !== false) {
     const explicit = new Set(claims.map((c) => c.field));
     // "I moved from the first floor to the second floor": the destination is the floor stated,
-    // and its span is the evidence. Checked first because an elided origin or destination
-    // ("... from the 2nd", "now I'm on the second") leaves extractFloor with a single mention.
-    const floor = extractFloorTransition(input.text)?.to ?? extractFloor(input.text);
+    // and its span is the evidence. The movement rule is first person, so in an observation it
+    // describes the observer's own movement, not the requester's floor: no floor is taken from it.
+    const floor =
+      kind === 'observation' && extractFloorTransition(input.text) ? null : extractStatedFloor(input.text);
     if (floor && !explicit.has('floor')) {
       claims.push({ field: 'floor', value: floor.value, extraction: 'rule', evidence: floor.span });
     }
@@ -87,7 +89,7 @@ function addStatement(
         text: input.text,
         inputMode: input.inputMode ?? 'typed',
         ...(input.language ? { language: input.language } : {}),
-        claims: statementClaims(input),
+        claims: statementClaims(input, kind),
       },
     },
   ]);
@@ -126,6 +128,45 @@ export function recordAIProposal(
           field: f.field,
           value: f.value,
           ...(f.evidence ? { evidence: f.evidence } : {}),
+        })),
+      },
+    },
+  ]);
+}
+
+export interface AssessmentInput {
+  reportId: string;
+  /** Version of the prompt that produced the verdict; part of the assessment's identity. */
+  promptVersion: string;
+  provider: string;
+  overall: PayloadOf<'STATEMENT_ASSESSED'>['overall'];
+  items: readonly {
+    field: ClaimField;
+    class: PayloadOf<'STATEMENT_ASSESSED'>['items'][number]['class'];
+    againstRevisionId?: string;
+    evidence?: TextSpan;
+  }[];
+}
+
+/**
+ * Records the on-device model's verdict on how a statement relates to earlier evidence. It is a
+ * proposal: no claim, contradiction or status changes. The id comes from the statement and the
+ * prompt version, so assessing the same statement twice with the same prompt is refused as a duplicate.
+ */
+export function recordAssessment(state: IncidentState, ctx: CommandContext, input: AssessmentInput): CommandResult {
+  return buildEvents(state, ctx, [
+    {
+      type: 'STATEMENT_ASSESSED',
+      payload: {
+        assessmentId: assessmentIdFor(input.reportId, input.promptVersion),
+        reportId: input.reportId,
+        provider: input.provider,
+        overall: input.overall,
+        items: input.items.map((i) => ({
+          field: i.field,
+          class: i.class,
+          ...(i.againstRevisionId ? { againstRevisionId: i.againstRevisionId } : {}),
+          ...(i.evidence ? { evidence: i.evidence } : {}),
         })),
       },
     },

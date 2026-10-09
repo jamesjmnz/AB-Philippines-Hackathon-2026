@@ -11,10 +11,12 @@ import {
   NameSchema,
   TextSpanSchema,
 } from './primitives';
+import type { DeltaClass, FieldDeltaClass } from './rules/delta';
 
 /**
- * The CareChain event vocabulary: the 20 events of the master specification plus two additions
- * (`CLARIFICATION_SKIPPED`, `RESPONDER_DECLINED`) documented in docs/DOMAIN_MODEL.md.
+ * The CareChain event vocabulary: the 20 events of the master specification plus three additions
+ * (`CLARIFICATION_SKIPPED`, `RESPONDER_DECLINED`, `STATEMENT_ASSESSED`) documented in
+ * docs/DOMAIN_MODEL.md.
  *
  * Every payload is a strict object: an unknown key (for example `severity`, `priority`,
  * `diagnosis`) fails validation.
@@ -23,6 +25,8 @@ import {
 const ShortText = z.string().min(1).max(500);
 const ReportText = z.string().min(1).max(4000);
 const NoteText = z.string().min(1).max(500);
+/** Name of the on-device model that produced a proposal or an assessment. */
+const ProviderName = z.string().min(1).max(64);
 
 /** Non-medical coordination only. */
 export const TASK_KINDS = ['communicate', 'go_to_requester', 'confirm_location', 'other'] as const;
@@ -47,6 +51,43 @@ export const AIFindingInputSchema = z.strictObject({
   evidence: TextSpanSchema.optional(),
 });
 export type AIFindingInput = z.infer<typeof AIFindingInputSchema>;
+
+/**
+ * The classes an assessment may carry. Spelled out here, and only type-checked against
+ * `DELTA_CLASSES` in rules/delta, because rules/delta reaches this module at load time through
+ * the reducer: a runtime import in this direction would be a cycle. A test asserts the two lists
+ * are equal. `not_assessed` is absent on purpose: an assessment that assessed nothing is not recorded.
+ */
+export const ASSESSMENT_CLASSES = [
+  'new_information',
+  'confirmation',
+  'correction',
+  'possible_contradiction',
+  'unrelated',
+  'no_meaningful_change',
+] as const satisfies readonly DeltaClass[];
+export const AssessmentClassSchema = z.enum(ASSESSMENT_CLASSES);
+
+/** Per-field classes: `unrelated` is a verdict on a whole statement, never on one field. */
+export const ASSESSMENT_FIELD_CLASSES = [
+  'new_information',
+  'confirmation',
+  'correction',
+  'possible_contradiction',
+  'no_meaningful_change',
+] as const satisfies readonly FieldDeltaClass[];
+export const AssessmentFieldClassSchema = z.enum(ASSESSMENT_FIELD_CLASSES);
+
+/** The model's verdict on one field of a statement: ids, a class and a span. No value, no free text. */
+export const AssessmentItemInputSchema = z.strictObject({
+  field: ClaimFieldSchema,
+  class: AssessmentFieldClassSchema,
+  /** The earlier human revision the statement was compared with. */
+  againstRevisionId: IdSchema.optional(),
+  /** Where in the assessed statement's own text the verdict rests. */
+  evidence: TextSpanSchema.optional(),
+});
+export type AssessmentItemInput = z.infer<typeof AssessmentItemInputSchema>;
 
 export const IncidentRecipientSchema = z.strictObject({
   deviceId: IdSchema,
@@ -76,7 +117,7 @@ const payloads = {
   AI_PROPOSAL_CREATED: z.strictObject({
     proposalId: IdSchema,
     reportId: IdSchema.optional(),
-    provider: z.string().min(1).max(64),
+    provider: ProviderName,
     findings: z.array(AIFindingInputSchema).max(12),
   }),
   CLARIFICATION_REQUESTED: z.strictObject({
@@ -174,6 +215,19 @@ const payloads = {
   INCIDENT_CANCELLED: z.strictObject({
     note: NoteText.optional(),
   }),
+  /** The on-device model's verdict on how a statement relates to earlier evidence. A proposal. */
+  STATEMENT_ASSESSED: z.strictObject({
+    assessmentId: IdSchema,
+    reportId: IdSchema,
+    provider: ProviderName,
+    overall: AssessmentClassSchema,
+    items: z
+      .array(AssessmentItemInputSchema)
+      .max(6)
+      .refine((items) => new Set(items.map((i) => i.field)).size === items.length, {
+        message: 'at most one item per field',
+      }),
+  }),
 } as const;
 
 export const EVENT_TYPES = [
@@ -200,6 +254,8 @@ export const EVENT_TYPES = [
   // Additions to the minimum vocabulary (see docs/DOMAIN_MODEL.md):
   'CLARIFICATION_SKIPPED',
   'RESPONDER_DECLINED',
+  // Incident Delta Intelligence (docs/ADR/0005). Appended: positions above must not move.
+  'STATEMENT_ASSESSED',
 ] as const satisfies readonly (keyof typeof payloads)[];
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -244,6 +300,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   eventSchema('TASK_COMPLETION_CONFIRMED'),
   eventSchema('INCIDENT_RESOLVED'),
   eventSchema('INCIDENT_CANCELLED'),
+  eventSchema('STATEMENT_ASSESSED'),
 ]);
 
 export type DomainEvent = z.infer<typeof DomainEventSchema>;

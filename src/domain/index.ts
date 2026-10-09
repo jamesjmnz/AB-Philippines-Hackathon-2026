@@ -1,4 +1,5 @@
 /** Public surface of the CareChain domain. Pure TypeScript: no React Native, Expo, AI or transport imports. */
+export * from './assessments';
 export * from './claims';
 export * from './commands';
 export * from './disclosure';

@@ -63,6 +63,11 @@ export function canRecordAIProposal(view: PolicyView, actor: Actor): Decision {
   return requireParticipant(view, actor);
 }
 
+/** Same as an AI proposal: any participant's device may record its model's verdict while the incident is open. */
+export function canRecordAssessment(view: PolicyView, actor: Actor): Decision {
+  return requireParticipant(view, actor);
+}
+
 export function canRequestClarification(view: PolicyView, actor: Actor): Decision {
   return requireParticipant(view, actor);
 }

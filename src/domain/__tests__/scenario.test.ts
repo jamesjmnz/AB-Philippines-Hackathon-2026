@@ -14,7 +14,7 @@ describe('full synthetic scenario', () => {
     const used = new Set(scenario.events.map((e) => e.type));
     const unused = EVENT_TYPES.filter((t) => !used.has(t));
     expect(unused.sort()).toEqual(
-      ['CLARIFICATION_SKIPPED', 'INCIDENT_CANCELLED', 'RESPONDER_DECLINED', 'TASK_DECLINED'].sort(),
+      ['CLARIFICATION_SKIPPED', 'INCIDENT_CANCELLED', 'RESPONDER_DECLINED', 'STATEMENT_ASSESSED', 'TASK_DECLINED'].sort(),
     );
   });
 });
