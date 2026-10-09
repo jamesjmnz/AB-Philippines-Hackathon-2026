@@ -92,3 +92,9 @@ Known gaps accepted for the prototype: event ordering trusts the author's Lampor
 | D-26 | Native frame cap is 1 MiB; the sync packet cap stays 512 KiB. Answers the open part of Q-06. | The native cap was below the packet cap. |
 | D-27 | `pair_confirm` carries an optional `answer: true`, and confirmations are re-sent until both sides trust. | A lost confirmation left pairing one-sided. |
 | D-28 | Overnight work is on `feat/pulse-2-overnight`, cut from `feat/pulse-2`; no pull request is opened and nothing is merged without the owner. | Owner's instruction before the run. |
+
+## Recorded for Incident Delta Intelligence (2026-10-10)
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| D-29 | Incident Delta Intelligence is deterministic first: `classifyStatementDelta` derives at replay how a new statement relates to earlier evidence, on every device, and is never persisted. The conflict rule compares only each author's latest statement per field, so a self-correction no longer flags. The on-device model is an optional second stage whose verdict is one new event, `STATEMENT_ASSESSED` (the 23rd type), a restricted-tier proposal that changes no claim or contradiction. Evaluation lives in a root `ml/` workspace. | Owner decision; [ADR 0005](ADR/0005-incident-delta-intelligence.md). Accepted, implementation in progress; nothing built to completion or measured, model behaviour unverified on a device. |
