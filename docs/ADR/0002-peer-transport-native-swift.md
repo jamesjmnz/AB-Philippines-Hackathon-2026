@@ -19,7 +19,7 @@ Constraints:
 ## Decision
 
 1. Build `modules/pulse-peer` as an Expo module in Swift.
-2. Use `NWListener` and `NWBrowser` over Bonjour service type `_pulse-sos._tcp`, with `includePeerToPeer` enabled.
+2. Use `NWListener` and `NWBrowser` over Bonjour service type `_sagip-sos._tcp`, with `includePeerToPeer` enabled.
 3. The module transports length-framed opaque bytes and emits typed connection and packet events. It contains no domain, crypto or policy logic.
 4. Declare `NSLocalNetworkUsageDescription` and `NSBonjourServices` through `app.config.ts`.
 5. Foreground only.

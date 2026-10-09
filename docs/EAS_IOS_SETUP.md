@@ -22,7 +22,7 @@ Status: instructions only. **No build has been attempted yet** (2026-10-09). The
 
 | Setting | Value |
 | --- | --- |
-| Bundle identifier | `com.jamesjmnz.pulse` |
+| Bundle identifier | `com.jamesjmnz.sagip` |
 | Deployment target | iOS 17.0 |
 | New Architecture | enabled |
 | URL scheme | `pulse` |
@@ -30,7 +30,7 @@ Status: instructions only. **No build has been attempted yet** (2026-10-09). The
 
 `.env.example` documents `EXPO_APPLE_TEAM_ID` with a fake placeholder. Put the real value in an untracked `.env.local`. Never commit it.
 
-Permission strings declared in `app.config.ts`: microphone, speech recognition, local network, and the Bonjour service `_pulse-sos._tcp`.
+Permission strings declared in `app.config.ts`: microphone, speech recognition, local network, and the Bonjour service `_sagip-sos._tcp`.
 
 ## Prepare each iPhone
 
@@ -85,7 +85,7 @@ Empty until a real problem has been met and solved.
 
 ## EAS Build (added 2026-10-10)
 
-EAS project: `@jamesjimenezzz/pulse` (linked in `app.config.ts`). Profiles are in `eas.json`.
+EAS project: `@jamesjimenezzz/sagip` (linked in `app.config.ts`). Profiles are in `eas.json`.
 
 | Profile | What it produces | Use |
 | --- | --- | --- |
@@ -100,7 +100,7 @@ One-time interactive steps (they ask for the Apple ID and need a paid Apple Deve
 because internal distribution uses ad hoc provisioning):
 
 ```bash
-eas device:create                               # register each iPhone (open the link on the phone)
+eas device:create                               # register each additional iPhone (the 17 Pro Max is already registered) (open the link on the phone)
 eas build -p ios --profile development          # creates the certificate and provisioning profile, then builds
 eas build -p ios --profile preview              # offline-capable build for the demo
 ```

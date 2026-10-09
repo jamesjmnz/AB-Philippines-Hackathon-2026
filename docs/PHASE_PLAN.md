@@ -73,7 +73,7 @@ Checks run in every phase once the scaffold exists: `npm run typecheck`, `npm ru
 | | |
 | --- | --- |
 | Owner | `pulse-swift-bridge`; review by `pulse-qa-reviewer` |
-| Deliverables | `modules/pulse-peer`: `NWListener` and `NWBrowser` over `_pulse-sos._tcp` with peer-to-peer, length-framed bytes, typed events, foreground lifecycle. App-level receipts, dedupe, reconnect flush, explicit relay with hop limit. |
+| Deliverables | `modules/pulse-peer`: `NWListener` and `NWBrowser` over `_sagip-sos._tcp` with peer-to-peer, length-framed bytes, typed events, foreground lifecycle. App-level receipts, dedupe, reconnect flush, explicit relay with hop limit. |
 | **Gate G5** | Physical iPhone A↔B real offline packet and receipt proof. Multi-hop stays unverified unless tested end to end. |
 | Git check | Standard. |
 

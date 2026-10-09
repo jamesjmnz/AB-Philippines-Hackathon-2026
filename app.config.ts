@@ -4,25 +4,25 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'SAGIP',
-  slug: 'pulse',
+  slug: 'sagip',
   version: '0.1.0',
-  scheme: 'pulse',
+  scheme: 'sagip',
   orientation: 'portrait',
   userInterfaceStyle: 'light',
   icon: './assets/images/icon.png',
   ios: {
-    bundleIdentifier: 'com.jamesjmnz.pulse',
+    bundleIdentifier: 'com.jamesjmnz.sagip',
     supportsTablet: false,
     appleTeamId: process.env.EXPO_APPLE_TEAM_ID,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSMicrophoneUsageDescription:
-        'PULSE records a voice report only after you start a recording, and transcribes it on this iPhone.',
+        'SAGIP records a voice report only after you start a recording, and transcribes it on this iPhone.',
       NSSpeechRecognitionUsageDescription:
-        'PULSE turns your recorded voice report into text on this iPhone. Audio is not uploaded.',
+        'SAGIP turns your recorded voice report into text on this iPhone. Audio is not uploaded.',
       NSLocalNetworkUsageDescription:
-        'PULSE finds trusted nearby iPhones and exchanges encrypted assistance requests with them without internet.',
-      NSBonjourServices: ['_pulse-sos._tcp'],
+        'SAGIP finds trusted nearby iPhones and exchanges encrypted assistance requests with them without internet.',
+      NSBonjourServices: ['_sagip-sos._tcp'],
     },
   },
   plugins: [
@@ -34,5 +34,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   experiments: { typedRoutes: true },
   owner: 'jamesjimenezzz',
-  extra: { eas: { projectId: '9e895006-4cfc-4e99-a4f1-782c32f57b79' } },
+  extra: { eas: { projectId: 'd30674b9-4ec8-4840-b8c9-1a28c10b62d4' } },
 });

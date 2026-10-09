@@ -14,11 +14,11 @@ Dated log. Newest entries are appended at the bottom of the table. Larger decisi
 | D-06 | 2026-10-09 | `@react-native-ai/apple` 0.12.0 from npm, not GitHub `main`. | `main` needs the iOS 26.4 SDK; Xcode 26.3 ships 26.2. Cost: no typed errors, so errors are classified by message. | In force |
 | D-07 | 2026-10-09 | NativeWind 4.2.7 with Tailwind CSS 3.4.19. | Tailwind 4 is not compatible with NativeWind v4. | In force |
 | D-08 | 2026-10-09 | Expo Router routes live in `src/app/`, not a top-level `app/`. | Expo SDK 57 template convention. Agent ownership tables use `src/app/`. | In force |
-| D-09 | 2026-10-09 | Bundle identifier `com.jamesjmnz.pulse`. | Owner's namespace; can be changed on request. | In force |
+| D-09 | 2026-10-09 | Bundle identifier `com.jamesjmnz.sagip`. | Owner's namespace; can be changed on request. | In force |
 | D-10 | 2026-10-09 | The iPhone 14 Pro Max and iPhone 13 will be updated to iOS 26. Per-feature runtime gating stays regardless. | Owner's plan; gating is needed because hardware eligibility differs even on the same OS. | Pending owner action |
 | D-11 | 2026-10-09 | iOS deployment target 17.0, with runtime gating for features that need iOS 26. | Lets the app install on devices before they are updated; text model and transcription are gated. | In force |
 | D-12 | 2026-10-09 | Callstack `@react-native-ai/apple` is the primary and only planned AI provider; no custom Swift Foundation Models wrapper. | Master specification; [ADR 0001](ADR/0001-callstack-primary-provider.md). | Accepted, implementation pending |
-| D-13 | 2026-10-09 | Peer transport is a Swift Expo module on Network framework with Bonjour `_pulse-sos._tcp`. | [ADR 0002](ADR/0002-peer-transport-native-swift.md). | Accepted, implementation pending |
+| D-13 | 2026-10-09 | Peer transport is a Swift Expo module on Network framework with Bonjour `_sagip-sos._tcp`. | [ADR 0002](ADR/0002-peer-transport-native-swift.md). | Accepted, implementation pending |
 | D-14 | 2026-10-09 | Capsule crypto in a Swift Expo module with CryptoKit and Keychain; pairing by human-compared short code. | [ADR 0003](ADR/0003-capsule-crypto-and-trust.md). | Accepted, implementation pending |
 | D-15 | 2026-10-09 | Append-only event ledger with per-device sequence and causal parents; sync by exchanging events. | [ADR 0004](ADR/0004-offline-event-synchronization.md). | Accepted, implementation pending |
 | D-16 | 2026-10-09 | Only `src/ai/callstack/` may import `@react-native-ai/apple` or `ai`; enforced by ESLint. | Keeps one adapter and prevents UI code from calling the model directly. | In force (rule present in `eslint.config.js`) |
@@ -61,4 +61,4 @@ Append a row with the date, the decision in one sentence, the reason and the sta
 
 Known gaps accepted for the prototype: event ordering trusts the author's Lamport value; an event id reused with different content is not detected; quarantined bodies have no retention rule.
 
-| D-NAME | 2026-10-10: the product is named **SAGIP**. README title and the app display name use it. "PULSE" remains as the working name in older docs and in code identifiers (module names, bundle id, design export) until a full rename is requested. | Owner decision. |
+| D-NAME | 2026-10-10: the product is named **SAGIP**. README, app display name, slug, URL scheme, bundle id (`com.jamesjmnz.sagip`), EAS project (`@jamesjimenezzz/sagip`) and Bonjour service (`_sagip-sos._tcp`) use it. Swift module names (`pulse-peer`, `pulse-crypto`), the branch name and the design export keep the working name. | Owner decision. |

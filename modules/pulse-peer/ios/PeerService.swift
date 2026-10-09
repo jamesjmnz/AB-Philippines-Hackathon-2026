@@ -14,7 +14,7 @@ protocol PeerServiceDelegate: AnyObject {
 /// It moves opaque bytes between devices running PULSE and makes no trust decision: the device id in the
 /// hello frame is a routing hint, and everything security-relevant is verified by the app layer.
 final class PeerService {
-  static let serviceType = "_pulse-sos._tcp"
+  static let serviceType = "_sagip-sos._tcp"
   private static let maxConnections = 8
 
   weak var delegate: PeerServiceDelegate?

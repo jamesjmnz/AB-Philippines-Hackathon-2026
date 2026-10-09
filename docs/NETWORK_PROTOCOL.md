@@ -16,7 +16,7 @@ Apple Network framework with Bonjour, in a small Swift Expo module (`modules/pul
 | --- | --- |
 | Listener | `NWListener` |
 | Browser | `NWBrowser` |
-| Service type | `_pulse-sos._tcp` |
+| Service type | `_sagip-sos._tcp` |
 | Peer-to-peer | `includePeerToPeer` enabled, so devices can connect without shared infrastructure Wi-Fi |
 | Payload | Length-framed opaque bytes |
 | Lifecycle | Foreground only |
@@ -30,7 +30,7 @@ Declared in `app.config.ts`:
 | Key | Value |
 | --- | --- |
 | `NSLocalNetworkUsageDescription` | Explains that PULSE finds trusted nearby iPhones and exchanges encrypted assistance requests without internet. |
-| `NSBonjourServices` | `["_pulse-sos._tcp"]` |
+| `NSBonjourServices` | `["_sagip-sos._tcp"]` |
 
 The Local Network prompt appears the first time discovery starts. If the user denies it, discovery fails with a typed error; SOS persistence and queueing are unaffected.
 

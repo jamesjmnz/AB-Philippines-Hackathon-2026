@@ -70,7 +70,7 @@ Fallback rule: if the Apple package fails to build on RN 0.86 after three substa
 
 | Setting | Value | Source |
 | --- | --- | --- |
-| Bundle identifier | `com.jamesjmnz.pulse` | `app.config.ts` |
+| Bundle identifier | `com.jamesjmnz.sagip` | `app.config.ts` |
 | iOS deployment target | 17.0 | `expo-build-properties` in `app.config.ts` |
 | New Architecture | enabled | `app.config.ts` |
 | Platforms | iOS only | |
