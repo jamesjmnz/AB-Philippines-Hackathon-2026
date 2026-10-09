@@ -1,5 +1,5 @@
 import { AppleEmbeddings, AppleTranscription, apple } from '@react-native-ai/apple';
-import { Output, embedMany, generateText, experimental_transcribe as transcribe } from 'ai';
+import { NoObjectGeneratedError, Output, embedMany, generateText, experimental_transcribe as transcribe } from 'ai';
 import * as Device from 'expo-device';
 
 import pkg from '../../../package.json';
@@ -18,17 +18,22 @@ export const appleRuntime: AppleRuntime = {
 
   // Structured output must be non-streaming with this provider: its adapter throws on streaming JSON.
   generateObject: async ({ system, prompt, schema, signal }) => {
-    const result = await generateText({
-      model: apple(),
-      system,
-      prompt,
-      output: Output.object({ schema }),
-      temperature: 0,
-      maxOutputTokens: 500,
-      maxRetries: 0,
-      abortSignal: signal,
-    });
-    return result.output;
+    try {
+      const result = await generateText({
+        model: apple(),
+        system,
+        prompt,
+        output: Output.object({ schema }),
+        temperature: 0,
+        maxOutputTokens: 500,
+        maxRetries: 0,
+        abortSignal: signal,
+      });
+      return result.output;
+    } catch (error) {
+      if (NoObjectGeneratedError.isInstance(error)) throw new Error(`NoObjectGenerated: ${error.message} ${describeShape(error.text, error.cause)}`);
+      throw error;
+    }
   },
 
   embeddingInfo: async (language) => {
@@ -54,3 +59,12 @@ export const appleRuntime: AppleRuntime = {
     return { text: result.text, durationSeconds: result.durationInSeconds ?? 0 };
   },
 };
+
+/** Says what kind of text came back, never the text itself: the report's words must not reach an error message. */
+function describeShape(text: string | undefined, cause: unknown): string {
+  const body = text ?? '';
+  const opener = /^\s*[{[]/.test(body) ? 'JSON-like' : /^\s*[A-Za-z_]+\(/.test(body) ? 'Swift description' : 'other';
+  const closed = /[}\]]\s*$/.test(body) ? 'closed' : 'not closed';
+  const name = cause instanceof Error ? cause.name : 'none';
+  return `(${body.length} chars, ${opener}, ${closed}, cause ${name})`;
+}
