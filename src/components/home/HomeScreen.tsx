@@ -1,15 +1,20 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { canAcknowledge } from '@/domain';
+import { canAcknowledge, canDeclineRequest } from '@/domain';
 import type { IncidentView } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Button, Chip, GroupedList, Icon, ListRow, MicroPill, PulseRing, Screen, SectionHeader, TextButton, colors, tones } from '@/ui';
+import { Avatar, Dialog, Enter, Icon, LinkButton, Pill, Press, PulseRing, Ring, colors, design, tabBarHeight, type IconName } from '@/ui';
 
+import { IntelligenceSheet } from '../ai/IntelligenceSheet';
+import { clock, useSafetySession } from '../demo/safetySession';
 import { useActor } from '../incident/useMe';
 import { useRun } from '../incident/useRun';
+import { IncidentMap, locationProtected, mapLabel } from '../map/IncidentMap';
 import { routes } from '../nav';
-import { firstName, incidentHeadline, incidentPlace, isOpen, presentNetwork, presentStatus, presentTextModel, type Me } from '../present';
+import { firstName, isOpen, LEVEL_LABELS, presentIntelligenceLine, presentNetwork, presentReadiness, presentStatus, whenLabel, type Me } from '../present';
 
 function greeting(name: string, hour: number): string {
   const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -17,203 +22,306 @@ function greeting(name: string, hour: number): string {
   return first.length > 0 ? `${part}, ${first}` : part;
 }
 
+/** Incoming request (design 173–232). */
 function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: string } }) {
   const actions = usePulseActions();
   const { busy, run } = useRun();
+  const [declining, setDeclining] = useState(false);
   const reporter = view.state.incident?.reporter;
-  const status = presentStatus(view.state, me);
+  const first = reporter ? firstName(reporter.userName) : 'the requester';
   const mine = view.state.recipients.find((r) => r.deviceId === me.deviceId);
-  const mayAck = canAcknowledge(view.state, me).ok && mine !== undefined && !mine.acknowledged;
-  const place = incidentPlace(view);
+  const acknowledged = mine?.acknowledged ?? false;
+  const mayAck = canAcknowledge(view.state, me).ok && mine !== undefined && !acknowledged;
+  const mayDecline = canDeclineRequest(view.state, me).ok && mine !== undefined && !mine.declined;
+  const helping = view.state.tasks.some((t) => t.assignee?.deviceId === me.deviceId);
+  const type = view.facts.find((f) => f.field === 'incidentType' && !f.protected)?.value ?? 'Assistance request';
+  const created = view.state.incident?.createdAtMs;
   const rows = [
-    { l: 'Where', v: place ?? 'Not reported or not shared' },
-    { l: 'Status', v: status.chip },
-    ...(view.receivedViaName ? [{ l: 'Reached you through', v: view.receivedViaName }] : []),
+    { l: 'Reported location', v: locationProtected(view) ? 'Protected' : (mapLabel(view) ?? 'Location not stated') },
+    { l: 'Created', v: created !== undefined ? whenLabel(created) : '—' },
+    { l: 'Received', v: view.receivedViaName ? `Relayed through ${view.receivedViaName}` : `Directly from ${first}` },
+    { l: 'Your access', v: LEVEL_LABELS[view.access] },
   ];
   return (
-    <View testID={`incoming-${view.id}`} className="gap-4 rounded-card bg-card p-5">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-[7px]">
-          <View className="h-2 w-2 items-center justify-center">
-            <PulseRing size={8} color={colors.coral} />
-            <View className="h-2 w-2 rounded-full bg-coral" />
+    <Enter kind="popIn" duration={400} ease="spring">
+      <View testID={`incoming-${view.id}`} style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 20, gap: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <View style={{ width: 8, height: 8 }}>
+              <PulseRing size={8} color={colors.coral} durationMs={1600} />
+              <View style={{ position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral }} />
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#B9403C' }}>Incoming request</Text>
           </View>
-          <Text className="text-[12px] font-bold text-coral-text">Incoming request</Text>
+          <Text style={{ fontSize: 12, fontWeight: '500', color: colors.gray1 }}>{view.shortId}</Text>
         </View>
-        <Text className="text-[12px] font-medium text-gray-1">{view.shortId}</Text>
-      </View>
-      <View className="flex-row items-center gap-3">
-        <Avatar name={reporter?.userName ?? '?'} size={44} />
-        <View className="flex-1">
-          <Text accessibilityRole="header" className="text-[17px] font-bold text-ink">
-            {incidentHeadline(view, me)}
-          </Text>
-          <Text className="mt-0.5 text-[13px] text-gray-1">{status.title}</Text>
-        </View>
-      </View>
-      <View className="border-t border-hairline">
-        {rows.map((r) => (
-          <View key={r.l} className="flex-row justify-between gap-3 border-b border-hairline py-[9px]">
-            <Text className="text-[13.5px] text-gray-1">{r.l}</Text>
-            <Text className="flex-1 text-right text-[13.5px] font-semibold text-ink">{r.v}</Text>
+        <IncidentMap view={view} radius={16} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Avatar name={reporter?.userName ?? '?'} size={44} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text accessibilityRole="header" style={{ fontSize: 17, fontWeight: '700', color: colors.ink }}>
+              {helping ? `You’re helping ${first}.` : 'Someone nearby needs assistance.'}
+            </Text>
+            <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>
+              {type} reported by {first}.
+            </Text>
           </View>
-        ))}
-      </View>
-      <View className="flex-row gap-[10px]">
-        <View className="flex-1">
-          <Button
+        </View>
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.hairline }}>
+          {rows.map((r) => (
+            <View key={r.l} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
+              <Text style={{ fontSize: 13.5, color: colors.gray1 }}>{r.l}</Text>
+              <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Pressable
             testID={`incoming-ack-${view.id}`}
-            label={mine?.acknowledged ? 'Seen' : 'Mark as seen'}
-            size="sm"
-            variant="secondary"
+            accessibilityRole="button"
+            accessibilityLabel={acknowledged ? 'Seen' : 'Mark as seen'}
+            accessibilityState={{ disabled: !mayAck || busy !== null }}
             disabled={!mayAck || busy !== null}
             onPress={() => void run('ack', () => actions.acknowledge(view.id))}
+            style={{ flex: 1, minHeight: 46, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: acknowledged ? design.softer : design.soft }}>
+            <Text style={{ fontSize: 14.5, fontWeight: '600', color: acknowledged ? colors.gray1 : colors.ink }}>{acknowledged ? 'Seen' : 'Mark as seen'}</Text>
+          </Pressable>
+          <Pill
+            testID={`incoming-open-${view.id}`}
+            label="Take a role"
+            h={46}
+            size={14.5}
+            press={0.97}
+            flex
+            onPress={() => router.push(routes.incident(view.id))}
+            accessibilityHint="Opens the request so you can choose a role"
           />
         </View>
-        <View className="flex-1">
-          <Button testID={`incoming-open-${view.id}`} label="Take a role" size="sm" onPress={() => router.push(routes.incident(view.id))} accessibilityHint="Opens the request so you can choose a role" />
+        <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 18 }}>
+          {mayDecline ? <LinkButton testID={`incoming-decline-${view.id}`} label="Can’t help" color={colors.coralText} size={13.5} h={20} onPress={() => setDeclining(true)} /> : null}
+          <LinkButton testID={`incoming-view-${view.id}`} label="View incident" size={13.5} h={20} onPress={() => router.push(routes.incident(view.id))} />
         </View>
       </View>
-      <TextButton label="View incident" tone="ink" onPress={() => router.push(routes.incident(view.id))} />
-    </View>
+      <Dialog
+        visible={declining}
+        title="Can’t help right now?"
+        message="The request stays open and your open roles go to someone else."
+        cancelLabel="Back"
+        confirmLabel="Can’t help"
+        destructive
+        onCancel={() => setDeclining(false)}
+        onConfirm={() => {
+          setDeclining(false);
+          void run('decline', () => actions.declineRequest(view.id));
+        }}
+      />
+    </Enter>
   );
 }
 
+/** Own open request (design 236–282). */
 function ActiveCard({ view, me }: { view: IncidentView; me: Me }) {
   const status = presentStatus(view.state, me);
-  const tone = tones[status.tone];
   return (
-    <Pressable
-      testID={`active-${view.id}`}
-      accessibilityRole="button"
-      accessibilityLabel={`Your request ${view.shortId}. ${status.title}. ${status.sub}`}
-      onPress={() => router.push(routes.incident(view.id))}
-      className="flex-row items-center gap-3 rounded-[26px] bg-card p-4 active:opacity-80">
-      <View className="h-[10px] w-[10px] rounded-full" style={{ backgroundColor: tone.fg }} />
-      <View className="flex-1">
-        <Text className="text-[15.5px] font-semibold text-ink">{status.title}</Text>
-        <Text className="mt-0.5 text-[13px] text-gray-1">
-          {view.shortId} · {status.chip}
-        </Text>
-      </View>
-      <Icon name="chevron_right" size={22} color={colors.gray5} />
-    </Pressable>
+    <Enter kind="popIn" duration={400}>
+      <Pressable
+        testID={`active-${view.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Your request ${view.shortId}. ${status.title}. ${status.sub}`}
+        onPress={() => router.push(routes.incident(view.id))}
+        style={{ backgroundColor: '#FFFFFF', borderRadius: 26, padding: 8 }}>
+        <IncidentMap view={view} radius={20} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12, paddingHorizontal: 8, paddingBottom: 6 }}>
+          <View style={{ width: 10, height: 10 }}>
+            <PulseRing size={10} color={status.ring} durationMs={1800} />
+            <View style={{ position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: status.ring }} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 15.5, fontWeight: '600', color: colors.ink }}>{status.title}</Text>
+            <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>
+              {view.shortId} · {status.chip}
+            </Text>
+          </View>
+          <Icon name="chevron_right" size={22} color={colors.gray5} />
+        </View>
+      </Pressable>
+    </Enter>
   );
 }
 
-export function LocalAICard() {
-  const { capabilities } = usePulse();
-  const model = presentTextModel(capabilities);
-  return (
-    <View testID="local-ai-card" className="gap-3 rounded-feature bg-card px-[18px] py-4">
-      <View className="flex-row items-center gap-3">
-        <View className="h-11 w-11 items-center justify-center rounded-[14px] bg-hairline">
-          <Icon name="memory" size={22} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-[13px] font-semibold text-gray-1">Local AI</Text>
-          <Text testID="local-ai-provider" className="text-[17px] font-bold text-ink">
-            {capabilities ? capabilities.provider : 'Checking…'}
-          </Text>
-        </View>
-        {capabilities?.source === 'simulated' ? <MicroPill label="Simulated" /> : null}
-      </View>
-      <View className="flex-row items-center justify-between gap-3 border-t border-hairline pt-3">
-        <Text className="text-[13.5px] text-gray-1">Device</Text>
-        <Text testID="local-ai-device" className="flex-1 text-right text-[13.5px] font-semibold text-ink">
-          {capabilities ? `${capabilities.device.model} · iOS ${capabilities.device.osVersion}` : '—'}
-        </Text>
-      </View>
-      <View className="flex-row items-center justify-between gap-3">
-        <Text className="text-[13.5px] text-gray-1">Text model</Text>
-        <View testID="local-ai-text">
-          <Chip label={model.label} tone={model.tone} />
-        </View>
-      </View>
-      <Text className="text-[12.5px] leading-[17px] text-gray-1">Manual SOS does not depend on local AI. It is saved and queued without it.</Text>
-    </View>
-  );
+type OverviewRow = { key: string; icon: IconName; label: string; sub: string; dot: string | null; onPress: () => void };
+
+/** "Active · 04:07", ticking once a second while the simulated session runs. */
+function useSessionLine(enabled: boolean): { active: boolean; sub: string } {
+  const active = useSafetySession((s) => s.active);
+  const startMs = useSafetySession((s) => s.startMs);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled || !active) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [enabled, active]);
+  return { active, sub: active ? `Active · ${clock((Math.max(now, startMs) - startMs) / 1000)}` : 'Not active' };
 }
 
+/** Home (design 165–313). */
 export function HomeScreen() {
   const snapshot = usePulse();
   const actor = useActor();
+  const insets = useSafeAreaInsets();
+  const [aiOpen, setAiOpen] = useState(false);
+  const demo = snapshot.mode === 'demo';
+  const session = useSessionLine(demo);
+
   const open = snapshot.incidents.filter(isOpen);
   const incoming = open.filter((i) => i.role === 'responder');
   const mine = open.filter((i) => i.role === 'reporter');
   const network = presentNetwork(snapshot);
-  const tone = tones[network.tone];
   const trusted = snapshot.peers.filter((p) => p.trusted);
   const connected = trusted.filter((p) => p.reach === 'connected');
+  const readiness = presentReadiness(snapshot);
+
+  const roles = open.reduce((n, i) => {
+    const reporterId = i.state.incident?.reporter.deviceId ?? null;
+    return n + i.state.tasks.filter((t) => t.assignee !== null && t.assignee.deviceId !== reporterId && (t.status === 'accepted' || t.status === 'in_progress' || t.status === 'completion_reported')).length;
+  }, 0);
+  const pending = open.reduce((n, i) => n + i.pendingOutbox, 0);
+  const firstActive = mine[0] ?? open[0];
+
+  const overview: OverviewRow[] = [
+    {
+      key: 'carechain',
+      icon: 'account_tree',
+      label: 'CareChain',
+      sub: open.length > 0 ? `${open.length} active · ${roles} role${roles === 1 ? '' : 's'} taken` : 'No active incidents',
+      dot: open.length > 0 ? colors.coral : null,
+      onPress: () => (firstActive ? router.push(routes.incident(firstActive.id)) : router.navigate(routes.activity)),
+    },
+    {
+      key: 'network',
+      icon: 'hub',
+      label: 'Nearby network',
+      sub: trusted.length === 0 ? 'No trusted device paired' : `${connected.length} connected · ${trusted.length - connected.length} unavailable${pending > 0 ? ` · ${pending} pending` : ''}`,
+      dot: pending > 0 ? colors.amber : null,
+      onPress: () => router.navigate(routes.network),
+    },
+    {
+      key: 'intelligence',
+      icon: 'auto_awesome',
+      label: 'On-Device Intelligence',
+      sub: presentIntelligenceLine(snapshot.capabilities),
+      dot: null,
+      onPress: () => setAiOpen(true),
+    },
+  ];
+  if (demo) {
+    overview.push({ key: 'session', icon: 'directions_walk', label: 'Safety Session', sub: session.sub, dot: session.active ? colors.green : null, onPress: () => router.push(routes.session) });
+  }
 
   return (
-    <Screen testID="home-screen" tabbed>
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-[15px] font-medium text-gray-1">{greeting(snapshot.me.name, new Date().getHours())}</Text>
-          <Text accessibilityRole="header" className="mt-1 text-[30px] font-bold leading-[33px] tracking-[-0.9px] text-ink">
-            Your safety, connected.
-          </Text>
-          <Text className="mt-1.5 text-[15px] leading-[20px] text-gray-1">Local intelligence. Trusted people. Even offline.</Text>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Profile and settings" onPress={() => router.navigate(routes.settings)} hitSlop={4}>
-          <Avatar name={snapshot.me.name.length > 0 ? snapshot.me.name : '?'} size={40} self />
-        </Pressable>
-      </View>
+    <View testID="home-screen" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
+        <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 6 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '500', color: colors.gray1 }}>{greeting(snapshot.me.name, new Date().getHours())}</Text>
+              <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, lineHeight: 33, color: colors.ink, marginTop: 4 }}>
+                Your safety, connected.
+              </Text>
+              <Text style={{ fontSize: 15, lineHeight: 20.25, color: colors.gray1, marginTop: 6 }}>Local intelligence. Trusted people. Even offline.</Text>
+            </View>
+            <Pressable testID="home-profile" accessibilityRole="button" accessibilityLabel="Profile and settings" onPress={() => router.navigate(routes.settings)} hitSlop={4} style={{ width: 40, height: 40 }}>
+              <Avatar name={snapshot.me.name.length > 0 ? snapshot.me.name : '?'} size={40} self />
+              {open.length > 0 ? (
+                <View testID="home-badge" style={{ position: 'absolute', top: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.coral, borderWidth: 2, borderColor: colors.page }} />
+              ) : null}
+            </Pressable>
+          </View>
 
-      <View testID="network-line" accessible accessibilityLiveRegion="polite" accessibilityLabel={`Network: ${network.text}`} className="flex-row items-center gap-2 self-start rounded-full px-[13px] py-2" style={{ backgroundColor: tone.bg }}>
-        <Icon name={network.icon} size={16} color={tone.fg} />
-        <Text className="shrink text-[13px] font-semibold" style={{ color: tone.fg }}>
-          {network.text}
-        </Text>
-      </View>
+          {network.tone !== 'green' ? (
+            <View
+              testID="network-line"
+              accessible
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={`Network: ${network.text}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: colors.amberTint, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 13 }}>
+              <Icon name={network.icon} size={16} color={design.offlineText} />
+              <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: '600', color: design.offlineText }}>{network.text}</Text>
+            </View>
+          ) : null}
 
-      {incoming.map((view) => (
-        <IncomingCard key={view.id} view={view} me={actor} />
-      ))}
-      {incoming.length === 0 && connected.length > 0 ? (
-        <View testID="responder-idle" className="flex-row items-center gap-3 rounded-card bg-card p-4">
-          <View className="h-2 w-2 rounded-full bg-green" />
-          <Text className="flex-1 text-[14px] leading-[19px] text-gray-3">Requests from your trusted devices appear here when they reach this iPhone.</Text>
-        </View>
-      ) : null}
-      {mine.map((view) => (
-        <ActiveCard key={view.id} view={view} me={actor} />
-      ))}
+          {incoming.map((view) => (
+            <IncomingCard key={view.id} view={view} me={actor} />
+          ))}
+          {incoming.length === 0 && connected.length > 0 ? (
+            <View testID="responder-idle" style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.green }} />
+              <Text style={{ flex: 1, fontSize: 14, color: colors.gray3 }}>Requests from your trusted devices appear here when they reach this iPhone.</Text>
+            </View>
+          ) : null}
+          {mine.map((view) => (
+            <ActiveCard key={view.id} view={view} me={actor} />
+          ))}
 
-      <Pressable
-        testID="request-assistance"
-        accessibilityRole="button"
-        accessibilityLabel="Request Assistance"
-        accessibilityHint="Opens the SOS countdown"
-        onPress={() => router.push(routes.sos)}
-        className="min-h-[64px] flex-row items-center justify-center gap-[10px] rounded-full bg-coral px-5 active:scale-[0.98]">
-        <Icon name="sos" size={22} color="#FFFFFF" filled />
-        <Text className="text-[18px] font-bold text-white">Request Assistance</Text>
-      </Pressable>
+          <Press
+            testID="request-assistance"
+            accessibilityRole="button"
+            accessibilityLabel="Request Assistance"
+            accessibilityHint="Opens the SOS countdown"
+            onPress={() => router.push(routes.sos)}
+            press={0.98}
+            style={{ minHeight: 64, borderRadius: 999, backgroundColor: colors.coral, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <Icon name="sos" size={22} color="#FFFFFF" filled />
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>Request Assistance</Text>
+          </Press>
 
-      <LocalAICard />
+          <View
+            testID="readiness-card"
+            accessible
+            accessibilityLabel={`${readiness.title}. ${readiness.facts.map((f) => `${f.label}: ${f.ok ? 'done' : 'not yet'}`).join('. ')}`}
+            style={{ backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 16, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <Ring size={60} r={26} stroke={6} progress={readiness.progress}>
+              <Icon name="shield" size={22} filled />
+            </Ring>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text testID="readiness-title" style={{ fontSize: 22, fontWeight: '700', letterSpacing: -0.5, color: colors.ink }}>
+                {readiness.title}
+              </Text>
+              <Text testID="readiness-line" style={{ fontSize: 13, lineHeight: 17.55, color: colors.gray1, marginTop: 3 }}>
+                {readiness.line}
+              </Text>
+            </View>
+          </View>
 
-      <View>
-        <SectionHeader title="Overview" />
-        <GroupedList>
-          <ListRow
-            first
-            testID="overview-network"
-            icon="hub"
-            title="Trusted network"
-            subtitle={trusted.length === 0 ? 'No trusted device paired' : `${trusted.length} trusted · ${connected.length} connected now`}
-            onPress={() => router.navigate(routes.network)}
-          />
-          <ListRow
-            icon="history"
-            title="Activity"
-            subtitle={snapshot.incidents.length === 0 ? 'No requests on this device' : `${snapshot.incidents.length} on this device · ${open.length} open`}
-            onPress={() => router.navigate(routes.activity)}
-          />
-          <ListRow icon="group_add" title="Pair a device" subtitle="Compare a six-digit code on both phones" onPress={() => router.push(routes.pair)} />
-        </GroupedList>
-      </View>
-    </Screen>
+          <View>
+            <Text accessibilityRole="header" style={{ fontSize: 13, fontWeight: '600', color: colors.gray1, paddingHorizontal: 4, paddingBottom: 8 }}>
+              Overview
+            </Text>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, overflow: 'hidden' }}>
+              {overview.map((o, i) => (
+                <Pressable
+                  key={o.key}
+                  testID={`overview-${o.key}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${o.label}, ${o.sub}`}
+                  onPress={o.onPress}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: '#FFFFFF', borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.hairline }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: colors.hairline, alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name={o.icon} size={20} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 15.5, fontWeight: '600', color: colors.ink }}>{o.label}</Text>
+                    <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>{o.sub}</Text>
+                  </View>
+                  {o.dot ? <View testID={`overview-dot-${o.key}`} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: o.dot }} /> : null}
+                  <Icon name="chevron_right" size={20} color={colors.gray5} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </Enter>
+      </ScrollView>
+      <IntelligenceSheet visible={aiOpen} onClose={() => setAiOpen(false)} />
+    </View>
   );
 }
