@@ -54,6 +54,8 @@ describe('provenance chips', () => {
     expect(within(screen.getByTestId('fact-building')).getByText('user reported')).toBeTruthy();
     expect(within(screen.getByTestId('fact-floor')).getByText('unresolved')).toBeTruthy();
     expect(within(screen.getByTestId('fact-symptom')).getByText('unknown')).toBeTruthy();
+    // The requester's words live under "How SAGIP understood this", as in the design.
+    fireEvent.press(screen.getByTestId('toggle-evidence'));
     expect(screen.getByTestId('original-report')).toHaveTextContent(/3rd floor of Building B/);
   });
 });
@@ -64,11 +66,12 @@ describe('corrected floor conflict', () => {
     const conflictId = view.state.contradictions[0]?.id ?? '';
     const app = open(view);
 
+    // Each value appears on its tile and, for the requester, on the design's pick button under it.
     const card = screen.getByTestId('conflict-floor');
-    expect(within(card).getByText('Third floor')).toBeTruthy();
-    expect(within(card).getByText('Fourth floor')).toBeTruthy();
-    expect(within(screen.getByTestId('conflict-value-Third floor')).getByText('Said by You')).toBeTruthy();
-    expect(within(screen.getByTestId('conflict-value-Fourth floor')).getByText('Said by Mika Santos')).toBeTruthy();
+    expect(within(card).getAllByText('Third floor')).toHaveLength(2);
+    expect(within(card).getAllByText('Fourth floor')).toHaveLength(2);
+    expect(within(screen.getByTestId('conflict-value-Third floor')).getByText('You')).toBeTruthy();
+    expect(within(screen.getByTestId('conflict-value-Fourth floor')).getByText('Mika Santos')).toBeTruthy();
     expect(screen.queryByTestId('conflict-ask')).toBeNull();
 
     fireEvent.press(screen.getByTestId('conflict-pick-Fourth floor'));
@@ -156,15 +159,17 @@ describe('coordination', () => {
     await waitFor(() => expect(screen.getByTestId('ai-tasks-failed')).toHaveTextContent(/Local AI unavailable/));
   });
 
-  it('shows per-recipient delivery from receipts only, and the no-peer state', () => {
-    const first = renderWithApp(<IncidentScreen incidentId={sosAcknowledged().state.incidentId} initialSegment="coordination" />, createFakePulseApp({ incidents: [viewOf(sosAcknowledged().state)] }));
+  it('shows per-recipient delivery from receipts only in the Relay sheet, and the no-peer state', () => {
+    const first = renderWithApp(<IncidentScreen incidentId={sosAcknowledged().state.incidentId} initialSegment="timeline" />, createFakePulseApp({ incidents: [viewOf(sosAcknowledged().state)] }));
+    fireEvent.press(screen.getByTestId('open-relay'));
     expect(screen.getByTestId(`recipient-${MIKA.deviceId}`)).toHaveTextContent(/Seen/);
     expect(screen.getByTestId(`recipient-${MIKA.deviceId}`)).toHaveTextContent(/Delivered/);
     expect(screen.getByTestId(`recipient-${NOAH.deviceId}`)).toHaveTextContent(/Not seen yet/);
     expect(screen.getByTestId(`recipient-${NOAH.deviceId}`)).toHaveTextContent(/Queued/);
     first.unmount();
 
-    open(viewOf(sosNoPeer().state), undefined, 'coordination');
+    open(viewOf(sosNoPeer().state), undefined, 'timeline');
+    fireEvent.press(screen.getByTestId('open-relay'));
     expect(screen.getByTestId('recipients-empty')).toHaveTextContent(/Nobody has received it/);
   });
 
@@ -183,10 +188,12 @@ describe('timeline', () => {
     open(view, undefined, 'timeline');
     const timeline = screen.getByTestId('timeline');
     expect(within(timeline).getByText('Request saved on this device')).toBeTruthy();
-    expect(within(timeline).getByText('Delivered · not yet')).toBeTruthy();
+    // The design's dashed placeholder rows: the step name, "Pending", and what the step still needs.
+    expect(within(timeline).getByText('Delivered')).toBeTruthy();
     expect(within(timeline).getByText('Needs a delivery receipt from a trusted device.')).toBeTruthy();
-    expect(within(timeline).getByText('Seen · not yet')).toBeTruthy();
-    expect(within(timeline).getByText('Resolved · not yet')).toBeTruthy();
+    expect(within(timeline).getByText('Seen')).toBeTruthy();
+    expect(within(timeline).getByText('Resolved')).toBeTruthy();
+    expect(within(timeline).getAllByText('Pending')).toHaveLength(4);
   });
 
   it('shows one row per timeline entry and no placeholders once closed', () => {
@@ -194,7 +201,7 @@ describe('timeline', () => {
     open(view, undefined, 'timeline');
     expect(view.state.timeline.length).toBeGreaterThan(5);
     expect(screen.getAllByLabelText(/, \d{1,2}:\d{2} (AM|PM)/)).toHaveLength(view.state.timeline.length);
-    expect(screen.queryByText(/not yet$/)).toBeNull();
+    expect(screen.queryByText('Pending')).toBeNull();
   });
 });
 

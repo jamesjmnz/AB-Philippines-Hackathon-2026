@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { canPrepareCapsule, type Actor, type DisclosureLevel } from '@/domain';
+import { canPrepareCapsule, type Actor, type ClaimField, type DisclosureLevel } from '@/domain';
 import type { FactView, IncidentView, RecipientPolicyInput } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Button, Chip, GroupedList, Icon, SectionHeader, SegmentedControl, Toggle, colors } from '@/ui';
+import { Avatar, Icon, Pill, SegmentedControl, Toggle, colors, type IconName } from '@/ui';
 
-import { FIELD_LABELS, LEVEL_LABELS, LEVEL_SHORT, presentDelivery } from '../present';
+import { DELIVERY_LOOK, FIELD_LABELS, LEVEL_LABELS, LEVEL_SHORT, presentDelivery } from '../present';
+import { CardBox, SectionTitle, TagPill } from './parts';
 import { useRun } from './useRun';
 
 const ORDER: readonly (DisclosureLevel | 'off')[] = ['off', 'relay', 'trusted', 'authorized'];
@@ -16,6 +17,16 @@ const PREVIEW_LEVELS = [
   { key: 'authorized', label: 'Everything' },
 ] as const;
 
+const FIELD_ICON: Record<ClaimField, IconName> = {
+  incidentType: 'emergency',
+  building: 'location_on',
+  floor: 'location_on',
+  locationText: 'location_on',
+  symptom: 'description',
+  assistanceRequested: 'pan_tool',
+};
+
+/** Preview row (design 578): 17pt icon, 13pt grey label, 14/600 value capped at 55%. */
 function PreviewRow({ fact }: { fact: FactView }) {
   const readable = !fact.protected;
   const value = readable ? (fact.value ?? 'Unknown') : 'Protected';
@@ -24,15 +35,15 @@ function PreviewRow({ fact }: { fact: FactView }) {
       testID={`preview-${fact.field}`}
       accessible
       accessibilityLabel={`${FIELD_LABELS[fact.field]}: ${readable ? value : 'protected, not readable at this level'}`}
-      className="flex-row items-center gap-3 border-t border-hairline px-4 py-[11px]">
-      <Icon name={readable ? 'visibility' : 'lock'} size={17} color={readable ? colors.ink : colors.gray4} />
-      <Text className="flex-1 text-[13px] text-gray-1">{FIELD_LABELS[fact.field]}</Text>
-      <Text className={`max-w-[55%] text-right text-[14px] font-semibold ${readable && fact.value !== null ? 'text-ink' : 'text-gray-4'}`}>{value}</Text>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.hairline }}>
+      <Icon name={readable ? FIELD_ICON[fact.field] : 'lock'} size={17} color={readable ? colors.ink : colors.gray4} />
+      <Text style={{ flex: 1, minWidth: 0, fontSize: 13, color: colors.gray1 }}>{FIELD_LABELS[fact.field]}</Text>
+      <Text style={{ maxWidth: '55%', fontSize: 14, fontWeight: '600', textAlign: 'right', color: readable && fact.value !== null ? colors.ink : colors.gray1 }}>{value}</Text>
     </View>
   );
 }
 
-/** The design's Privacy page: preview per level, recipients with delivery state, share toggles, send. */
+/** Capsule segment = the design's Privacy sub-page (571–593): preview per level, recipients, share toggles, send. */
 export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }) {
   const { mode } = usePulse();
   const actions = usePulseActions();
@@ -52,6 +63,7 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
   const dirty = draft !== null;
   const mayPrepare = canPrepareCapsule(state, actor).ok;
   const neverPrepared = state.capsules.length === 0;
+  const canSend = mayPrepare && (dirty || neverPrepared);
 
   const preview = owner ? actions.previewDisclosure(view.id, level, policy) : view.facts;
   const holders = state.recipients.filter((r) => (policy.levels[r.deviceId] ?? 'off') === level).map((r) => r.userName);
@@ -62,121 +74,111 @@ export function CapsuleTab({ view, actor }: { view: IncidentView; actor: Actor }
     setDraft({ ...policy, levels: { ...policy.levels, [deviceId]: next } });
   };
 
+  const pill = neverPrepared ? { label: 'Not prepared', fg: colors.gray1, bg: colors.hairline } : dirty ? { label: 'Changes not sent', fg: colors.amberText, bg: colors.amberTint } : { label: 'Prepared', fg: colors.ink, bg: colors.hairline };
+
   return (
-    <View className="gap-[14px]">
+    <>
       <View>
-        <Text accessibilityRole="header" className="text-[26px] font-bold tracking-[-0.7px] text-ink">
+        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.7, color: colors.ink }}>
           Privacy
         </Text>
-        <Text className="mt-1 text-[14px] text-gray-1">Share what’s needed. Protect what isn’t.</Text>
+        <Text style={{ fontSize: 14, color: colors.gray1, marginTop: 4 }}>Share what’s needed. Protect what isn’t.</Text>
       </View>
 
-      <View className="flex-row items-center gap-3 rounded-card bg-card px-4 py-[14px]">
+      <View testID="capsule-card" style={{ backgroundColor: '#FFFFFF', borderRadius: 22, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Icon name="lock" size={20} filled />
-        <View className="flex-1">
-          <Text className="text-[15px] font-semibold text-ink">Rescue Capsule</Text>
-          <Text className="mt-[1px] text-[12.5px] leading-[17px] text-gray-1">
-            {mode === 'demo' ? 'Encryption simulated · ' : ''}Each recipient reads only their level · delivery is shown only from receipts
-          </Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>Rescue Capsule</Text>
+          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 1 }}>{mode === 'demo' ? 'Encryption simulated · receipts confirm delivery' : 'Each recipient reads only their level · receipts confirm delivery'}</Text>
         </View>
-        <Chip label={neverPrepared ? 'Not prepared' : dirty ? 'Changes not sent' : 'Prepared'} tone={neverPrepared || dirty ? 'amber' : 'neutral'} />
+        <TagPill testID="capsule-state" label={pill.label} fg={pill.fg} bg={pill.bg} />
       </View>
 
-      {owner ? <SegmentedControl options={PREVIEW_LEVELS} value={level} onChange={setLevel} accessibilityLabel="Preview what a level can read" /> : null}
+      {owner ? <SegmentedControl options={PREVIEW_LEVELS} value={level} onChange={setLevel} accessibilityLabel="Preview what a level can read" fontSize={13} /> : null}
 
-      <GroupedList>
-        <View className="px-4 py-3">
-          <Text testID="preview-who" className="text-[12.5px] text-gray-1">
+      <CardBox>
+        <View style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+          <Text testID="preview-who" style={{ fontSize: 12.5, color: colors.gray1 }}>
             {owner ? (holders.length > 0 ? `Seen by: ${holders.join(', ')}` : 'Nobody holds this level right now') : 'This is what your device can read'}
           </Text>
         </View>
         {preview.length === 0 ? (
-          <View className="border-t border-hairline px-4 py-3">
-            <Text testID="preview-empty" className="text-[13.5px] text-gray-1">
+          <View style={{ paddingVertical: 11, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.hairline }}>
+            <Text testID="preview-empty" style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray1 }}>
               {owner && level === 'relay' ? 'Nothing. A device that only passes along handles sealed data and cannot read any detail.' : 'Nothing readable at this level.'}
             </Text>
           </View>
         ) : (
           preview.map((f) => <PreviewRow key={f.field} fact={f} />)
         )}
-      </GroupedList>
+      </CardBox>
 
       {owner ? (
         <>
-          <View>
-            <SectionHeader title="Recipients" />
-            <GroupedList>
-              {state.recipients.length === 0 ? (
-                <View className="px-4 py-4">
-                  <Text className="text-[14px] text-gray-1">No trusted device paired when this request was created.</Text>
-                </View>
-              ) : (
-                state.recipients.map((r, i) => {
-                  const current = policy.levels[r.deviceId] ?? 'off';
-                  const d = presentDelivery(r.capsuleDelivery);
-                  return (
-                    <View key={r.deviceId} testID={`capsule-recipient-${r.deviceId}`} className={`flex-row items-center gap-3 px-4 py-3 ${i === 0 ? '' : 'border-t border-hairline'}`}>
-                      <Avatar name={r.userName} size={34} />
-                      <View className="flex-1">
-                        <Text className="text-[15px] font-semibold text-ink">{r.userName}</Text>
-                        <Text className="text-[12px] font-medium" style={{ color: d.tone === 'green' ? colors.greenText : d.tone === 'amber' ? colors.amberText : colors.gray1 }}>
-                          Capsule: {d.label}
-                        </Text>
-                      </View>
-                      <Pressable
-                        testID={`level-${r.deviceId}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${r.userName}: ${LEVEL_LABELS[current]}. Change level`}
-                        disabled={!mayPrepare}
-                        onPress={() => cycle(r.deviceId)}
-                        hitSlop={6}
-                        className="min-h-[36px] flex-row items-center gap-1 rounded-full bg-fill-pill px-3">
-                        <Text className="text-[13px] font-semibold text-ink">{LEVEL_SHORT[current]}</Text>
-                        <Icon name="unfold_more" size={15} color={colors.gray2} />
-                      </Pressable>
-                    </View>
-                  );
-                })
-              )}
-            </GroupedList>
-          </View>
-
-          <GroupedList>
-            <View className="flex-row items-center gap-3 px-4 py-3">
-              <View className="flex-1">
-                <Text className="text-[15px] font-medium text-ink">Share detailed location</Text>
-                <Text className="mt-0.5 text-[12.5px] text-gray-1">Off: recipients read the building only.</Text>
+          <SectionTitle>Recipients</SectionTitle>
+          <CardBox>
+            {state.recipients.length === 0 ? (
+              <View style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 14, color: colors.gray1 }}>No trusted device paired when this request was created.</Text>
               </View>
+            ) : (
+              state.recipients.map((r, i) => {
+                const current = policy.levels[r.deviceId] ?? 'off';
+                const d = presentDelivery(r.capsuleDelivery);
+                return (
+                  <View key={r.deviceId} testID={`capsule-recipient-${r.deviceId}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.hairline }}>
+                    <Avatar name={r.userName} size={34} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>{r.userName}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '500', color: DELIVERY_LOOK[r.capsuleDelivery].fg }}>Capsule: {d.label}</Text>
+                    </View>
+                    <Pressable
+                      testID={`level-${r.deviceId}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${r.userName}: ${LEVEL_LABELS[current]}. Change level`}
+                      disabled={!mayPrepare}
+                      onPress={() => cycle(r.deviceId)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      style={{ minHeight: 32, paddingLeft: 12, paddingRight: 8, borderRadius: 999, backgroundColor: colors.hairline, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.ink }}>{LEVEL_SHORT[current]}</Text>
+                      <Icon name="unfold_more" size={16} />
+                    </Pressable>
+                  </View>
+                );
+              })
+            )}
+          </CardBox>
+
+          <CardBox>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16 }}>
+              <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: colors.ink }}>Share detailed location</Text>
               <Toggle testID="toggle-location" label="Share detailed location" value={policy.shareDetailedLocation} disabled={!mayPrepare} onChange={(v) => setDraft({ ...policy, shareDetailedLocation: v })} />
             </View>
-            <View className="flex-row items-center gap-3 border-t border-hairline px-4 py-3">
-              <View className="flex-1">
-                <Text className="text-[15px] font-medium text-ink">Share what I described</Text>
-                <Text className="mt-0.5 text-[12.5px] text-gray-1">Off: nobody else reads your description or your original words.</Text>
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.hairline }}>
+              <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: colors.ink }}>Share what I described</Text>
               <Toggle testID="toggle-description" label="Share what I described" value={policy.shareSymptoms} disabled={!mayPrepare} onChange={(v) => setDraft({ ...policy, shareSymptoms: v })} />
             </View>
-          </GroupedList>
+          </CardBox>
 
-          <Button
+          <Pill
             testID="capsule-send"
-            label={neverPrepared ? 'Prepare and queue capsule' : 'Send capsule update'}
-            size="md"
-            disabled={!mayPrepare || busy !== null || (!dirty && !neverPrepared)}
+            label={neverPrepared ? 'Confirm capsule preparation' : dirty ? 'Send capsule update' : 'Capsule up to date'}
+            h={54}
+            size={16}
+            press={0.98}
+            disabled={!canSend || busy !== null}
             onPress={async () => {
               const r = await run('capsule', () => actions.updateCapsule(view.id, policy));
               if (r.ok) setDraft(null);
             }}
           />
-          <Text className="px-1 text-[12px] leading-[17px] text-gray-1">
-            Sending queues the update on this device. Each recipient shows Delivered only after their device returns a receipt.
-          </Text>
+          <Text style={{ fontSize: 12, lineHeight: 16.8, color: colors.gray1, paddingHorizontal: 4 }}>Sending queues the update on this device. Each recipient shows Delivered only after their device returns a receipt.</Text>
         </>
       ) : (
-        <Text testID="my-access" className="px-1 text-[13px] text-gray-1">
+        <Text testID="my-access" style={{ fontSize: 13, color: colors.gray1, paddingHorizontal: 4 }}>
           Your access: {LEVEL_LABELS[view.access]}
         </Text>
       )}
-    </View>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import type { AIFailureState, TaskKind, TaskProposal } from '@/ai';
 import {
@@ -17,10 +17,11 @@ import {
   type AssistanceTask,
 } from '@/domain';
 import type { IncidentView } from '@/services/api';
-import { usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Banner, Button, Chip, ChoiceChip, Dialog, GroupedList, Icon, MicroPill, SectionHeader, Sheet, TextButton, TextField, colors } from '@/ui';
+import { usePulse, usePulseActions } from '@/services/PulseProvider';
+import { Avatar, ChoiceChip, Dialog, Icon, LinkButton, Pill, Sheet, colors, useToast } from '@/ui';
 
-import { displayName, firstName, presentAIState, presentDelivery, TASK_STATUS } from '../present';
+import { BRAND, displayName, firstName, presentAIState, TASK_LOOK, TASK_STATUS } from '../present';
+import { CardBox, INK_LINES, SectionTitle, TagPill } from './parts';
 import { useRun } from './useRun';
 
 const KIND_LABEL: Record<TaskKind, string> = {
@@ -32,12 +33,14 @@ const KIND_LABEL: Record<TaskKind, string> = {
 
 type TaskAction = { key: string; label: string; primary?: boolean; run: () => void };
 
+/** One role (design 500–507): padding 14/16, 32pt avatar, 15/600 title, 12.5 who-line, pill, 38pt actions. */
 function TaskRow({ view, actor, task, first }: { view: IncidentView; actor: Actor; task: AssistanceTask; first: boolean }) {
   const actions = usePulseActions();
   const { busy, run } = useRun();
   const mine = task.assignee?.deviceId === actor.deviceId;
   const forSomeoneElse = task.offeredToDeviceId !== null && task.offeredToDeviceId !== actor.deviceId;
   const status = TASK_STATUS[task.status];
+  const look = TASK_LOOK[task.status];
   const who = task.assignee
     ? `${displayName(actor, task.assignee.deviceId, firstName(task.assignee.userName))}${task.status === 'in_progress' && task.inPerson ? ' · arrival not confirmed' : ''}`
     : forSomeoneElse
@@ -51,48 +54,46 @@ function TaskRow({ view, actor, task, first }: { view: IncidentView; actor: Acto
       list.push({ key: 'accept', label: 'Take this role', primary: true, run: () => void run('accept', () => actions.acceptTask(view.id, task.id)) });
     }
     if (canDeclineTask(view.state, actor, task.id).ok && !task.declinedByDeviceIds.includes(actor.deviceId)) {
-      list.push({ key: 'decline', label: 'Decline', run: () => void run('decline', () => actions.declineTask(view.id, task.id)) });
+      list.push({ key: 'decline', label: 'Can’t help', run: () => void run('decline', () => actions.declineTask(view.id, task.id)) });
     }
   }
   if (mine && task.status === 'accepted' && canReportProgress(view.state, actor, task.id).ok) {
-    list.push({ key: 'start', label: task.inPerson ? 'I’m on my way' : 'Start', primary: true, run: () => void run('start', () => actions.startTask(view.id, task.id)) });
+    list.push({ key: 'start', label: task.inPerson ? 'I’m on my way' : 'Start', run: () => void run('start', () => actions.startTask(view.id, task.id)) });
   }
   if (mine && canReportCompletion(view.state, actor, task.id).ok) {
-    list.push({ key: 'done', label: 'Report done', primary: task.status === 'in_progress', run: () => void run('done', () => actions.reportTaskComplete(view.id, task.id)) });
+    list.push({ key: 'done', label: 'I’m done', primary: true, run: () => void run('done', () => actions.reportTaskComplete(view.id, task.id)) });
   }
   if (mine && (task.status === 'accepted' || task.status === 'in_progress') && canDeclineTask(view.state, actor, task.id).ok) {
     list.push({ key: 'release', label: 'Release', run: () => void run('release', () => actions.declineTask(view.id, task.id)) });
   }
   if (canConfirmCompletion(view.state, actor, task.id).ok) {
-    list.push({ key: 'confirm', label: 'Confirm done', primary: true, run: () => void run('confirm', () => actions.confirmTaskComplete(view.id, task.id)) });
+    list.push({ key: 'confirm', label: 'Confirm', primary: true, run: () => void run('confirm', () => actions.confirmTaskComplete(view.id, task.id)) });
   }
 
   return (
-    <View testID={`task-${task.id}`} className={`px-4 py-[14px] ${first ? '' : 'border-t border-hairline'}`}>
-      <View className="flex-row items-center gap-3">
+    <View testID={`task-${task.id}`} style={{ paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         {task.assignee ? (
           <Avatar name={task.assignee.userName} size={32} self={mine} />
         ) : (
-          <View className="h-8 w-8 items-center justify-center rounded-full bg-hairline">
-            <Icon name="person" size={16} color={colors.gray1} />
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.line, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.gray1 }}>?</Text>
           </View>
         )}
-        <View className="flex-1">
-          <Text className="text-[15px] font-semibold leading-[20px] text-ink">{task.title}</Text>
-          <Text className="mt-0.5 text-[12.5px] text-gray-1">{who}</Text>
-          {task.origin === 'ai_suggested' ? <Text className="mt-0.5 text-[12px] text-indigo">Suggested by AI · added by a person</Text> : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', lineHeight: 19.5, color: colors.ink }}>{task.title}</Text>
+          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 2 }}>{who}</Text>
+          {task.origin === 'ai_suggested' ? <Text style={{ fontSize: 12, color: colors.indigo, marginTop: 2 }}>Suggested by AI · added by a person</Text> : null}
         </View>
-        <Chip label={status.label} tone={status.tone} solid={status.solid} />
+        <TagPill label={status.label} fg={look.fg} bg={look.bg} />
       </View>
       {task.status === 'completion_reported' && !canConfirmCompletion(view.state, actor, task.id).ok ? (
-        <Text className="mt-2 pl-11 text-[12.5px] text-gray-1">Reported done. Waiting for the requester to confirm.</Text>
+        <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 8, paddingLeft: 44 }}>Reported done. Waiting for the requester to confirm.</Text>
       ) : null}
       {list.length > 0 ? (
-        <View className="mt-3 flex-row flex-wrap gap-2 pl-11">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingLeft: 44 }}>
           {list.map((a) => (
-            <View key={a.key} className="min-w-[120px] flex-1">
-              <Button testID={`task-${a.key}-${task.id}`} label={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} disabled={busy !== null} onPress={a.run} />
-            </View>
+            <Pill key={a.key} testID={`task-${a.key}-${task.id}`} flex label={a.label} tone={a.primary ? 'ink' : 'soft'} h={38} size={13.5} press={0.97} disabled={busy !== null} onPress={a.run} />
           ))}
         </View>
       ) : null}
@@ -102,22 +103,34 @@ function TaskRow({ view, actor, task, first }: { view: IncidentView; actor: Acto
 
 type Suggestions = { state: 'idle' } | { state: 'loading' } | { state: 'ok'; items: TaskProposal[]; source: string } | { state: 'failed'; reason: AIFailureState };
 
+/**
+ * Coordination segment: "Who’s helping", the resolution and contact actions, and Cancel request, as
+ * designed (497–510, 532–535, 557); plus the responder's seen / can't-help card and AI role suggestions.
+ */
 export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Actor }) {
+  const { mode } = usePulse();
   const actions = usePulseActions();
   const { busy, run } = useRun();
-  const [dialog, setDialog] = useState<'resolve' | 'cancel' | null>(null);
+  const toast = useToast((s) => s.show);
+  const [dialog, setDialog] = useState<'resolve' | 'cancel' | 'decline' | null>(null);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<TaskKind>('communicate');
   const [suggestions, setSuggestions] = useState<Suggestions>({ state: 'idle' });
   const [added, setAdded] = useState<string[]>([]);
 
-  const myRecipient = view.state.recipients.find((r) => r.deviceId === actor.deviceId);
-  const mayAck = canAcknowledge(view.state, actor).ok && myRecipient !== undefined && !myRecipient.acknowledged;
-  const mayDecline = canDeclineRequest(view.state, actor).ok && myRecipient !== undefined && !myRecipient.declined;
-  const mayOffer = canOfferTask(view.state, actor, '', null).ok;
-  const mayResolve = canResolveIncident(view.state, actor).ok;
-  const mayCancel = canCancelIncident(view.state, actor).ok;
+  const state = view.state;
+  const myRecipient = state.recipients.find((r) => r.deviceId === actor.deviceId);
+  const mayAck = canAcknowledge(state, actor).ok && myRecipient !== undefined && !myRecipient.acknowledged;
+  const mayDecline = canDeclineRequest(state, actor).ok && myRecipient !== undefined && !myRecipient.declined;
+  const mayOffer = canOfferTask(state, actor, '', null).ok;
+  const mayResolve = canResolveIncident(state, actor).ok;
+  const mayCancel = canCancelIncident(state, actor).ok;
+
+  const reporter = state.incident?.reporter ?? null;
+  const helper = state.tasks.find((t) => t.assignee !== null && t.assignee.deviceId !== reporter?.deviceId)?.assignee ?? null;
+  const contactName = view.role === 'reporter' ? (helper ? firstName(helper.userName) : null) : reporter ? firstName(reporter.userName) : null;
+  const contactLabel = contactName ? `Contact ${contactName}` : 'Contact trusted responder';
 
   const suggest = async () => {
     setSuggestions({ state: 'loading' });
@@ -126,10 +139,10 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
   };
 
   return (
-    <View className="gap-[14px]">
+    <>
       {myRecipient ? (
-        <View testID="responder-actions" className="gap-3 rounded-card bg-card p-4">
-          <Text className="text-[13.5px] leading-[19px] text-gray-2">
+        <View testID="responder-actions" style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, gap: 12 }}>
+          <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>
             {myRecipient.declined
               ? 'You said you can’t help with this request.'
               : myRecipient.acknowledged
@@ -137,77 +150,78 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
                 : 'Marking as seen tells the requester you have read this. It is not the same as taking a role.'}
           </Text>
           {mayAck || mayDecline ? (
-            <View className="flex-row gap-[10px]">
-              {mayAck ? (
-                <View className="flex-1">
-                  <Button testID="ack" label="Mark as seen" size="sm" variant="secondary" disabled={busy !== null} onPress={() => void run('ack', () => actions.acknowledge(view.id))} />
-                </View>
-              ) : null}
-              {mayDecline ? (
-                <View className="flex-1">
-                  <Button testID="cant-help" label="Can’t help" size="sm" variant="secondary" disabled={busy !== null} onPress={() => void run('decline', () => actions.declineRequest(view.id))} />
-                </View>
-              ) : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {mayAck ? <Pill testID="ack" flex label="Mark as seen" tone="soft" h={46} size={14.5} disabled={busy !== null} onPress={() => void run('ack', () => actions.acknowledge(view.id))} /> : null}
+              {mayDecline ? <Pill testID="cant-help" flex label="Can’t help" tone="soft" h={46} size={14.5} disabled={busy !== null} onPress={() => setDialog('decline')} /> : null}
             </View>
           ) : null}
         </View>
       ) : null}
 
-      <View>
-        <SectionHeader title="Who’s helping" />
-        <GroupedList>
-          {view.state.tasks.length === 0 ? (
-            <View testID="tasks-empty" className="px-4 py-4">
-              <Text className="text-[14px] text-gray-1">No roles yet. Nobody has been asked to do anything specific.</Text>
-            </View>
-          ) : (
-            view.state.tasks.map((t, i) => <TaskRow key={t.id} view={view} actor={actor} task={t} first={i === 0} />)
-          )}
-          {mayOffer ? (
-            <View className="border-t border-hairline">
-              <TextButton testID="request-more" label={view.role === 'reporter' ? '+ Request more help' : '+ Offer a role'} tone="ink" onPress={() => setAdding(true)} />
-            </View>
-          ) : null}
-        </GroupedList>
-      </View>
+      <SectionTitle>Who’s helping</SectionTitle>
+      <CardBox testID="tasks-card">
+        {state.tasks.length === 0 ? (
+          <View testID="tasks-empty" style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
+            <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray1 }}>No roles yet. Nobody has been asked to do anything specific.</Text>
+          </View>
+        ) : (
+          state.tasks.map((t, i) => <TaskRow key={t.id} view={view} actor={actor} task={t} first={i === 0} />)
+        )}
+        {mayOffer ? (
+          <Pressable
+            testID="request-more"
+            accessibilityRole="button"
+            onPress={() => setAdding(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: '#FFFFFF' }}>
+            <Icon name="add" size={18} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}>{view.role === 'reporter' ? 'Request more help' : 'Offer a role'}</Text>
+          </Pressable>
+        ) : null}
+      </CardBox>
 
       {mayOffer ? (
-        <View testID="ai-tasks" className="gap-3 rounded-feature border border-indigo-line bg-card p-[18px]">
-          <View className="flex-row items-center gap-1.5">
+        <View testID="ai-tasks" style={{ backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: INK_LINES.indigoLine, padding: 18, gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Icon name="auto_awesome" size={16} color={colors.indigo} />
-            <Text className="flex-1 text-[12px] font-bold text-indigo">Suggested by AI · non-medical roles</Text>
-            {suggestions.state === 'ok' && suggestions.source === 'simulated' ? <MicroPill label="Simulated" /> : null}
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: colors.indigo }}>Suggested by AI · non-medical roles</Text>
+            {suggestions.state === 'ok' && suggestions.source === 'simulated' ? <TagPill label="SIMULATED" fg={colors.gray1} bg={colors.hairline} /> : null}
           </View>
           {suggestions.state === 'idle' ? (
             <>
-              <Text className="text-[13.5px] leading-[19px] text-gray-2">Ask the on-device model for roles people could take. Nothing is added unless you add it.</Text>
-              <Button testID="ai-tasks-run" label="Suggest roles on this device" size="sm" variant="secondary" icon="auto_awesome" onPress={() => void suggest()} />
+              <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>Ask the on-device model for roles people could take. Nothing is added unless you add it.</Text>
+              <Pill testID="ai-tasks-run" label="Suggest roles on this device" tone="soft" h={40} size={14} icon="auto_awesome" iconSize={16} onPress={() => void suggest()} />
             </>
           ) : null}
-          {suggestions.state === 'loading' ? <Text accessibilityLiveRegion="polite" className="text-[13.5px] text-gray-1">Asking the on-device model…</Text> : null}
+          {suggestions.state === 'loading' ? (
+            <Text accessibilityLiveRegion="polite" style={{ fontSize: 14, color: colors.gray1 }}>
+              Asking the on-device model…
+            </Text>
+          ) : null}
           {suggestions.state === 'failed' ? (
-            <Text testID="ai-tasks-failed" accessibilityLiveRegion="polite" className="text-[13.5px] leading-[19px] text-gray-2">
+            <Text testID="ai-tasks-failed" accessibilityLiveRegion="polite" style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>
               Local AI unavailable ({presentAIState(suggestions.reason).label.toLowerCase()}). You can still add roles yourself.
             </Text>
           ) : null}
-          {suggestions.state === 'ok' && suggestions.items.length === 0 ? <Text className="text-[13.5px] text-gray-1">No suggestions.</Text> : null}
+          {suggestions.state === 'ok' && suggestions.items.length === 0 ? <Text style={{ fontSize: 14, color: colors.gray1 }}>No suggestions.</Text> : null}
           {suggestions.state === 'ok'
             ? suggestions.items.map((s) => {
                 const key = `${s.kind}:${s.title}`;
                 const done = added.includes(key);
                 return (
-                  <View key={key} className="flex-row items-center gap-3 rounded-2xl bg-page p-3">
-                    <View className="flex-1">
-                      <Text className="text-[14.5px] font-semibold text-ink">{s.title}</Text>
-                      <Text className="mt-0.5 text-[12px] text-gray-1">{KIND_LABEL[s.kind]}</Text>
+                  <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.page, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 12 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: colors.ink }}>{s.title}</Text>
+                      <Text style={{ fontSize: 12, color: colors.gray1, marginTop: 2 }}>{KIND_LABEL[s.kind]}</Text>
                     </View>
                     {done ? (
-                      <Chip label="Added" tone="gray" />
+                      <TagPill label="Added" fg={colors.gray1} bg={colors.hairline} />
                     ) : (
-                      <Button
+                      <Pill
                         testID={`ai-task-add-${s.kind}`}
                         label="Add"
-                        size="sm"
+                        h={36}
+                        size={13.5}
+                        px={16}
                         disabled={busy !== null}
                         onPress={async () => {
                           const r = await run('offer', () => actions.offerTask(view.id, { kind: s.kind, title: s.title, aiSuggested: true }));
@@ -222,40 +236,26 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
         </View>
       ) : null}
 
-      <View>
-        <SectionHeader title="Recipients" />
-        <GroupedList>
-          {view.state.recipients.length === 0 ? (
-            <View testID="recipients-empty" className="px-4 py-4">
-              <Text className="text-[14px] text-gray-1">No trusted device paired when this was created. Nobody has received it.</Text>
-            </View>
-          ) : (
-            view.state.recipients.map((r, i) => {
-              const d = presentDelivery(r.delivery);
-              return (
-                <View key={r.deviceId} testID={`recipient-${r.deviceId}`} className={`flex-row items-center gap-3 px-4 py-3 ${i === 0 ? '' : 'border-t border-hairline'}`}>
-                  <Avatar name={r.userName} size={34} self={r.deviceId === actor.deviceId} />
-                  <View className="flex-1">
-                    <Text className="text-[15px] font-semibold text-ink">{displayName(actor, r.deviceId, r.userName)}</Text>
-                    <Text className="text-[12px] text-gray-1">{r.declined ? 'Can’t help' : r.acknowledged ? 'Seen' : 'Not seen yet'}</Text>
-                  </View>
-                  <Chip label={d.label} tone={d.tone} />
-                </View>
-              );
-            })
-          )}
-        </GroupedList>
-        {view.pendingOutbox > 0 ? (
-          <View className="mt-2">
-            <Button testID="retry-delivery" label="Try delivery again" size="sm" variant="secondary" icon="replay" onPress={() => void actions.retryDelivery(view.id)} />
-          </View>
-        ) : null}
-      </View>
-
-      {view.state.closure ? <Banner tone="gray" text={view.state.closure.kind === 'resolved' ? 'This request is resolved. No further actions are available.' : 'This request was cancelled. No further actions are available.'} /> : null}
-
-      {mayResolve ? <Button testID="resolve" label="Confirm resolution" size="md" onPress={() => setDialog('resolve')} /> : null}
-      {mayCancel ? <TextButton testID="cancel-request" label="Cancel request" tone="coral" onPress={() => setDialog('cancel')} /> : null}
+      {state.closure ? (
+        <Text testID="closed-note" style={{ fontSize: 13, color: colors.gray1, paddingHorizontal: 4 }}>
+          {state.closure.kind === 'resolved' ? 'This request is resolved. No further actions are available.' : 'This request was cancelled. No further actions are available.'}
+        </Text>
+      ) : (
+        <View style={{ gap: 10, marginTop: 4 }}>
+          {mayResolve ? <Pill testID="resolve" label="Confirm resolution" h={54} size={16} press={0.98} onPress={() => setDialog('resolve')} /> : null}
+          <Pill
+            testID="contact"
+            label={contactLabel}
+            tone="soft"
+            h={52}
+            size={16}
+            icon="call"
+            iconSize={19}
+            onPress={() => (mode === 'demo' ? toast('Simulated, no call placed', 'call') : toast(`${BRAND} has no number for ${contactName ?? 'them'}. Use your phone to reach them.`, 'call'))}
+          />
+        </View>
+      )}
+      {mayCancel ? <LinkButton testID="cancel-request" label="Cancel request" color={colors.coralText} size={15} h={44} onPress={() => setDialog('cancel')} /> : null}
 
       <Dialog
         visible={dialog === 'resolve'}
@@ -263,6 +263,7 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
         message="This records that the request is resolved, on your word. It closes the request for everyone who receives the update."
         cancelLabel="Not yet"
         confirmLabel="Resolve"
+        confirmColor={colors.greenText}
         onCancel={() => setDialog(null)}
         onConfirm={() => {
           setDialog(null);
@@ -282,28 +283,58 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
           void run('cancel', () => actions.cancelIncident(view.id));
         }}
       />
+      <Dialog
+        visible={dialog === 'decline'}
+        title="Can’t help right now?"
+        message="The request stays open and your open roles go to someone else."
+        cancelLabel="Back"
+        confirmLabel="Can’t help"
+        destructive
+        onCancel={() => setDialog(null)}
+        onConfirm={() => {
+          setDialog(null);
+          void run('decline', () => actions.declineRequest(view.id));
+        }}
+      />
 
-      <Sheet visible={adding} onClose={() => setAdding(false)} title={view.role === 'reporter' ? 'Request more help' : 'Offer a role'}>
-        <Text className="text-[14px] leading-[20px] text-gray-1">Describe a non-medical role someone could take. People choose for themselves; nobody is assigned.</Text>
-        <View className="flex-row flex-wrap gap-2">
+      <Sheet testID="add-role-sheet" visible={adding} onClose={() => setAdding(false)}>
+        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink }}>
+          {view.role === 'reporter' ? 'Request more help' : 'Offer a role'}
+        </Text>
+        <Text style={{ fontSize: 14, lineHeight: 20.3, color: colors.gray1, marginTop: 4 }}>Describe a non-medical role someone could take. People choose for themselves; nobody is assigned.</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
           {(Object.keys(KIND_LABEL) as TaskKind[]).map((k) => (
-            <ChoiceChip key={k} label={KIND_LABEL[k]} selected={kind === k} onPress={() => setKind(k)} />
+            <ChoiceChip key={k} testID={`task-kind-${k}`} label={KIND_LABEL[k]} selected={kind === k} onPress={() => setKind(k)} />
           ))}
         </View>
-        <TextField testID="task-title" label="Role" placeholder="For example: Meet me at the lobby" value={title} onChangeText={setTitle} maxLength={80} />
-        <Button
-          testID="task-add"
-          label="Add role"
-          disabled={busy !== null || title.trim().length === 0}
-          onPress={async () => {
-            const r = await run('offer', () => actions.offerTask(view.id, { kind, title: title.trim() }));
-            if (r.ok) {
-              setTitle('');
-              setAdding(false);
-            }
-          }}
+        <TextInput
+          testID="task-title"
+          accessibilityLabel="Role"
+          value={title}
+          onChangeText={setTitle}
+          placeholder="For example: Meet me at the lobby"
+          placeholderTextColor={colors.gray4}
+          maxLength={80}
+          returnKeyType="done"
+          style={{ minHeight: 44, borderRadius: 13, borderWidth: 1, borderColor: colors.lineInput, backgroundColor: INK_LINES.fillInput, paddingHorizontal: 14, paddingVertical: 0, fontSize: 16, color: colors.ink, marginTop: 12 }}
         />
+        <View style={{ marginTop: 20 }}>
+          <Pill
+            testID="task-add"
+            label="Add role"
+            h={54}
+            size={16}
+            disabled={busy !== null || title.trim().length === 0}
+            onPress={async () => {
+              const r = await run('offer', () => actions.offerTask(view.id, { kind, title: title.trim() }));
+              if (r.ok) {
+                setTitle('');
+                setAdding(false);
+              }
+            }}
+          />
+        </View>
       </Sheet>
-    </View>
+    </>
   );
 }

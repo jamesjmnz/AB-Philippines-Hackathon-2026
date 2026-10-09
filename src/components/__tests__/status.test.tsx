@@ -1,12 +1,13 @@
 import '../testing/mocks';
 
-import { render, screen } from '@testing-library/react-native';
+import { screen } from '@testing-library/react-native';
 
 import type { IncidentState } from '@/domain';
 
 import { StatusCard } from '../incident/StatusCard';
 import { presentSteps } from '../present';
-import { ME, viewOf } from '../testing/fakePulseApp';
+import { createFakePulseApp, ME, viewOf } from '../testing/fakePulseApp';
+import { renderWithApp } from '../testing/render';
 import {
   MIKA,
   sosAcknowledged,
@@ -47,7 +48,7 @@ describe('status card', () => {
   it.each(CASES)('$name', ({ build, status, title, chip, sub, steps }) => {
     const { state } = build();
     expect(state.status.status).toBe(status);
-    render(<StatusCard view={viewOf(state)} me={ME} />);
+    renderWithApp(<StatusCard view={viewOf(state)} me={ME} />, createFakePulseApp());
 
     expect(screen.getByTestId('status-title')).toHaveTextContent(title);
     expect(screen.getByTestId('status-chip')).toHaveTextContent(chip);
@@ -61,7 +62,7 @@ describe('status card', () => {
 
   it('never words a queued or attempted send as sent, delivered or on the way', () => {
     for (const build of [sosNoPeer, sosQueued, sosSendAttempted]) {
-      const view = render(<StatusCard view={viewOf(build().state)} me={ME} />);
+      const view = renderWithApp(<StatusCard view={viewOf(build().state)} me={ME} />, createFakePulseApp());
       expect(screen.queryByText(/\bSent\b/)).toBeNull();
       expect(screen.queryByText(/on the way/i)).toBeNull();
       expect(screen.queryByText(/notified|alerted/i)).toBeNull();
@@ -72,22 +73,24 @@ describe('status card', () => {
 
   it('says "on the way" only while an in-person task is in progress', () => {
     for (const build of [sosDelivered, sosAcknowledged, sosRoleTaken]) {
-      const view = render(<StatusCard view={viewOf(build().state)} me={ME} />);
+      const view = renderWithApp(<StatusCard view={viewOf(build().state)} me={ME} />, createFakePulseApp());
       expect(screen.getByTestId('status-title')).not.toHaveTextContent(/on the way/i);
       view.unmount();
     }
   });
 
   it('tells a responder the request is on their device without claiming the requester knows', () => {
-    render(<StatusCard view={viewOf(sosQueued().state, MIKA)} me={MIKA} />);
+    renderWithApp(<StatusCard view={viewOf(sosQueued().state, MIKA)} me={MIKA} />, createFakePulseApp());
     expect(screen.getByTestId('status-title')).toHaveTextContent('Received on this device');
     expect(screen.getByTestId('status-chip')).toHaveTextContent('Received');
     expect(screen.getByTestId('status-chip')).not.toHaveTextContent('Delivered');
     expect(screen.getByRole('progressbar')).toHaveProp('accessibilityLabel', 'Saved done, Delivered pending, Seen pending, Role taken pending, Resolved pending');
   });
 
-  it('shows the reported location words instead of a map, or says they are unknown', () => {
-    render(<StatusCard view={viewOf(sosQueued().state)} me={ME} />);
-    expect(screen.getByTestId('status-place')).toHaveTextContent('Location not reported');
+  it('draws the map card veiled in Live, with the reported location words (or that none were stated) on its chip', () => {
+    renderWithApp(<StatusCard view={viewOf(sosQueued().state)} me={ME} />, createFakePulseApp());
+    expect(screen.getByTestId('map-label')).toHaveTextContent('Location not stated');
+    expect(screen.getByTestId('map-veil')).toBeTruthy();
+    expect(screen.queryByTestId('map-pin-request')).toBeNull();
   });
 });
