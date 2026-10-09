@@ -32,7 +32,10 @@ npm run ios                   # build and install on a connected iPhone
 npm start                     # Metro for the dev client
 ```
 
-There are no simulator runtimes on the development Mac; native runs go to physical iPhones.
+Local Xcode device builds fail on the development Mac (no iOS 26.2 platform component); builds go
+through EAS (`eas build -p ios --profile development|simulator|preview`). An iOS 26.3 simulator runtime
+is installed and runs the simulator build, with no Apple Intelligence model and no peer-to-peer radio,
+so a simulator run never passes a device gate.
 
 ## Layout
 
@@ -41,8 +44,10 @@ src/app/          routes only
 src/domain/       Zod contracts, events, reducers, invariants, policies (pure TS, no React Native imports)
 src/storage/      SQLite migrations, IncidentRepository, outbox/inbox
 src/ai/           LocalAIService, rules engine; src/ai/callstack/ is the Callstack adapter
-src/transport/    PeerTransport interface, native adapter, sync, relay
-src/crypto/       CapsuleCrypto interface, native adapter, envelope codec, disclosure policy
+src/transport/    PeerTransport interface, native adapter
+src/crypto/       CapsuleCrypto interface, native adapter, capsule sections
+src/sync/         packet codec, SyncEngine (outbox, receipts, relay), pairing
+src/services/     PulseApp contract (api.ts), PulseCore, LIVE wiring, provider hooks
 src/demo/         SIMULATED adapters and scenarios
 src/ui/           theme tokens and primitives
 src/components/   feature components
