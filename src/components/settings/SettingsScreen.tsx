@@ -1,135 +1,238 @@
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { DemoDevice } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, ChoiceChip, GroupedList, ListRow, MicroPill, Screen, SectionHeader, TextButton, Toggle } from '@/ui';
+import { Avatar, Dialog, Enter, Icon, SegmentedControl, Toggle, colors, tabBarHeight, useToast, type IconName } from '@/ui';
 
+import { IntelligenceSheet } from '../ai/IntelligenceSheet';
+import { useSafetySession } from '../demo/safetySession';
 import { routes } from '../nav';
-import { shortDeviceId } from '../present';
-import { CapabilityRows } from './CapabilityRows';
+import { BRAND, presentAIState, shortDeviceId } from '../present';
 
-const COUNTDOWNS = [3, 5, 10] as const;
+type RowProps = {
+  icon: IconName;
+  label: string;
+  first: boolean;
+  color?: string;
+  value?: string;
+  nav?: boolean;
+  onPress?: () => void;
+  trailing?: ReactNode;
+  testID?: string;
+};
+
+/** One settings row (design 399–406): min-height 54, padding 8/16, 20pt icon, 15.5pt medium label. */
+function Row({ icon, label, first, color = colors.ink, value, nav, onPress, trailing, testID }: RowProps) {
+  const body = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 54, paddingVertical: 8, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
+      <Icon name={icon} size={20} color={color} />
+      <Text style={{ flex: 1, fontSize: 15.5, fontWeight: '500', color }}>{label}</Text>
+      {value ? <Text style={{ fontSize: 14, color: colors.gray1, textAlign: 'right', maxWidth: 150 }}>{value}</Text> : null}
+      {nav ? <Icon name="chevron_right" size={20} color={colors.gray5} /> : null}
+      {trailing}
+    </View>
+  );
+  if (!onPress) return <View testID={testID}>{body}</View>;
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={value ? `${label}, ${value}` : label} onPress={onPress}>
+      {body}
+    </Pressable>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View>
+      <Text accessibilityRole="header" style={{ fontSize: 13, fontWeight: '600', color: colors.gray1, paddingHorizontal: 6, paddingBottom: 8 }}>
+        {title}
+      </Text>
+      <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, overflow: 'hidden' }}>{children}</View>
+    </View>
+  );
+}
+
+const COUNTDOWNS = [
+  { key: '3', label: '3s' },
+  { key: '5', label: '5s' },
+  { key: '10', label: '10s' },
+] as const;
 const LOCALES = [
   { key: 'en-US', label: 'English' },
   { key: 'fil-PH', label: 'Filipino' },
 ] as const;
+const PREVIEW: readonly { key: DemoDevice; label: string }[] = [
+  { key: 'alex', label: 'Alex' },
+  { key: 'mika', label: 'Mika' },
+  { key: 'noah', label: 'Noah' },
+];
+const SEG = { height: 28, radius: 10, itemRadius: 8, pad: 2, gap: 2, fontSize: 13, hug: true } as const;
 
-function ToggleRow({ title, subtitle, value, onChange, first, testID }: { title: string; subtitle: string; value: boolean; onChange: (v: boolean) => void; first?: boolean; testID: string }) {
-  return (
-    <View className={`min-h-[54px] flex-row items-center gap-3 px-4 py-3 ${first ? '' : 'border-t border-hairline'}`}>
-      <View className="flex-1">
-        <Text className="text-[15.5px] font-semibold text-ink">{title}</Text>
-        <Text className="mt-0.5 text-[13px] leading-[18px] text-gray-1">{subtitle}</Text>
-      </View>
-      <Toggle testID={testID} label={title} value={value} onChange={onChange} />
-    </View>
-  );
-}
-
-function InfoRow({ title, body, first }: { title: string; body: string; first?: boolean }) {
-  return (
-    <View className={`px-4 py-3 ${first ? '' : 'border-t border-hairline'}`}>
-      <Text className="text-[15.5px] font-semibold text-ink">{title}</Text>
-      <Text className="mt-0.5 text-[13px] leading-[18px] text-gray-1">{body}</Text>
-    </View>
-  );
-}
-
+/** Settings (design 386–413), every row bound to real state. */
 export function SettingsScreen() {
   const snapshot = usePulse();
   const actions = usePulseActions();
-  const { me, settings, capabilities } = snapshot;
-  const keys = me.hardwareBackedKeys === null ? 'Not checked yet' : me.hardwareBackedKeys ? 'Held in the Secure Enclave' : 'Held in the Keychain (software)';
-  const knownLocale = LOCALES.some((l) => l.key === settings.reportLocale);
+  const insets = useSafeAreaInsets();
+  const toast = useToast((s) => s.show);
+  const sessionActive = useSafetySession((s) => s.active);
+  const [sheet, setSheet] = useState(false);
+  const [dialog, setDialog] = useState<'delete' | 'reset' | null>(null);
+  const { me, settings, capabilities: caps, demo } = snapshot;
+  const isDemo = snapshot.mode === 'demo';
+  const trusted = snapshot.peers.filter((p) => p.trusted).length;
+  const keys = me.hardwareBackedKeys === null ? 'Not checked yet' : me.hardwareBackedKeys ? 'Secure Enclave' : 'Keychain';
+  const model = !caps ? 'Checking…' : caps.source === 'simulated' ? 'Simulation' : caps.text.state === 'ready' ? 'Ready on-device' : presentAIState(caps.text.state).label;
+  const countdown = String(settings.sosCountdownSeconds);
+  const info = (message: string) => () => toast(message, 'info');
 
   return (
-    <Screen testID="settings-screen" tabbed title="Settings">
-      <View className="flex-row items-center gap-[14px] rounded-feature bg-card p-4">
-        <Avatar name={me.name.length > 0 ? me.name : '?'} size={58} self />
-        <View className="flex-1">
-          <Text className="text-[18px] font-bold text-ink">{me.name.length > 0 ? me.name : 'This device'}</Text>
-          <Text testID="device-id" className="mt-0.5 text-[13px] text-gray-1">
-            Device ID {shortDeviceId(me.deviceId)}
+    <View testID="settings-screen" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
+        <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 20 }}>
+          <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink, paddingTop: 6 }}>
+            Settings
           </Text>
-        </View>
-        {snapshot.mode === 'demo' ? <MicroPill label="Simulated" /> : null}
-      </View>
 
-      <View>
-        <SectionHeader title="Local AI" />
-        <GroupedList>
-          {capabilities ? (
-            <>
-              <ListRow first title={capabilities.provider} subtitle={`${capabilities.device.model} · iOS ${capabilities.device.osVersion}`} icon="memory" />
-              <View className="border-t border-hairline">
-                <CapabilityRows caps={capabilities} />
-              </View>
-            </>
-          ) : (
-            <ListRow first title="Checking this iPhone…" subtitle="Capabilities have not been read yet" icon="memory" />
-          )}
-          <View className="border-t border-hairline">
-            <TextButton testID="refresh-capabilities" label="Check again" tone="ink" onPress={() => void actions.refreshCapabilities()} />
-          </View>
-        </GroupedList>
-        <Text className="px-1 pt-2 text-[12.5px] leading-[17px] text-gray-1">Everything runs on this iPhone; no cloud model is used. Manual SOS does not depend on any of these.</Text>
-      </View>
-
-      <View>
-        <SectionHeader title="Network" />
-        <GroupedList>
-          <ToggleRow first testID="toggle-discovery" title="Nearby discovery" subtitle="Find and be found by iPhones running PULSE nearby" value={settings.discoveryEnabled} onChange={(v) => void actions.setDiscovery(v)} />
-          <ToggleRow testID="toggle-relay" title="Pass along for others" subtitle="Forward sealed requests between your trusted devices. This iPhone cannot read them." value={settings.relayEnabled} onChange={(v) => void actions.updateSettings({ relayEnabled: v })} />
-        </GroupedList>
-      </View>
-
-      <View>
-        <SectionHeader title="SOS" />
-        <GroupedList>
-          <View className="gap-2 px-4 py-3">
-            <Text className="text-[15.5px] font-semibold text-ink">Countdown before saving</Text>
-            <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
-              {COUNTDOWNS.map((s) => (
-                <ChoiceChip key={s} testID={`countdown-${s}`} label={`${s} seconds`} selected={settings.sosCountdownSeconds === s} onPress={() => void actions.updateSettings({ sosCountdownSeconds: s })} />
-              ))}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Avatar name={me.name.length > 0 ? me.name : '?'} size={58} self />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.ink }}>{me.name.length > 0 ? me.name : 'This device'}</Text>
+              <Text testID="device-id" style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>
+                {caps ? `${caps.device.model} · ` : ''}Device ID {shortDeviceId(me.deviceId)}
+              </Text>
             </View>
-            <Text className="text-[13px] leading-[18px] text-gray-1">When it ends the request is saved and queued. “Send SOS now” skips the wait.</Text>
-          </View>
-          <View className="gap-2 border-t border-hairline px-4 py-3">
-            <Text className="text-[15.5px] font-semibold text-ink">Report language</Text>
-            <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
-              {LOCALES.map((l) => (
-                <ChoiceChip key={l.key} testID={`locale-${l.key}`} label={l.label} selected={settings.reportLocale === l.key} onPress={() => void actions.updateSettings({ reportLocale: l.key })} />
-              ))}
-              {knownLocale ? null : <ChoiceChip label={settings.reportLocale} selected onPress={() => undefined} />}
+            <View style={{ backgroundColor: colors.hairline, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 }}>
+              <Text testID="profile-pill" style={{ fontSize: 12, fontWeight: '600', color: colors.ink }}>
+                {isDemo ? 'Simulated' : 'This iPhone'}
+              </Text>
             </View>
-            <Text className="text-[13px] leading-[18px] text-gray-1">Used for voice transcription. Typed reports can be in any language; whether the model understands them depends on this iPhone.</Text>
           </View>
-        </GroupedList>
-      </View>
 
-      <View>
-        <SectionHeader title="Privacy and permissions" />
-        <GroupedList>
-          <InfoRow first title="Local Network" body="Needed to find and reach nearby iPhones. iOS asks the first time discovery starts. Without it, requests are saved here and not delivered." />
-          <InfoRow title="Microphone" body="Asked only when you tap record on a voice report. Never needed to send an SOS." />
-          <InfoRow title="Stored on this device" body="Requests, reports and their history stay in this app’s storage. There is no account and no server." />
-          <InfoRow title="Device keys" body={keys} />
-          <InfoRow title="No camera" body="PULSE has no photo or camera features." />
-          <ToggleRow testID="toggle-technical" title="Show technical details" subtitle="Adds identifiers and delivery internals where available" value={settings.showTechnicalDetails} onChange={(v) => void actions.updateSettings({ showTechnicalDetails: v })} />
-        </GroupedList>
-      </View>
+          <Section title="Profile">
+            <Row first testID="row-name" icon="person" label="Name" value={me.name} />
+          </Section>
 
-      <View>
-        <SectionHeader title="Prototype" />
-        <GroupedList>
-          <ListRow first testID="open-demo-lab" icon="science" title="Demo Lab" subtitle={snapshot.mode === 'demo' ? 'Demo mode is on · everything is simulated' : 'Simulated scenarios, kept apart from live data'} onPress={() => router.push(routes.demoLab)} />
-        </GroupedList>
-      </View>
+          <Section title="Safety">
+            <Row first testID="row-trusted-contacts" icon="group" label="Trusted contacts" value={String(trusted)} nav onPress={() => router.navigate(routes.network)} />
+            <Row
+              first={false}
+              icon="timer"
+              label="SOS countdown"
+              trailing={
+                <SegmentedControl
+                  {...SEG}
+                  accessibilityLabel="SOS countdown"
+                  options={COUNTDOWNS.some((c) => c.key === countdown) ? COUNTDOWNS : [...COUNTDOWNS, { key: countdown, label: `${countdown}s` }]}
+                  value={countdown}
+                  onChange={(k) => void actions.updateSettings({ sosCountdownSeconds: Number(k) })}
+                />
+              }
+            />
+            {isDemo ? <Row first={false} testID="row-session" icon="directions_walk" label="Safety sessions" value={sessionActive ? 'Active' : undefined} nav onPress={() => router.push(routes.session)} /> : null}
+          </Section>
 
-      <Text className="pb-2 text-center text-[12px] leading-[18px] text-gray-4">
-        PULSE is a prototype. It is not an emergency service or a medical device.{'\n'}It never calls emergency services.
-      </Text>
-    </Screen>
+          <Section title="Local AI">
+            <Row first testID="open-intelligence" icon="memory" label="Model availability" value={model} nav onPress={() => setSheet(true)} />
+            <Row
+              first={false}
+              icon="translate"
+              label="Report language"
+              trailing={
+                <SegmentedControl
+                  {...SEG}
+                  accessibilityLabel="Report language"
+                  options={LOCALES.some((l) => l.key === settings.reportLocale) ? LOCALES : [...LOCALES, { key: settings.reportLocale, label: settings.reportLocale }]}
+                  value={settings.reportLocale}
+                  onChange={(k) => void actions.updateSettings({ reportLocale: k })}
+                />
+              }
+            />
+            <Row first={false} icon="offline_bolt" label="Offline processing details" nav onPress={info('Reports are read on this iPhone. No cloud model is used.')} />
+            <Row first={false} icon="shield_person" label="Privacy explanation" nav onPress={info('Reports never leave this iPhone for AI processing.')} />
+          </Section>
+
+          <Section title="Network">
+            <Row first icon="radar" label="Nearby discovery" trailing={<Toggle testID="toggle-discovery" label="Nearby discovery" value={settings.discoveryEnabled} onChange={(v) => void actions.setDiscovery(v)} />} />
+            <Row first={false} testID="row-trusted-devices" icon="devices" label="Trusted devices" value={String(trusted)} nav onPress={() => router.push(routes.pair)} />
+            <Row
+              first={false}
+              icon="alt_route"
+              label="Incident relay permissions"
+              trailing={<Toggle testID="toggle-relay" label="Incident relay permissions" value={settings.relayEnabled} onChange={(v) => void actions.updateSettings({ relayEnabled: v })} />}
+            />
+          </Section>
+
+          <Section title="Demo">
+            <Row first testID="open-demo-lab" icon="science" label={`${BRAND} Demo Lab`} value={isDemo ? 'Simulated' : 'Off'} nav onPress={() => router.push(routes.demoLab)} />
+            <Row
+              first={false}
+              icon="description"
+              label="Show technical details"
+              trailing={<Toggle testID="toggle-technical" label="Show technical details" value={settings.showTechnicalDetails} onChange={(v) => void actions.updateSettings({ showTechnicalDetails: v })} />}
+            />
+            {isDemo && demo ? (
+              <>
+                <Row first={false} testID="reset-mock" icon="restart_alt" label="Reset mock data" onPress={() => setDialog('reset')} />
+                <Row
+                  first={false}
+                  icon="smartphone"
+                  label="Preview"
+                  trailing={<SegmentedControl {...SEG} accessibilityLabel="Preview as" options={PREVIEW} value={demo.viewingAs} onChange={(k) => actions.demo.viewAs(k)} />}
+                />
+                <Row
+                  first={false}
+                  icon="link_off"
+                  label="Simulate connection loss"
+                  trailing={<Toggle testID="toggle-link-mika" label="Simulate connection loss" value={!demo.links.mika} onChange={(v) => actions.demo.setLink('mika', !v)} />}
+                />
+              </>
+            ) : null}
+          </Section>
+
+          <Section title="Privacy">
+            <Row first icon="folder_managed" label="Local data controls" nav onPress={info('Requests and their history stay in this app on this iPhone.')} />
+            <Row first={false} testID="row-keys" icon="key" label="Device keys" value={keys} />
+            {snapshot.incidents.length > 0 ? <Row first={false} testID="delete-all" icon="delete" label="Delete incidents on this device" color={colors.coralText} onPress={() => setDialog('delete')} /> : null}
+            <Row first={false} icon="policy" label="Permission explanations" nav onPress={info('Local Network and Microphone are asked only when first needed.')} />
+          </Section>
+
+          <Text testID="settings-footer" style={{ fontSize: 12, lineHeight: 18, color: colors.gray4, textAlign: 'center', paddingBottom: 8 }}>
+            {isDemo
+              ? `${BRAND} prototype · All data, AI output and networking are simulated.\nNo real alerts or emergency calls are made.`
+              : `${BRAND} prototype · Not an emergency service or a medical device.\nIt never calls emergency services.`}
+          </Text>
+        </Enter>
+      </ScrollView>
+
+      <IntelligenceSheet visible={sheet} onClose={() => setSheet(false)} />
+      <Dialog
+        visible={dialog === 'delete'}
+        title="Delete all incidents here?"
+        message="This removes every request and its history from this device only. Copies already delivered to other devices are not deleted. Your identity and pairings stay."
+        cancelLabel="Keep"
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setDialog(null)}
+        onConfirm={() => {
+          setDialog(null);
+          void actions.deleteAllIncidents();
+        }}
+      />
+      <Dialog
+        visible={dialog === 'reset'}
+        title="Reset mock data?"
+        message="Restores the simulated incidents, devices and settings."
+        cancelLabel="Cancel"
+        confirmLabel="Reset"
+        onCancel={() => setDialog(null)}
+        onConfirm={() => {
+          setDialog(null);
+          actions.demo.reset();
+          useSafetySession.getState().reset();
+        }}
+      />
+    </View>
   );
 }

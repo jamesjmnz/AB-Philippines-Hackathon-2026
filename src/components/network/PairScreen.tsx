@@ -67,7 +67,7 @@ export function PairScreen() {
   const candidates = snapshot.peers.filter((p) => !p.trusted && p.reach !== 'unreachable');
   const discovery = snapshot.network.discovery;
   return (
-    <Screen testID="pair-screen" white onBack={back} title="Pair a device" subtitle="Choose an iPhone running PULSE nearby. You will both see a six-digit code to compare.">
+    <Screen testID="pair-screen" white onBack={back} title="Pair a device" subtitle="Choose an iPhone running SAGIP nearby. You will both see a six-digit code to compare.">
       {finished ? (
         <Banner
           testID="pair-result"
@@ -87,7 +87,7 @@ export function PairScreen() {
           <View testID="pair-empty" className="items-center gap-1 px-5 py-8">
             <Icon name="radar" size={32} color={colors.gray4} />
             <Text className="mt-1 text-center text-[16px] font-semibold text-ink">No device to pair yet</Text>
-            <Text className="text-center text-[13px] leading-[18px] text-gray-1">Open PULSE on the other iPhone and keep both phones close.</Text>
+            <Text className="text-center text-[13px] leading-[18px] text-gray-1">Open SAGIP on the other iPhone and keep both phones close.</Text>
           </View>
         ) : (
           candidates.map((p, i) => (

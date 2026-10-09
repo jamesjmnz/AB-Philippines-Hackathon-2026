@@ -93,7 +93,7 @@ describe('SOS screen', () => {
     const app = createFakePulseApp();
     renderWithApp(<SOSScreen />, app);
 
-    expect(screen.getByText(/PULSE does not contact emergency services/)).toBeTruthy();
+    expect(screen.getByText(/SAGIP does not contact emergency services/)).toBeTruthy();
     expect(mockOpenURL).not.toHaveBeenCalled();
     act(() => jest.advanceTimersByTime(2000));
     expect(mockOpenURL).not.toHaveBeenCalled();
