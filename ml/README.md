@@ -53,7 +53,8 @@ benchmarks/    device-results/        JSON exported from the iPhone
 
 ```bash
 npm run ml:verify                 # datasets validate, fixtures current, nothing changed since the freeze
-npm run ml:baseline               # deterministic baseline on all three splits -> benchmarks/mac-results/
+npm run ml:baseline               # deterministic baseline on development and validation -> benchmarks/mac-results/
+npm run ml:baseline -- held_out   # held-out, once, when the rules are final
 npm run ml:score -- <result.json> # tables and failure analysis for one result file
 npm run ml:report                 # regenerate the generated section of RESULTS.md from all result files
 npx jest ml                       # unit tests for the scorer and schemas

@@ -27,7 +27,7 @@ import { runResultSchema, type RunResult } from './result-schema';
  *   fixtures            write fixtures/<split>/{inputs,reference}.json from the datasets
  *   freeze "<note>"     record the sha256 of datasets and fixtures in datasets/FROZEN.json
  *   verify              check datasets validate, fixtures are current and nothing changed after the freeze
- *   baseline [split]    run the deterministic baseline on the Mac and save the result
+ *   baseline [split]    run the deterministic baseline on the Mac and save the result (held_out only when named)
  *   score <file>        print the tables and failure analysis for one result file
  *   report              rewrite the generated section of RESULTS.md from every saved result file
  */
@@ -108,7 +108,8 @@ switch (command) {
   case 'baseline': {
     requireVerified();
     mkdirSync(MAC_RESULTS, { recursive: true });
-    for (const split of args[0] ? [asSplit(args[0])] : SPLITS) {
+    // Held-out is run only when asked for by name, once the rules are final: it is not a tuning signal.
+    for (const split of args[0] ? [asSplit(args[0])] : SPLITS.filter((x) => x !== 'held_out')) {
       const file = join(MAC_RESULTS, `baseline-rules-${split}.json`);
       writeFileSync(file, `${JSON.stringify(runBaseline(split), null, 2)}\n`);
       console.log(`wrote ${relative(process.cwd(), file)}`);

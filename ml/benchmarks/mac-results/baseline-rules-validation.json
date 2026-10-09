@@ -1,0 +1,796 @@
+{
+  "header": {
+    "runner": "mac-baseline",
+    "variant": "rules",
+    "split": "validation",
+    "inputsSha256": "1afd491c1b92415a19cc978f0ee5462eac7f17fb3ed8e58dad20044f6604deb5",
+    "promptVersion": "none",
+    "commit": "db0d35b",
+    "startedAt": "2026-10-09T23:27:16.409Z",
+    "device": {
+      "model": "Mac (Node)",
+      "osVersion": "v22.23.2",
+      "isPhysicalDevice": false
+    },
+    "packageVersion": "n/a",
+    "conditions": "Deterministic rules only, no model, run under Node on the development Mac"
+  },
+  "records": [
+    {
+      "scenarioId": "ext-en-004",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {}
+        }
+      ],
+      "deltas": [],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "ext-en-005",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "floor": {
+              "value": "Ground floor",
+              "evidence": "ground floor"
+            }
+          }
+        }
+      ],
+      "deltas": [],
+      "conflicts": [],
+      "clarification": {
+        "field": "building",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "ext-tl-003",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {}
+        }
+      ],
+      "deltas": [],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "ext-tl-004",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "building": {
+              "value": "Building F",
+              "evidence": "Building F"
+            }
+          }
+        }
+      ],
+      "deltas": [],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "delta-en-004",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s4",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {}
+        },
+        {
+          "statementId": "s2",
+          "fields": {
+            "building": {
+              "value": "Building F",
+              "evidence": "Building F"
+            }
+          }
+        },
+        {
+          "statementId": "s3",
+          "fields": {
+            "building": {
+              "value": "Building F",
+              "evidence": "Building F"
+            }
+          }
+        },
+        {
+          "statementId": "s4",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "new_information",
+          "fields": {
+            "building": "new_information"
+          }
+        },
+        {
+          "statementId": "s3",
+          "overall": "confirmation",
+          "fields": {
+            "building": "confirmation"
+          }
+        },
+        {
+          "statementId": "s4",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "delta-en-005",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 2,
+          "kept": 2
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s4",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "building": {
+              "value": "Building B",
+              "evidence": "Building B"
+            },
+            "floor": {
+              "value": "Third floor",
+              "evidence": "Third floor"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {}
+        },
+        {
+          "statementId": "s3",
+          "fields": {
+            "floor": {
+              "value": "Second floor",
+              "evidence": "second floor"
+            }
+          }
+        },
+        {
+          "statementId": "s4",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "not_assessed",
+          "fields": {}
+        },
+        {
+          "statementId": "s3",
+          "overall": "possible_contradiction",
+          "fields": {
+            "floor": "possible_contradiction"
+          }
+        },
+        {
+          "statementId": "s4",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [
+        {
+          "field": "floor",
+          "statementIds": [
+            "s1",
+            "s3"
+          ]
+        }
+      ],
+      "clarification": null
+    },
+    {
+      "scenarioId": "delta-tl-004",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 2,
+          "kept": 2
+        },
+        {
+          "op": "extract",
+          "statementId": "s4",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "building": {
+              "value": "Building E",
+              "evidence": "Building E"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {
+            "floor": {
+              "value": "Fourth floor",
+              "evidence": "4th floor"
+            }
+          }
+        },
+        {
+          "statementId": "s3",
+          "fields": {
+            "building": {
+              "value": "Building E",
+              "evidence": "Building E"
+            },
+            "floor": {
+              "value": "Fourth floor",
+              "evidence": "4th floor"
+            }
+          }
+        },
+        {
+          "statementId": "s4",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "new_information",
+          "fields": {
+            "floor": "new_information"
+          }
+        },
+        {
+          "statementId": "s3",
+          "overall": "confirmation",
+          "fields": {
+            "building": "confirmation",
+            "floor": "confirmation"
+          }
+        },
+        {
+          "statementId": "s4",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "delta-tl-005",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        },
+        {
+          "op": "extract",
+          "statementId": "s4",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "floor": {
+              "value": "Ground floor",
+              "evidence": "ground floor"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {
+            "floor": {
+              "value": "Third floor",
+              "evidence": "third floor"
+            }
+          }
+        },
+        {
+          "statementId": "s3",
+          "fields": {}
+        },
+        {
+          "statementId": "s4",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "correction",
+          "fields": {
+            "floor": "correction"
+          }
+        },
+        {
+          "statementId": "s3",
+          "overall": "not_assessed",
+          "fields": {}
+        },
+        {
+          "statementId": "s4",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [],
+      "clarification": {
+        "field": "building",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "con-en-003",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 1,
+          "kept": 1
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "floor": {
+              "value": "Third floor",
+              "evidence": "third floor"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {
+            "floor": {
+              "value": "First floor",
+              "evidence": "first floor"
+            }
+          }
+        },
+        {
+          "statementId": "s3",
+          "fields": {
+            "floor": {
+              "value": "Fourth floor",
+              "evidence": "fourth floor"
+            }
+          }
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "possible_contradiction",
+          "fields": {
+            "floor": "possible_contradiction"
+          }
+        },
+        {
+          "statementId": "s3",
+          "overall": "correction",
+          "fields": {
+            "floor": "correction"
+          }
+        }
+      ],
+      "conflicts": [
+        {
+          "field": "floor",
+          "statementIds": [
+            "s1",
+            "s2"
+          ]
+        }
+      ],
+      "clarification": {
+        "field": "building",
+        "question": ""
+      }
+    },
+    {
+      "scenarioId": "con-tl-003",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 2,
+          "kept": 2
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 2,
+          "kept": 2
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "building": {
+              "value": "Building D",
+              "evidence": "Building D"
+            },
+            "floor": {
+              "value": "Ground floor",
+              "evidence": "ground floor"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {
+            "building": {
+              "value": "Building D",
+              "evidence": "Building D"
+            },
+            "floor": {
+              "value": "Ground floor",
+              "evidence": "ground floor"
+            }
+          }
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "confirmation",
+          "fields": {
+            "building": "confirmation",
+            "floor": "confirmation"
+          }
+        }
+      ],
+      "conflicts": [],
+      "clarification": null
+    },
+    {
+      "scenarioId": "adv-en-002",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 2,
+          "kept": 2
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        },
+        {
+          "op": "extract",
+          "statementId": "s3",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {
+            "building": {
+              "value": "Building D",
+              "evidence": "Building D"
+            },
+            "floor": {
+              "value": "Third floor",
+              "evidence": "3rd floor"
+            }
+          }
+        },
+        {
+          "statementId": "s2",
+          "fields": {}
+        },
+        {
+          "statementId": "s3",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "not_assessed",
+          "fields": {}
+        },
+        {
+          "statementId": "s3",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [],
+      "clarification": null
+    },
+    {
+      "scenarioId": "adv-tl-003",
+      "calls": [
+        {
+          "op": "extract",
+          "statementId": "s1",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        },
+        {
+          "op": "extract",
+          "statementId": "s2",
+          "state": "ready",
+          "source": "rules",
+          "latencyMs": 0,
+          "proposed": 0,
+          "kept": 0
+        }
+      ],
+      "extraction": [
+        {
+          "statementId": "s1",
+          "fields": {}
+        },
+        {
+          "statementId": "s2",
+          "fields": {}
+        }
+      ],
+      "deltas": [
+        {
+          "statementId": "s2",
+          "overall": "not_assessed",
+          "fields": {}
+        }
+      ],
+      "conflicts": [],
+      "clarification": {
+        "field": "floor",
+        "question": ""
+      }
+    }
+  ]
+}
