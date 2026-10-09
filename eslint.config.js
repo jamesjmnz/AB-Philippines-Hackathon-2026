@@ -7,6 +7,7 @@ const AI_PACKAGES = [
   { name: 'ai', message: 'Use LocalAIService from @/ai instead.' },
 ];
 const TESTING_HELPERS = [{ group: ['**/testing/*', '@/*/testing/*'], message: 'testing/ helpers are for tests only.' }];
+const ML_WORKSPACE = [{ group: ['**/ml/**'], message: 'Only src/eval may import from the ml/ workspace.' }];
 
 module.exports = defineConfig([
   expoConfig,
@@ -16,14 +17,25 @@ module.exports = defineConfig([
   {
     // App code: no provider or AI SDK outside the adapter (docs/LOCAL_AI.md), and no test helpers.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/ai/callstack/**', ...TEST_FILES],
+    ignores: ['src/ai/callstack/**', 'src/eval/**', ...TEST_FILES],
+    rules: { 'no-restricted-imports': ['error', { paths: AI_PACKAGES, patterns: [...TESTING_HELPERS, ...ML_WORKSPACE] }] },
+  },
+  {
+    // The evaluation runner is the one place app code reads the ml/ workspace (inputs and types only).
+    files: ['src/eval/**/*.{ts,tsx}'],
+    ignores: TEST_FILES,
     rules: { 'no-restricted-imports': ['error', { paths: AI_PACKAGES, patterns: TESTING_HELPERS }] },
+  },
+  {
+    // Evaluation code scores results; it never talks to a model provider itself.
+    files: ['ml/**/*.ts'],
+    rules: { 'no-restricted-imports': ['error', { paths: AI_PACKAGES }] },
   },
   {
     // The adapter may import the provider; it still must not ship test helpers.
     files: ['src/ai/callstack/**/*.{ts,tsx}'],
     ignores: TEST_FILES,
-    rules: { 'no-restricted-imports': ['error', { patterns: TESTING_HELPERS }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [...TESTING_HELPERS, ...ML_WORKSPACE] }] },
   },
   {
     // Tests outside the adapter fake LocalAIService; they never load the provider.
