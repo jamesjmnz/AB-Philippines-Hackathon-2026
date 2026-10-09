@@ -24,7 +24,10 @@ module.exports = defineConfig([
     // The evaluation runner is the one place app code reads the ml/ workspace (inputs and types only).
     files: ['src/eval/**/*.{ts,tsx}'],
     ignores: TEST_FILES,
-    rules: { 'no-restricted-imports': ['error', { paths: AI_PACKAGES, patterns: TESTING_HELPERS }] },
+    rules: {
+      'no-restricted-imports': ['error', { paths: AI_PACKAGES, patterns: [...TESTING_HELPERS, { group: ['**/reference.json', '**/datasets/*.json'], message: 'Reference answers never ship in the app.' }] }],
+      'no-restricted-syntax': ['error', { selector: "CallExpression[callee.name='require'][arguments.0.value=/reference\\.json|datasets\\//]", message: 'Reference answers never ship in the app.' }],
+    },
   },
   {
     // Evaluation code scores results; it never talks to a model provider itself.

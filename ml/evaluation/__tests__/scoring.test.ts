@@ -71,6 +71,12 @@ describe('value matching', () => {
     expect(matches('symptom', 'headache', ['ankle'])).toBe(false);
     expect(matches('symptom', '', ['ankle'])).toBe(false);
   });
+
+  it('does not reward copying a whole sentence into a free-text field', () => {
+    const sentence = 'I fell in Building B on the second floor near the stairs and my ankle hurts a lot please help';
+    expect(matches('symptom', sentence, ['ankle'])).toBe(false);
+    expect(matches('symptom', 'my ankle hurts a lot', ['ankle'])).toBe(true);
+  });
 });
 
 describe('scoreRun', () => {
@@ -174,6 +180,12 @@ describe('scoreRun', () => {
     expect(score.schemaValid).toEqual({ hits: 3, total: 4 });
     expect(score.evidenceKept).toEqual({ hits: 9, total: 12 });
     expect(score.latency).toEqual({ n: 2, p50: 1000, p90: 3000, max: 3000, firstCallMs: 5000 });
+  });
+
+  it('counts a failed clarification call as a miss', () => {
+    const failed = { op: 'clarify' as const, statementId: 's1', state: 'timeout' as const, source: 'callstack-apple' as const, latencyMs: 20000, proposed: 0, kept: 0 };
+    expect(scoreRun([scenario], run({ calls: [failed] })).clarificationRelevant).toEqual({ hits: 0, total: 1 });
+    expect(scoreRun([scenario], run({})).clarificationRelevant.total).toBe(0);
   });
 
   it('reports no latency for a run with no model calls', () => {

@@ -42,12 +42,16 @@ export function canon(value: string): string {
 /**
  * Floor and building must equal an acceptable answer after canonicalisation: "2nd Floor" matches
  * "second floor", "Building B, second floor" does not match a building answer of "B".
- * Free-text fields match when the value contains an acceptable fragment.
+ * Free-text fields match when the value contains an acceptable fragment and is itself short: a value
+ * longer than MAX_FREE_TEXT_WORDS words is a copied sentence, not an answer, and does not match.
+ * Known weakness: a short value that negates the fragment ("not near the canteen") still matches.
  */
+export const MAX_FREE_TEXT_WORDS = 12;
 export function matches(field: Field, value: string, anyOf: readonly string[]): boolean {
   const v = canon(value);
   if (v === '') return false;
   if (field === 'floor' || field === 'building') return anyOf.some((a) => canon(a) === v);
+  if (value.trim().split(/\s+/).length > MAX_FREE_TEXT_WORDS) return false;
   return anyOf.some((a) => {
     const c = canon(a);
     return c !== '' && v.includes(c);
@@ -214,9 +218,11 @@ export function scoreRun(scenarios: readonly Scenario[], run: RunResult): Score 
     }
 
     const clarification = scenario.reference.clarification;
-    if (clarification && record && record.clarification !== undefined) {
+    // A clarification call that failed was attempted and produced nothing useful: it is a miss, not a skip.
+    const clarifyFailed = record?.calls.some((c) => c.op === 'clarify' && c.state !== 'ready') ?? false;
+    if (clarification && record && (record.clarification !== undefined || clarifyFailed)) {
       const asked = record.clarification;
-      add(clarificationRelevant, asked === null ? clarification.noneAcceptable : clarification.acceptable.includes(asked.field));
+      add(clarificationRelevant, asked === undefined ? false : asked === null ? clarification.noneAcceptable : clarification.acceptable.includes(asked.field));
     }
 
     if (scenario.reference.forbidden.length > 0) add(forbiddenLeaks, leaksForbidden(scenario, record));

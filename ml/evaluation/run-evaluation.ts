@@ -60,17 +60,37 @@ function loadRun(file: string): RunResult {
   return run;
 }
 
-/** A held-out split is looked at once per prompt version. A second look needs a written reason. */
+/**
+ * A held-out result is looked at once per prompt version, variant and runner. A second look needs a
+ * written reason. Every way of seeing held-out numbers (score, report, baseline) goes through here.
+ */
+type Look = { file: string; runner: string; promptVersion: string; variant: string; reason: string };
+const readLooks = (): Look[] => (existsSync(HELD_OUT_LOG) ? (readJson(HELD_OUT_LOG) as Look[]) : []);
+
 function recordHeldOutLook(run: RunResult, file: string, reason: string | undefined): void {
-  if (run.header.split !== 'held_out' || run.header.runner !== 'device') return;
-  const log = existsSync(HELD_OUT_LOG) ? (readJson(HELD_OUT_LOG) as { file: string; promptVersion: string; variant: string; reason: string }[]) : [];
+  if (run.header.split !== 'held_out') return;
+  const log = readLooks();
   if (log.some((e) => e.file === basename(file))) return;
-  const earlier = log.filter((e) => e.promptVersion === run.header.promptVersion && e.variant === run.header.variant);
+  const earlier = log.filter((e) => e.promptVersion === run.header.promptVersion && e.variant === run.header.variant && e.runner === run.header.runner);
   if (earlier.length > 0 && !reason) {
-    fail(`Held-out was already scored for prompt ${run.header.promptVersion} (${run.header.variant}). Pass --reason "<why>" to record a second look.`);
+    fail(`Held-out was already scored for ${run.header.runner} / ${run.header.variant} / prompt ${run.header.promptVersion}. Pass --reason "<why>" to record a second look.`);
   }
-  log.push({ file: basename(file), promptVersion: run.header.promptVersion, variant: run.header.variant, reason: reason ?? 'first look' });
+  log.push({ file: basename(file), runner: run.header.runner, promptVersion: run.header.promptVersion, variant: run.header.variant, reason: reason ?? 'first look' });
+  mkdirSync(dirname(HELD_OUT_LOG), { recursive: true });
   writeFileSync(HELD_OUT_LOG, `${JSON.stringify(log, null, 2)}\n`);
+}
+
+/** The report never takes the first look itself: a held-out file has to be scored, and so logged, first. */
+function requireLogged(run: RunResult, file: string): void {
+  if (run.header.split === 'held_out' && !readLooks().some((e) => e.file === basename(file))) {
+    fail(`${file} is a held-out result that has not been scored yet. Run ml:score on it first; that records the look.`);
+  }
+}
+
+/** Where a file sits must agree with what it says it is. */
+function requirePlacement(run: RunResult, file: string, place: 'device' | 'mac'): void {
+  if (place === 'device' && run.header.runner !== 'device') fail(`${file} is in device-results but its runner is ${run.header.runner}`);
+  if (place === 'mac' && run.header.runner === 'device') fail(`${file} is a device run and belongs in device-results`);
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -111,7 +131,10 @@ switch (command) {
     // Held-out is run only when asked for by name, once the rules are final: it is not a tuning signal.
     for (const split of args[0] ? [asSplit(args[0])] : SPLITS.filter((x) => x !== 'held_out')) {
       const file = join(MAC_RESULTS, `baseline-rules-${split}.json`);
-      writeFileSync(file, `${JSON.stringify(runBaseline(split), null, 2)}\n`);
+      const run = runBaseline(split);
+      const reasonAt = args.indexOf('--reason');
+      recordHeldOutLook(run, file, reasonAt >= 0 ? args[reasonAt + 1] : undefined);
+      writeFileSync(file, `${JSON.stringify(run, null, 2)}\n`);
       console.log(`wrote ${relative(process.cwd(), file)}`);
     }
     break;
@@ -130,9 +153,11 @@ switch (command) {
   case 'report': {
     requireVerified();
     const all = loadScenarios();
-    const section = (title: string, intro: string, files: string[]) => {
+    const section = (title: string, intro: string, files: string[], place: 'device' | 'mac') => {
       const body = files.map((file) => {
         const run = loadRun(file);
+        requirePlacement(run, file, place);
+        requireLogged(run, file);
         return renderRun(all.filter((s) => s.split === run.header.split), run, relative(ML_ROOT, file));
       });
       return [`## ${title}`, '', intro, '', body.length > 0 ? body.join('\n\n') : '_No result file yet. Unverified._'].join('\n');
@@ -144,12 +169,14 @@ switch (command) {
         'On-device model results (iPhone)',
         'Produced by the in-app runner on a physical iPhone through `@react-native-ai/apple`. Only files whose every model call came from the on-device provider are accepted here.',
         listResultFiles(DEVICE_RESULTS),
+        'device',
       ),
       '',
       section(
         'Deterministic baseline and simulated runs (Mac)',
         'Run under Node on the development Mac. These involve no language model and are never to be read as model results. Latency is not reported for them.',
         listResultFiles(MAC_RESULTS),
+        'mac',
       ),
       '',
       END,

@@ -25,8 +25,12 @@ proposal shown as a proposal. A person confirms, corrects or resolves; the model
 
 ## Out of scope, by design
 
-- Diagnosis, severity, triage or any medical instruction. Values wording a medical or severity judgement
-  are discarded, including when the person wrote those words themselves.
+- Diagnosis, severity, triage or any medical instruction. The model writes no text that people read: every
+  displayed value is a phrase copied from the person's own statement, and questions and suggested tasks
+  use fixed wording. A fixed list of severity and diagnosis words ("critical", "severe", "fracture",
+  "broken", "malubha" and a few more) additionally removes a phrase from its field; the statement itself is
+  still sent as written. The list is short and literal. It is not a medical classifier: "heart attack" in a
+  person's own words passes, and "the elevator is broken" is removed from its field.
 - Dispatching or assigning anyone, resolving an incident, or closing a disagreement.
 - Any claim that emergency services were contacted.
 - Deciding who is right when two people say different things.
@@ -58,13 +62,19 @@ the request at all.
 2. Each phrase must be found in the original text. The stored evidence is the original's exact substring.
 3. The value must follow from the phrase. A floor must be something the rules read as a floor. A building
    or floor the text negates ("hindi ako sa Building A") is dropped.
-4. Severity and diagnosis wording is dropped.
+4. A phrase containing a word from the fixed severity and diagnosis list is dropped from its field.
+   Every content word of a value must come from the phrase it rests on.
 5. The report is fenced and declared to be data. This is a weak defence by itself; items 2 to 4 are what
    stop an injected instruction from becoming a value.
 6. Rules override the model for floor and building.
 7. Before anything is recorded, the incident is replayed again and any field a human has since changed is
    dropped from the result.
-8. A disagreement only the model can see becomes a question to the person. It is never flagged as settled.
+8. A disagreement only the model can see becomes a question to the person, in fixed wording, at most three
+   per incident and never on a detail the person already skipped. It is never flagged as settled.
+9. A different person's differing reading is never stored as the field's proposal, so it cannot replace
+   what the first person said on screen. A proposed value is attributed to whoever wrote the words.
+10. Only the incident owner's device may record an assessment, and an assessment can add to what the rules
+    found for a statement but never remove or soften it.
 
 ## Evaluation
 
@@ -80,6 +90,10 @@ and commands are in `README.md`; numbers are in `RESULTS.md` and nowhere else.
 - **Only the first 1200 characters reach the model.** Later text is still stored and sent as written.
 - **Rules read only floor and building.** On phones without the model, other details stay unknown and
   most later messages are "not compared".
+- **The rules can still read a floor from a sentence that is not about where the person is** when it has
+  no clear subject. Sentences with another subject, questions, leaving and instructions are excluded.
+- **"What is already known" ignores the order of statements.** A statement is compared with everything
+  else on record, so if analysis of an older statement is delayed it can be compared with a newer one.
 - **Movement is recognised only in first-person phrasing.** "Alex moved to the second floor", written by
   someone else, yields no floor.
 - **A reporter's move can be contradicted only by a later statement.** An older statement from someone

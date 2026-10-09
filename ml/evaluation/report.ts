@@ -29,6 +29,7 @@ export function deviceClaimProblems(run: RunResult): string[] {
   const sources = new Set(run.records.flatMap((r) => r.calls.map((c) => c.source)));
   for (const s of sources) if (s !== 'callstack-apple' && s !== 'rules') problems.push(`contains ${s} calls`);
   if (!sources.has('callstack-apple')) problems.push('contains no call from the on-device provider');
+  if (!run.records.some((r) => r.calls.some((c) => c.source === 'callstack-apple' && c.state === 'ready'))) problems.push('contains no completed model call');
   return problems;
 }
 
