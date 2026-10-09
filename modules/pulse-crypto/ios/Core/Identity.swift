@@ -103,3 +103,20 @@ enum Transcript {
     return out
   }
 }
+
+/// Stable, content-free descriptions. The JS adapter maps these names to typed failure reasons.
+extension CryptoCoreError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .invalidKey: return "invalidKey"
+    case .invalidPairingMaterial: return "invalidPairingMaterial"
+    case .invalidEnvelope(let detail): return "invalidEnvelope: \(detail)"
+    case .unsupportedVersion(let v): return "unsupportedVersion: \(v)"
+    case .expired: return "expired"
+    case .badSignature: return "badSignature"
+    case .senderMismatch: return "senderMismatch"
+    case .notARecipient: return "notARecipient"
+    case .decryptionFailed: return "decryptionFailed"
+    }
+  }
+}
