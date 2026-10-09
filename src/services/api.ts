@@ -22,6 +22,11 @@ export type PeerView = {
   trusted: boolean;
   reach: PeerReach;
   lastSeenMs: number | null;
+  /**
+   * What this device shares with the peer on a new SOS. Present on trusted peers only. A `relay` peer
+   * carries ciphertext for others and is sent nothing of its own. Changed with `setPeerLevel`.
+   */
+  level?: DisclosureLevel;
 };
 
 /** One displayed incident fact. `value: null` means unknown; `protected` means this device may not read it. */
@@ -53,7 +58,15 @@ export type IncidentView = {
   /** How this incident reached this device: null when created here or received directly. */
   receivedViaName: string | null;
   pendingOutbox: number;
+  /**
+   * Set while an update for this incident cannot be sent at all because it exceeds what one packet
+   * may carry. It stays queued (counted in `pendingOutbox`) and is not retried into success by waiting.
+   * Null or absent when nothing is blocked.
+   */
+  sendFailure?: SendFailureCode | null;
 };
+
+export type SendFailureCode = 'packet_too_large';
 
 export type DiscoveryState = 'off' | 'starting' | 'on' | 'permission_denied' | 'error';
 
@@ -87,6 +100,12 @@ export type PulseSnapshot = {
   incidents: IncidentView[];
   pairing: PairingSession | null;
   settings: AppSettings;
+  /**
+   * `settingsPersistent` is false when the profile, pairings and settings are held in memory only and
+   * will be gone after a restart (the device key-value store could not be loaded, or this is the Demo
+   * Lab). Incidents are stored separately and are not covered by this flag.
+   */
+  storage?: { settingsPersistent: boolean };
   /** Demo-only state. Null in live mode. */
   demo: DemoState | null;
 };
@@ -121,6 +140,12 @@ export interface PulseActions {
   addReport(incidentId: string, text: string, inputMode: 'typed' | 'transcribed'): Promise<ActionResult<{ reportId: string }>>;
   /** Runs on-device extraction for a stored report. The result is a proposal; nothing is recorded as fact. */
   analyzeReport(incidentId: string, reportId: string): Promise<AIResult<IncidentProposal>>;
+  /**
+   * Diagnostics: runs the same on-device extraction on arbitrary text. Creates no incident, writes
+   * nothing and sends nothing. The text is trimmed and cut to 4000 characters (the report limit);
+   * empty text returns `invalid_output` / `empty_input` without calling the model.
+   */
+  diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>>;
   /** Records the proposal in the ledger as AI-proposed claims. */
   attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult>;
   /** A human confirms (optionally editing) one proposed or reported field. */
@@ -163,6 +188,11 @@ export interface PulseActions {
   cancelPairing(): Promise<void>;
   removePeer(peerDeviceId: string): Promise<void>;
   renamePeer(peerDeviceId: string, name: string): Promise<void>;
+  /**
+   * Sets the default disclosure level for a trusted peer. It applies to incidents created afterwards;
+   * an incident already sent keeps its recipients and levels until `updateCapsule` changes them.
+   */
+  setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<ActionResult>;
 
   /** On-device transcription of a recorded WAV file. Returns unsupported_locale etc. rather than throwing. */
   transcribe(wavFileUri: string, locale: string): Promise<AIResult<{ text: string }>>;

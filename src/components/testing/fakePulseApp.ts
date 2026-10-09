@@ -102,6 +102,7 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
     sendSOS: async () => ({ ok: true as const, value: { incidentId: 'inc-test-0001' } }),
     addReport: async () => ({ ok: true as const, value: { reportId: 'rpt-test-0001' } }),
     analyzeReport: async () => aiUnavailable(),
+    diagnoseExtraction: async () => aiUnavailable(),
     attachProposal: async () => okResult,
     confirmFact: async () => okResult,
     suggestClarification: async () => aiUnavailable(),
@@ -130,6 +131,7 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
     cancelPairing: async () => undefined,
     removePeer: async () => undefined,
     renamePeer: async () => undefined,
+    setPeerLevel: async () => okResult,
     transcribe: async () => aiUnavailable(),
     updateSettings: async () => undefined,
     refreshCapabilities: async () => undefined,
@@ -156,4 +158,4 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
 }
 
 /** Names of every action that reaches on-device AI. The SOS path must call none of them. */
-export const AI_ACTIONS = ['analyzeReport', 'suggestClarification', 'suggestTasks', 'transcribe', 'refreshCapabilities'] as const;
+export const AI_ACTIONS = ['analyzeReport', 'diagnoseExtraction', 'suggestClarification', 'suggestTasks', 'transcribe', 'refreshCapabilities'] as const;

@@ -44,7 +44,11 @@ export const packetSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     ...routing,
     kind: z.literal('pair_confirm'),
-    pairing: z.strictObject({ signature: z.string().min(8).max(1024) }),
+    pairing: z.strictObject({
+      signature: z.string().min(8).max(1024),
+      /** Set on a confirmation sent in reply to a repeated one. An answer is never answered. */
+      answer: z.literal(true).optional(),
+    }),
   }),
   z.strictObject({ ...routing, kind: z.literal('pair_cancel') }),
 ]);

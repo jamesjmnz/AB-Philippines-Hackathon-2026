@@ -39,6 +39,9 @@ export const peerRecordSchema = z.strictObject({
 });
 export type PeerRecord = z.infer<typeof peerRecordSchema>;
 
+/** Why an outbox row cannot be sent at all, as opposed to not yet. A code only, never content. */
+export type SendBlockCode = 'packet_too_large';
+
 export type SyncFailureCode =
   | 'identity_unavailable'
   | 'peer_not_trusted'

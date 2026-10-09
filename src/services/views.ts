@@ -12,7 +12,7 @@ import {
   type IncidentState,
 } from '@/domain';
 
-import type { FactView, IncidentView, RecipientPolicyInput } from './api';
+import type { FactView, IncidentView, RecipientPolicyInput, SendFailureCode } from './api';
 
 /** Short human reference derived from the incident id. Carries no personal data. */
 export function shortIdFor(incidentId: string): string {
@@ -118,6 +118,7 @@ export interface IncidentViewInput {
   stored: SentProjection | null;
   viaName: string | null;
   pendingOutbox: number;
+  sendFailure: SendFailureCode | null;
 }
 
 /** Null when this device may not list the incident (unknown incident, or relay-only access). */
@@ -130,6 +131,7 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
     state,
     receivedViaName: input.viaName,
     pendingOutbox: input.pendingOutbox,
+    sendFailure: input.sendFailure,
   };
   if (isLocal(state.incident.reporter.deviceId)) {
     const own = state.reports.filter((r) => r.kind === 'report' && r.role === 'reporter').map((r) => r.text);

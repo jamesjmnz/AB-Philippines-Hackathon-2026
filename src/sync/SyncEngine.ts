@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { capsuleIdFor, decodePacket, encodePacket, incidentRefFor, type PairingPacket, type SealedPacket } from './packet';
 import { PairingManager, type PairingResult, type PairingView } from './pairing';
 import { RelayStore } from './relay';
-import type { KeyValueStore, PeerRecord, Timers } from './types';
+import type { KeyValueStore, PeerRecord, SendBlockCode, Timers } from './types';
 
 /**
  * Moves incident data between devices: seals outbox rows into capsule packets, routes them directly
@@ -69,6 +69,8 @@ export interface SyncConfig {
   connectTimeoutMs: number;
   /** A send still unresolved after this long may be attempted again. */
   inFlightTimeoutMs: number;
+  /** Most events one capsule section may carry. Receivers refuse a section with more (see `@/crypto/capsule`). */
+  maxSectionEvents: number;
 }
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
@@ -78,6 +80,7 @@ export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   pairingHelloTimeoutMs: 8_000,
   connectTimeoutMs: 6_000,
   inFlightTimeoutMs: 15_000,
+  maxSectionEvents: 1000,
 };
 
 export interface SyncEngineDeps {
@@ -120,6 +123,20 @@ function rawType(event: unknown): string | null {
   return typeof event.type === 'string' ? event.type : null;
 }
 
+/** True when any section holds more events than `max`. Sections are the JSON this device just built. */
+function exceedsEventCap(sections: Partial<Record<CapsuleSectionName, string>>, max: number): boolean {
+  for (const json of Object.values(sections)) {
+    if (json === undefined) continue;
+    try {
+      const body: unknown = JSON.parse(json);
+      if (typeof body === 'object' && body !== null && 'events' in body && Array.isArray(body.events) && body.events.length > max) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function settle<T>(work: Promise<CryptoResult<T>>): Promise<CryptoResult<T>> {
   try {
     return await work;
@@ -139,6 +156,8 @@ export class SyncEngine {
   private readonly inFlight = new Map<string, number>();
   /** Packet ids whose content was already built at least once; a new event needs a new row after that. */
   private readonly sealedOnce = new Set<string>();
+  /** Pending packet ids that cannot be sent as they are, with the reason. Rebuilt by the next send after a restart. */
+  private readonly blocked = new Map<string, SendBlockCode>();
   private unsubscribers: Unsubscribe[] = [];
   private lastTransportError: string | null = null;
 
@@ -159,6 +178,7 @@ export class SyncEngine {
         await deps.host.trust(record);
         void deps.host.track(this.onPeerUsable(record.deviceId));
       },
+      trusted: (peerId) => deps.host.peer(peerId),
       nowMs: () => deps.clock.nowMs(),
       changed: () => deps.host.changed(),
       helloTimeoutMs: this.config.pairingHelloTimeoutMs,
@@ -259,6 +279,8 @@ export class SyncEngine {
       this.connected.add(peerId);
       this.seen(peerId);
       this.settleConnect(peerId, true);
+      // A pairing still waiting on this peer's confirmation asks again now that the link is back.
+      void this.deps.host.track(this.pairing.resendConfirm(peerId));
       void this.deps.host.track(this.onPeerUsable(peerId));
     } else if (state === 'disconnected') {
       this.connected.delete(peerId);
@@ -326,6 +348,18 @@ export class SyncEngine {
     }
     await this.forwardRelayed();
     await this.flush({ reconnectedPeer: peerId });
+  }
+
+  /** Why a pending packet cannot be sent at all, or null when it is merely waiting. */
+  sendBlockOf(packetId: string): SendBlockCode | null {
+    return this.blocked.get(packetId) ?? null;
+  }
+
+  /** The row stays pending and is never recorded as attempted; the incident's view says why. */
+  private block(packetId: string, code: SendBlockCode): void {
+    if (this.blocked.get(packetId) === code) return;
+    this.blocked.set(packetId, code);
+    this.deps.host.changed();
   }
 
   /** Where to hand a packet for `target`: the target itself, or every connected trusted peer as a relay. */
@@ -422,9 +456,18 @@ export class SyncEngine {
         if (!state.incident) return null;
         const level = levelForDevice(state, peer.deviceId);
         this.sealedOnce.add(row.packetId);
-        return { level, sections: buildCapsuleSections({ state, senderDeviceId: me.deviceId, recipientLevel: level }) };
+        return {
+          level,
+          eventCount: state.events.length,
+          sections: buildCapsuleSections({ state, senderDeviceId: me.deviceId, recipientLevel: level }),
+        };
       });
       if (!built) return;
+      // Only a ledger longer than the cap can overfill a section, so the count is skipped otherwise.
+      if (built.eventCount > this.config.maxSectionEvents && exceedsEventCap(built.sections, this.config.maxSectionEvents)) {
+        this.block(row.packetId, 'packet_too_large');
+        return;
+      }
       const readable = sectionsForLevel(built.level).filter((name) => built.sections[name] !== undefined);
       const sealed = await settle(
         crypto.encryptForRecipients({
@@ -442,8 +485,11 @@ export class SyncEngine {
       try {
         bytes = encodePacket({ v: 1, packetId: row.packetId, kind: 'capsule', hops: 0, to: peer.deviceId, envelope: sealed.value });
       } catch {
+        this.block(row.packetId, 'packet_too_large');
         return;
       }
+      // It fits now (it may not have before, under another disclosure level).
+      this.blocked.delete(row.packetId);
 
       let via: string | null = null;
       let sent = false;
@@ -747,6 +793,11 @@ export class SyncEngine {
 
   cancelPairing(): Promise<void> {
     return this.pairing.cancel();
+  }
+
+  /** Called on the retry tick: a pairing whose last confirmation was lost converges instead of staying one-sided. */
+  retryPairing(): Promise<void> {
+    return this.pairing.resendConfirm();
   }
 
   async forgetPeer(peerId: string): Promise<void> {

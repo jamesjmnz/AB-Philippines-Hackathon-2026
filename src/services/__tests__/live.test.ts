@@ -7,10 +7,20 @@ import { createLiveApp } from '../live';
  * by modules that fail to load. This checks the composition (lazy imports, fallbacks, SOS path), not
  * any native behaviour.
  */
-const mockState: { repo: IncidentRepository | null; storage: Map<string, string>; openFails: boolean } = {
+const mockState: {
+  repo: IncidentRepository | null;
+  storage: Map<string, string>;
+  openFails: boolean;
+  kvFails: boolean;
+  appStateFails: boolean;
+  appListeners: Set<(state: string) => void>;
+} = {
   repo: null,
   storage: new Map(),
   openFails: false,
+  kvFails: false,
+  appStateFails: false,
+  appListeners: new Set(),
 };
 
 jest.mock('@/storage/expoDriver', () => ({
@@ -20,10 +30,25 @@ jest.mock('@/storage/expoDriver', () => ({
   },
 }));
 jest.mock('expo-sqlite/kv-store', () => ({
-  Storage: {
-    getItemAsync: async (key: string) => mockState.storage.get(key) ?? null,
-    setItemAsync: async (key: string, value: string) => void mockState.storage.set(key, value),
-    removeItemAsync: async (key: string) => mockState.storage.delete(key),
+  get Storage() {
+    if (mockState.kvFails) throw new Error('kv-store missing');
+    return {
+      getItemAsync: async (key: string) => mockState.storage.get(key) ?? null,
+      setItemAsync: async (key: string, value: string) => void mockState.storage.set(key, value),
+      removeItemAsync: async (key: string) => mockState.storage.delete(key),
+    };
+  },
+}));
+jest.mock('react-native/Libraries/AppState/AppState', () => ({
+  __esModule: true,
+  get default() {
+    if (mockState.appStateFails) throw new Error('AppState missing');
+    return {
+      addEventListener: (_type: string, listener: (state: string) => void) => {
+        mockState.appListeners.add(listener);
+        return { remove: () => void mockState.appListeners.delete(listener) };
+      },
+    };
   },
 }));
 jest.mock('expo-device', () => ({ modelName: 'iPhone 17 Pro Max', osVersion: '26.0' }));
@@ -51,12 +76,15 @@ describe('createLiveApp', () => {
     mockState.repo = createMemoryIncidentRepository();
     mockState.storage = new Map();
     mockState.openFails = false;
+    mockState.kvFails = false;
+    mockState.appStateFails = false;
+    mockState.appListeners = new Set();
   });
 
   it('starts in live mode, and an SOS persists even though AI, radio and crypto modules failed to load', async () => {
     const app = await createLiveApp();
     try {
-      expect(app.getSnapshot()).toMatchObject({ mode: 'live', demo: null });
+      expect(app.getSnapshot()).toMatchObject({ mode: 'live', demo: null, storage: { settingsPersistent: true } });
       // The SOS does not wait for readiness.
       const sos = await app.actions.sendSOS();
       if (!sos.ok) throw new Error(sos.code);
@@ -85,6 +113,61 @@ describe('createLiveApp', () => {
       app.actions.demo.runScenario('normal');
       app.actions.demo.reset();
       expect(app.getSnapshot()).toBe(before);
+    } finally {
+      await app.dispose();
+    }
+  });
+
+  it('pauses the radio when the app goes to the background, restarts it on return, and unsubscribes on dispose', async () => {
+    const app = await createLiveApp();
+    const emit = (state: string) => mockState.appListeners.forEach((listener) => listener(state));
+    try {
+      await waitFor(() => app.getSnapshot().ready);
+      await app.actions.completeOnboarding({ name: 'Alex' });
+      // The radio module is missing in this test, so "started" shows up as its error state.
+      await waitFor(() => app.getSnapshot().network.discovery === 'error');
+      expect(mockState.appListeners.size).toBe(1);
+
+      // Control Center and the app switcher are not the background.
+      emit('inactive');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(app.getSnapshot().network.discovery).toBe('error');
+
+      emit('background');
+      await waitFor(() => app.getSnapshot().network.discovery === 'off');
+      expect((await app.actions.sendSOS()).ok).toBe(true);
+      emit('active');
+      await waitFor(() => app.getSnapshot().network.discovery === 'error');
+    } finally {
+      await app.dispose();
+    }
+    expect(mockState.appListeners.size).toBe(0);
+  });
+
+  it('says so when settings and pairings can only be kept in memory', async () => {
+    mockState.kvFails = true;
+    const app = await createLiveApp();
+    try {
+      expect(app.getSnapshot().storage).toEqual({ settingsPersistent: false });
+      // The ledger is separate storage: an SOS is still persisted.
+      const sos = await app.actions.sendSOS();
+      if (!sos.ok) throw new Error(sos.code);
+      expect(await mockState.repo?.allIncidentIds()).toEqual([sos.value.incidentId]);
+      await app.actions.completeOnboarding({ name: 'Alex' });
+      expect(app.getSnapshot().me).toMatchObject({ name: 'Alex', onboarded: true });
+      expect(app.getSnapshot().storage).toEqual({ settingsPersistent: false });
+      expect(mockState.storage.size).toBe(0);
+    } finally {
+      await app.dispose();
+    }
+  });
+
+  it('still starts when the app state module cannot be loaded', async () => {
+    mockState.appStateFails = true;
+    const app = await createLiveApp();
+    try {
+      expect((await app.actions.sendSOS()).ok).toBe(true);
+      await waitFor(() => app.getSnapshot().ready);
     } finally {
       await app.dispose();
     }

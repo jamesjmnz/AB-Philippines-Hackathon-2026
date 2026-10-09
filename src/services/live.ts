@@ -95,6 +95,7 @@ const lazy = {
   device: () => require('expo-device') as typeof import('expo-device'),
   crypto: () => require('expo-crypto') as typeof import('expo-crypto'),
   fileSystem: () => require('expo-file-system') as typeof import('expo-file-system'),
+  reactNative: () => require('react-native') as typeof import('react-native'),
   ai: () => require('@/ai/callstack') as typeof import('@/ai/callstack'),
   transport: () => require('@/transport/NativePeerTransport') as typeof import('@/transport/NativePeerTransport'),
   capsuleCrypto: () => require('@/crypto/NativeCapsuleCrypto') as typeof import('@/crypto/NativeCapsuleCrypto'),
@@ -113,6 +114,8 @@ async function boot(): Promise<PulseCore> {
   // Storage first: without the ledger nothing can be persisted, so this one is allowed to fail the boot.
   const { repository } = await lazy.storage().openExpoIncidentRepository();
 
+  // Without the key-value module the profile, pairings and settings live in memory; the snapshot says so.
+  let kvPersistent = true;
   const kv = attempt<KeyValueStore>(
     () => {
       const { Storage } = lazy.kvStore();
@@ -127,7 +130,10 @@ async function boot(): Promise<PulseCore> {
         LIVE_KV_PREFIX,
       );
     },
-    () => createMemoryKeyValueStore(),
+    () => {
+      kvPersistent = false;
+      return createMemoryKeyValueStore();
+    },
   );
 
   const deviceInfo = attempt(
@@ -168,6 +174,7 @@ async function boot(): Promise<PulseCore> {
     transport,
     crypto,
     kv,
+    kvPersistent,
     clock: { nowMs: () => Date.now() },
     ids,
     deviceInfo,
@@ -185,5 +192,24 @@ async function boot(): Promise<PulseCore> {
 export async function createLiveApp(): Promise<PulseApp> {
   const core = await boot();
   void core.start();
-  return core;
+  // 'inactive' (Control Center, the app switcher) is ignored: iOS keeps the radio up through it.
+  const stopWatching = attempt(
+    () => {
+      const subscription = lazy.reactNative().AppState.addEventListener('change', (state) => {
+        if (state === 'active') void core.setAppActive(true);
+        else if (state === 'background') void core.setAppActive(false);
+      });
+      return () => subscription.remove();
+    },
+    () => () => undefined,
+  );
+  return {
+    getSnapshot: core.getSnapshot,
+    subscribe: core.subscribe,
+    actions: core.actions,
+    dispose: async () => {
+      attempt(stopWatching, () => undefined);
+      await core.dispose();
+    },
+  };
 }

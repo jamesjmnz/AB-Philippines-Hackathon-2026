@@ -46,6 +46,7 @@ import {
   resolveConflict,
   resolveIncident,
   skipClarification,
+  DisclosureLevelSchema,
   DomainError,
   type Actor,
   type ClaimField,
@@ -76,6 +77,7 @@ import type {
   PulseApp,
   PulseSnapshot,
   RecipientPolicyInput,
+  SendFailureCode,
 } from './api';
 import { readJson, writeJson } from './kv';
 import { buildIncidentView, policyFromInput, projectionFacts } from './views';
@@ -115,6 +117,8 @@ export interface PulseCoreDeps {
   transport: PeerTransport;
   crypto: CapsuleCrypto;
   kv: KeyValueStore;
+  /** False when `kv` does not survive a restart. Defaults to true in LIVE and false in DEMO. */
+  kvPersistent?: boolean;
   clock: Clock;
   ids: IdGenerator;
   deviceInfo: { model: string; osVersion: string };
@@ -209,6 +213,9 @@ function spanIn(text: string, evidence: string): TextSpan | null {
   return exact.length <= 500 ? { start, end, text: exact } : null;
 }
 
+/** Same bound as a stored report's text. */
+const MAX_DIAGNOSTIC_TEXT = 4_000;
+
 const CLARIFICATION_PROMPTS: Record<ClaimField, string> = {
   floor: 'Which floor are you on?',
   building: 'Which building are you in?',
@@ -224,6 +231,7 @@ export class PulseCore implements PulseApp {
 
   private readonly config: CoreConfig;
   private readonly timers: Timers;
+  private readonly storage: { settingsPersistent: boolean };
   private profile: Profile;
   private settings: AppSettings;
   private readonly peers = new Map<string, PeerRecord>();
@@ -233,6 +241,9 @@ export class PulseCore implements PulseApp {
   private discoveryError: string | null = null;
   private ready = false;
   private disposed = false;
+  /** False while the app is in the background. The radio is paused then, whatever the setting says. */
+  private appActive = true;
+  private lifecycleTail: Promise<void> = Promise.resolve();
 
   private snapshot: PulseSnapshot;
   private readonly listeners = new Set<() => void>();
@@ -251,6 +262,7 @@ export class PulseCore implements PulseApp {
   constructor(private readonly deps: PulseCoreDeps) {
     this.config = { ...DEFAULT_CORE_CONFIG, ...(deps.config ?? {}) };
     this.timers = deps.timers ?? systemTimers;
+    this.storage = Object.freeze({ settingsPersistent: deps.kvPersistent ?? deps.mode === 'live' });
     this.profile = {
       deviceId: null,
       aliases: [],
@@ -369,8 +381,9 @@ export class PulseCore implements PulseApp {
     const needsIdentity = this.profile.deviceId === null || this.profile.provisional;
     await this.bounded(Promise.all([needsIdentity ? identity : Promise.resolve(), this.refreshCapabilitiesInner()]));
     if (this.disposed) return;
-    if (this.settings.discoveryEnabled && this.profile.onboarded) void this.track(this.applyDiscovery(true));
+    if (this.appActive && this.settings.discoveryEnabled && this.profile.onboarded) void this.track(this.applyDiscovery(true));
     this.retryTimer = this.timers.setInterval(() => {
+      void this.track(this.engine.retryPairing());
       void this.track(this.engine.forwardRelayed().then(() => this.engine.flush()));
     }, this.config.retryIntervalMs);
     this.ready = true;
@@ -389,7 +402,7 @@ export class PulseCore implements PulseApp {
         await writeJson(this.deps.kv, KEY_PROFILE, this.profile);
         this.namesVersion += 1;
         // Discovery that already failed for lack of an identity is retried now that there is one.
-        if (this.settings.discoveryEnabled && this.profile.onboarded && this.discovery === 'error') {
+        if (this.appActive && this.settings.discoveryEnabled && this.profile.onboarded && this.discovery === 'error') {
           void this.track(this.applyDiscovery(true));
         }
         this.changed();
@@ -511,6 +524,7 @@ export class PulseCore implements PulseApp {
       trusted: true,
       reach: this.engine.reachOf(p.deviceId),
       lastSeenMs: this.engine.lastSeenMs(p.deviceId),
+      level: p.level,
     }));
     for (const id of this.engine.discoveredIds()) {
       if (this.peers.has(id) || this.isLocal(id)) continue;
@@ -538,6 +552,7 @@ export class PulseCore implements PulseApp {
       incidents: this.incidentViews,
       pairing,
       settings: this.settings,
+      storage: this.storage,
       demo: null,
     };
     if (!previous) return next;
@@ -566,7 +581,12 @@ export class PulseCore implements PulseApp {
     const repo = this.deps.repo;
     const ids = await repo.allIncidentIds();
     const pendingBy = new Map<string, number>();
-    for (const row of await repo.getPendingOutbox()) pendingBy.set(row.incidentId, (pendingBy.get(row.incidentId) ?? 0) + 1);
+    const blockedBy = new Map<string, SendFailureCode>();
+    for (const row of await repo.getPendingOutbox()) {
+      pendingBy.set(row.incidentId, (pendingBy.get(row.incidentId) ?? 0) + 1);
+      const block = this.engine.sendBlockOf(row.packetId);
+      if (block) blockedBy.set(row.incidentId, block);
+    }
     const views: IncidentView[] = [];
     const live = new Set(ids);
     for (const id of this.viewCache.keys()) if (!live.has(id)) this.viewCache.delete(id);
@@ -574,7 +594,8 @@ export class PulseCore implements PulseApp {
       const events = await repo.eventsForIncident(id);
       const stored = this.projections.get(id) ?? null;
       const pending = pendingBy.get(id) ?? 0;
-      const key = `${events.length}|${pending}|${stored?.version ?? 0}|${this.namesVersion}`;
+      const sendFailure = blockedBy.get(id) ?? null;
+      const key = `${events.length}|${pending}|${stored?.version ?? 0}|${this.namesVersion}|${sendFailure ?? ''}`;
       let cached = this.viewCache.get(id);
       if (!cached || cached.key !== key) {
         const via = stored?.via ?? null;
@@ -588,6 +609,7 @@ export class PulseCore implements PulseApp {
             stored: stored?.projection ?? null,
             viaName: via === null ? null : (this.peers.get(via)?.name ?? null),
             pendingOutbox: pending,
+            sendFailure,
           }),
         };
         this.viewCache.set(id, cached);
@@ -756,6 +778,13 @@ export class PulseCore implements PulseApp {
     return this.guardAI(() => this.deps.ai.extractIncidentReport({ text: report.text }));
   }
 
+  /** Extraction on text that belongs to no incident. Touches neither the ledger, the outbox nor the radio. */
+  private async diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>> {
+    const bounded = typeof text === 'string' ? text.trim().slice(0, MAX_DIAGNOSTIC_TEXT) : '';
+    if (bounded.length === 0) return this.aiFailure('invalid_output', 'empty_input');
+    return this.guardAI(() => this.deps.ai.extractIncidentReport({ text: bounded }));
+  }
+
   private attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult> {
     return this.simple(incidentId, (state, ctx) => {
       const report = state.reports.find((r) => r.id === reportId);
@@ -890,6 +919,33 @@ export class PulseCore implements PulseApp {
     this.publish();
   }
 
+  /**
+   * App moved to the background (`false`) or back to the foreground (`true`). iOS tears the listener,
+   * browser and links down in the background and restarts none of them, so the radio is stopped on the
+   * way out and, if the person has discovery on, started again on the way back, followed by a delivery
+   * pass. Repeated calls with the same value do nothing. Nothing on the SOS path waits for this.
+   */
+  setAppActive(active: boolean): Promise<void> {
+    if (this.disposed || active === this.appActive) return this.lifecycleTail;
+    this.appActive = active;
+    const run = this.lifecycleTail.then(async () => {
+      await (this.startup ?? this.local());
+      // A later change already replaced this one.
+      if (this.disposed || this.appActive !== active) return;
+      if (!active) {
+        if (this.discovery !== 'off') await this.applyDiscovery(false);
+        return;
+      }
+      // Also retried after an error: the person may be returning from granting the permission.
+      const running = this.discovery === 'on' || this.discovery === 'starting';
+      if (!running && this.settings.discoveryEnabled && this.profile.onboarded) await this.applyDiscovery(true);
+      await this.engine.forwardRelayed().catch(() => undefined);
+      this.kickDelivery();
+    });
+    this.lifecycleTail = run.catch(() => undefined);
+    return this.track(this.lifecycleTail);
+  }
+
   private async saveSettings(patch: Partial<AppSettings>): Promise<void> {
     const merged = settingsSchema.safeParse({ ...this.settings, ...patch });
     if (!merged.success) return;
@@ -908,7 +964,7 @@ export class PulseCore implements PulseApp {
         this.profile = { ...this.profile, name: name.trim().slice(0, 80), onboarded: true };
         this.namesVersion += 1;
         await writeJson(this.deps.kv, KEY_PROFILE, this.profile);
-        if (this.settings.discoveryEnabled && this.discovery === 'off') void this.track(this.applyDiscovery(true));
+        if (this.appActive && this.settings.discoveryEnabled && this.discovery === 'off') void this.track(this.applyDiscovery(true));
         await this.refresh();
       },
 
@@ -923,6 +979,7 @@ export class PulseCore implements PulseApp {
         return ok({ reportId: added.payload.reportId });
       },
       analyzeReport: (incidentId, reportId) => this.analyzeReport(incidentId, reportId),
+      diagnoseExtraction: (text) => this.diagnoseExtraction(text),
       attachProposal: (incidentId, reportId, proposal) => this.attachProposal(incidentId, reportId, proposal),
       confirmFact: (incidentId, field, value) =>
         this.simple(incidentId, (state, ctx) => {
@@ -1031,7 +1088,8 @@ export class PulseCore implements PulseApp {
       setDiscovery: async (enabled) => {
         await this.local();
         await this.saveSettings({ discoveryEnabled: enabled });
-        await this.applyDiscovery(enabled);
+        // In the background only the choice is stored; the radio follows it on the next foreground.
+        if (this.appActive || !enabled) await this.applyDiscovery(enabled);
       },
       startPairing: async (peerDeviceId) => {
         await this.local();
@@ -1067,6 +1125,7 @@ export class PulseCore implements PulseApp {
         await writeJson(this.deps.kv, KEY_PEERS, [...this.peers.values()]);
         await this.refresh();
       },
+      setPeerLevel: (peerDeviceId, level) => this.setPeerLevel(peerDeviceId, level),
 
       transcribe: (wavFileUri, locale) => this.transcribe(wavFileUri, locale),
 
@@ -1074,7 +1133,7 @@ export class PulseCore implements PulseApp {
         await this.local();
         const discoveryChanged = patch.discoveryEnabled !== undefined && patch.discoveryEnabled !== this.settings.discoveryEnabled;
         await this.saveSettings(patch);
-        if (discoveryChanged) await this.applyDiscovery(this.settings.discoveryEnabled);
+        if (discoveryChanged && (this.appActive || !this.settings.discoveryEnabled)) await this.applyDiscovery(this.settings.discoveryEnabled);
       },
       refreshCapabilities: () => this.refreshCapabilitiesInner(),
       deleteAllIncidents: async () => {
@@ -1091,12 +1150,15 @@ export class PulseCore implements PulseApp {
   }
 
   /** Changes the default disclosure level this device grants a paired peer on new incidents. */
-  async setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<void> {
+  async setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<ActionResult> {
     await this.local();
     const peer = this.peers.get(peerDeviceId);
-    if (!peer) return;
-    this.peers.set(peerDeviceId, { ...peer, level });
+    if (!peer) return fail(new CoreError('peer_not_trusted'));
+    const parsed = DisclosureLevelSchema.safeParse(level);
+    if (!parsed.success) return fail(new CoreError('invalid_input'));
+    this.peers.set(peerDeviceId, { ...peer, level: parsed.data });
     await writeJson(this.deps.kv, KEY_PEERS, [...this.peers.values()]);
     await this.refresh();
+    return ok();
   }
 }
