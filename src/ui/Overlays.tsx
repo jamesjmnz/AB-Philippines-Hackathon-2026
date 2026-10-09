@@ -1,31 +1,137 @@
-import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 
 import { Icon, type IconName } from './Icon';
-import { colors } from './theme';
+import { Enter, SheetUp } from './Motion';
+import { colors, design, padBottom } from './theme';
 
-type SheetProps = { visible: boolean; onClose: () => void; title?: string; children: ReactNode; dismissable?: boolean };
+/**
+ * Sheets and dialogs are drawn in the React tree, not in a native `Modal`, so they sit inside the
+ * shell: below the SIMULATED bar in Demo, above the tab bar and every screen. `OverlayHost` is mounted
+ * once by the shell; a `Sheet` or `Dialog` anywhere below the provider renders into it.
+ */
+type Entry = { node: ReactNode; z: number };
+type OverlayState = {
+  hosts: number;
+  entries: Record<number, Entry>;
+  put: (id: number, entry: Entry) => void;
+  drop: (id: number) => void;
+  mount: (delta: number) => void;
+};
 
-/** Bottom sheet with grabber. Scrim tap closes unless `dismissable` is false. */
-export function Sheet({ visible, onClose, title, children, dismissable = true }: SheetProps) {
-  const insets = useSafeAreaInsets();
+const useOverlays = create<OverlayState>((set) => ({
+  hosts: 0,
+  entries: {},
+  put: (id, entry) => set((s) => ({ entries: { ...s.entries, [id]: entry } })),
+  drop: (id) =>
+    set((s) => {
+      if (!(id in s.entries)) return s;
+      const next = { ...s.entries };
+      delete next[id];
+      return { entries: next };
+    }),
+  mount: (delta) => set((s) => ({ hosts: s.hosts + delta })),
+}));
+
+let overlaySeq = 0;
+
+function Portal({ z, children }: { z: number; children: ReactNode }) {
+  const hosted = useOverlays((s) => s.hosts > 0);
+  const [id] = useState(() => {
+    overlaySeq += 1;
+    return overlaySeq;
+  });
+  // Runs after every render so the hosted copy always shows the caller's latest children.
+  useEffect(() => {
+    if (hosted) useOverlays.getState().put(id, { node: children, z });
+  });
+  useEffect(() => () => useOverlays.getState().drop(id), [id]);
+  // Without a host (a component rendered on its own in a test) the overlay is drawn in place.
+  if (hosted) return null;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={dismissable ? onClose : undefined}>
-      <Pressable accessibilityLabel="Close" accessibilityRole="button" className="flex-1 bg-black/40" onPress={dismissable ? onClose : undefined} />
-      <View className="max-h-[88%] rounded-t-sheet bg-card px-[22px] pt-[10px]" style={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}>
-        <View className="mb-3 h-[5px] w-[38px] self-center rounded-full bg-line-track" />
-        {title ? (
-          <Text accessibilityRole="header" className="mb-3 text-[26px] font-bold tracking-[-0.7px] text-ink">
-            {title}
-          </Text>
-        ) : null}
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-3 pb-2">
-          {children}
-        </ScrollView>
-      </View>
-    </Modal>
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {children}
+    </View>
+  );
+}
+
+/** Mount once, after the navigator, inside the provider. */
+export function OverlayHost() {
+  const entries = useOverlays((s) => s.entries);
+  useEffect(() => {
+    useOverlays.getState().mount(1);
+    return () => useOverlays.getState().mount(-1);
+  }, []);
+  const ids = Object.keys(entries)
+    .map(Number)
+    .sort((a, b) => (entries[a]?.z ?? 0) - (entries[b]?.z ?? 0) || a - b);
+  if (ids.length === 0) return null;
+  return (
+    <View testID="overlay-host" pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {ids.map((id) => (
+        <View key={id} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          {entries[id]?.node}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+type SheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  /** Scrim tap closes unless false (the unusual-movement sheet cannot be dismissed). */
+  dismissable?: boolean;
+  /** Space under the grabber: 18 in the design, 16 on the unusual-movement sheet. */
+  grabberGap?: number;
+  /** Centres the content (unusual-movement sheet). */
+  centered?: boolean;
+  /** Optional heading in the design's sheet title style (26pt extrabold, -0.8 tracking). */
+  title?: string;
+  testID?: string;
+};
+
+/**
+ * Bottom sheet (design 809–887): white, 32pt top corners, padding 10/22/40, 38×5 grabber, at most 88%
+ * of the height, scrim rgba(10,10,12,.4) fading in over .25s, sheetUp over .42s.
+ */
+export function Sheet({ visible, onClose, children, dismissable = true, grabberGap = 18, centered, title, testID }: SheetProps) {
+  const insets = useSafeAreaInsets();
+  if (!visible) return null;
+  return (
+    <Portal z={31}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Enter kind="fadeIn" duration={250} style={StyleSheet.absoluteFill}>
+          <Pressable
+            testID="sheet-scrim"
+            accessibilityRole={dismissable ? 'button' : undefined}
+            accessibilityLabel={dismissable ? 'Close' : undefined}
+            accessible={dismissable}
+            onPress={dismissable ? onClose : undefined}
+            style={{ flex: 1, backgroundColor: design.scrim }}
+          />
+        </Enter>
+        <SheetUp testID={testID} style={{ maxHeight: '88%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32 }}>
+          <ScrollView
+            accessibilityViewIsModal
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[{ paddingTop: 10, paddingHorizontal: 22, paddingBottom: padBottom(insets.bottom) }, centered ? { alignItems: 'center' } : null]}>
+            <View style={{ width: 38, height: 5, borderRadius: 3, backgroundColor: colors.track, alignSelf: 'center', marginBottom: grabberGap }} />
+            {title ? (
+              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink, marginBottom: 12 }}>
+                {title}
+              </Text>
+            ) : null}
+            {children}
+          </ScrollView>
+        </SheetUp>
+      </KeyboardAvoidingView>
+    </Portal>
   );
 }
 
@@ -35,31 +141,42 @@ type DialogProps = {
   message: string;
   cancelLabel: string;
   confirmLabel: string;
+  /** Coral confirm label. */
   destructive?: boolean;
+  /** Explicit confirm colour (the design uses green for "Resolve"). Wins over `destructive`. */
+  confirmColor?: string;
   onCancel: () => void;
   onConfirm: () => void;
 };
 
-export function Dialog({ visible, title, message, cancelLabel, confirmLabel, destructive, onCancel, onConfirm }: DialogProps) {
+/** Alert (design 889–899): 280pt wide, radius 18, rgba(250,250,252,.98), 46pt buttons, popIn .25s. */
+export function Dialog({ visible, title, message, cancelLabel, confirmLabel, destructive, confirmColor, onCancel, onConfirm }: DialogProps) {
+  if (!visible) return null;
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View className="flex-1 items-center justify-center bg-black/40">
-        <View accessibilityViewIsModal className="w-[280px] overflow-hidden rounded-[18px] bg-card">
-          <View className="gap-1 px-5 py-5">
-            <Text className="text-center text-[17px] font-semibold text-ink">{title}</Text>
-            <Text className="text-center text-[13.5px] leading-[18px] text-gray-2">{message}</Text>
+    <Portal z={40}>
+      <Enter kind="fadeIn" duration={200} style={[StyleSheet.absoluteFill, { backgroundColor: design.scrim, alignItems: 'center', justifyContent: 'center' }]}>
+        <Enter kind="popIn" duration={250} ease="spring" style={{ width: 280, borderRadius: 18, overflow: 'hidden', backgroundColor: 'rgba(250,250,252,0.98)' }}>
+          <View accessibilityViewIsModal accessibilityRole="alert">
+            <View style={{ paddingTop: 20, paddingHorizontal: 18, paddingBottom: 16 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>{title}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray2, textAlign: 'center', marginTop: 6 }}>{message}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.lineInput }}>
+              <Pressable
+                testID="dialog-cancel"
+                accessibilityRole="button"
+                onPress={onCancel}
+                style={{ flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: colors.lineInput }}>
+                <Text style={{ fontSize: 16, color: colors.ink }}>{cancelLabel}</Text>
+              </Pressable>
+              <Pressable testID="dialog-confirm" accessibilityRole="button" onPress={onConfirm} style={{ flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: confirmColor ?? (destructive ? colors.coralText : colors.ink) }}>{confirmLabel}</Text>
+              </Pressable>
+            </View>
           </View>
-          <View className="flex-row border-t border-line-input">
-            <Pressable accessibilityRole="button" onPress={onCancel} className="h-[46px] flex-1 items-center justify-center border-r border-line-input">
-              <Text className="text-[16px] text-ink">{cancelLabel}</Text>
-            </Pressable>
-            <Pressable testID="dialog-confirm" accessibilityRole="button" onPress={onConfirm} className="h-[46px] flex-1 items-center justify-center">
-              <Text className={`text-[16px] font-bold ${destructive ? 'text-coral-text' : 'text-ink'}`}>{confirmLabel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
+        </Enter>
+      </Enter>
+    </Portal>
   );
 }
 
@@ -73,7 +190,7 @@ let toastSeq = 0;
 
 export const useToast = create<ToastState>((set, get) => ({
   toast: null,
-  show: (message, icon = 'info', color = '#FFFFFF') => {
+  show: (message, icon = 'check_circle', color = '#FFFFFF') => {
     toastSeq += 1;
     const id = toastSeq;
     set({ toast: { id, message, icon, color } });
@@ -84,19 +201,40 @@ export const useToast = create<ToastState>((set, get) => ({
   },
 }));
 
-/** Mount once at the root. */
+/**
+ * Toast (design 911–913): ink pill 4pt under the status-bar inset, padding 11/16, 14pt semibold, 18pt
+ * filled icon, shadow 0 10px 30px rgba(0,0,0,.2), toastIn .35s. Mount once at the root, last.
+ */
 export function ToastHost() {
   const toast = useToast((s) => s.toast);
   const insets = useSafeAreaInsets();
   if (!toast) return null;
   return (
-    <View pointerEvents="none" className="absolute left-0 right-0 items-center" style={{ top: insets.top + 6 }}>
-      <View accessibilityLiveRegion="polite" accessibilityRole="alert" className="max-w-[90%] flex-row items-center gap-2 rounded-full px-4 py-3" style={{ backgroundColor: colors.ink }}>
-        <Icon name={toast.icon} size={18} color={toast.color} filled />
-        <Text numberOfLines={2} className="text-[14px] font-semibold text-white">
-          {toast.message}
-        </Text>
-      </View>
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: insets.top + 4, alignItems: 'center' }}>
+      <Enter key={toast.id} kind="toastIn" duration={350} ease="spring" style={{ maxWidth: 340, marginHorizontal: 16 }}>
+        <View
+          testID="toast"
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: colors.ink,
+            borderRadius: 999,
+            paddingVertical: 11,
+            paddingHorizontal: 16,
+            shadowColor: '#000000',
+            shadowOpacity: 0.2,
+            shadowRadius: 30,
+            shadowOffset: { width: 0, height: 10 },
+          }}>
+          <Icon name={toast.icon} size={18} color={toast.color} filled />
+          <Text numberOfLines={2} style={{ flexShrink: 1, fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
+            {toast.message}
+          </Text>
+        </View>
+      </Enter>
     </View>
   );
 }

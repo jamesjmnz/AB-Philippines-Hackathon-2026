@@ -38,3 +38,29 @@ export const tones: Record<Tone, { fg: string; bg: string }> = {
   coral: { fg: colors.coralText, bg: colors.coralTint },
   indigo: { fg: colors.indigo, bg: colors.indigoTint },
 };
+
+/** Design neutrals that have no Tailwind token: map paper, ring track, soft button fill. */
+export const design = {
+  scrim: 'rgba(10,10,12,0.4)',
+  ringTrack: '#F0F0F2',
+  soft: '#EFEFF2',
+  softer: '#F5F5F7',
+  mapPaper: '#F8F4EC',
+  coralRingTrack: '#FBE3E2',
+  conflictTint: '#FDF1F0',
+  offlineText: '#8A5A0E',
+} as const;
+
+/**
+ * The design draws a 402×874 frame whose bottom paddings (40px) already contain the 34pt home
+ * indicator. On a device the same padding is the safe-area inset plus the design's 6pt, never less
+ * than the design value.
+ */
+export function padBottom(insetBottom: number, designPx = 40): number {
+  return Math.max(designPx, insetBottom + 6);
+}
+
+/** Tab bar: 60pt of content above the home-indicator inset (94px in the design frame). */
+export function tabBarHeight(insetBottom: number): number {
+  return 60 + Math.max(insetBottom, 10);
+}
