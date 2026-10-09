@@ -16,11 +16,61 @@ function flagged(events: readonly DomainEvent[]): DomainEvent[] {
   return events.filter((e) => e.type === 'CONFLICT_FLAGGED');
 }
 
+/**
+ * The invariant every delta in this file is held to. A field needs verification exactly while its
+ * revision is in dispute:
+ * - a revision that is in an open contradiction, or in a proposal the conflict rule has pending,
+ *   always needs verification;
+ * - a revision that needs verification is always on a field that has an open contradiction or a
+ *   pending proposal. It may not be a member itself: the rule records one contradiction per
+ *   disagreeing value, so a second statement of an already-disputed value is in dispute without
+ *   being named in any event.
+ */
+function expectVerificationMatchesConflicts(state: IncidentState, delta: StatementDelta): void {
+  const pending = detectFieldConflicts(state);
+  const open = state.contradictions.filter((c) => c.status === 'open');
+  for (const f of delta.fields) {
+    const member =
+      open.some((c) => c.revisionIds.includes(f.revisionId)) || pending.some((p) => p.revisionIds.includes(f.revisionId));
+    const fieldDisputed = open.some((c) => c.field === f.field) || pending.some((p) => p.field === f.field);
+    if (member) expect({ revisionId: f.revisionId, needsVerification: f.needsVerification }).toEqual({ revisionId: f.revisionId, needsVerification: true });
+    if (f.needsVerification) expect({ revisionId: f.revisionId, fieldDisputed }).toEqual({ revisionId: f.revisionId, fieldDisputed: true });
+  }
+  expect(delta.needsVerification).toBe(delta.fields.some((f) => f.needsVerification));
+}
+
+function deltaOf(state: IncidentState, reportId: string): StatementDelta | null {
+  const delta = classifyStatementDelta(state, reportId);
+  if (delta) expectVerificationMatchesConflicts(state, delta);
+  return delta;
+}
+
+function allDeltas(state: IncidentState): (StatementDelta | null)[] {
+  return state.reports.map((r) => deltaOf(state, r.id));
+}
+
 function lastDelta(state: IncidentState): StatementDelta {
   const report = state.reports[state.reports.length - 1];
-  const delta = report ? classifyStatementDelta(state, report.id) : null;
+  const delta = report ? deltaOf(state, report.id) : null;
   if (!delta) throw new Error('fixture: no report to classify');
   return delta;
+}
+
+/** Same events in any order: same state, same deltas, same pending conflict proposals and ids. */
+function expectDeterministic(state: IncidentState, seeds: readonly number[] = [1, 2, 3, 4, 5]): void {
+  const deltas = allDeltas(state);
+  const proposals = detectFieldConflicts(state);
+  const conflictIds = state.contradictions.map((c) => c.id);
+  for (const seed of seeds) {
+    const replayed = replay(state.incidentId, shuffled(state.events, seed));
+    expect(replayed).toEqual(state);
+    expect(allDeltas(replayed)).toEqual(deltas);
+    expect(detectFieldConflicts(replayed)).toEqual(proposals);
+    expect(replayed.contradictions.map((c) => c.id)).toEqual(conflictIds);
+  }
+  const restored = replay(state.incidentId, JSON.parse(JSON.stringify(state.events)) as DomainEvent[]);
+  expect(allDeltas(restored)).toEqual(deltas);
+  expect(detectFieldConflicts(restored)).toEqual(proposals);
 }
 
 describe('same-author supersession in conflict detection', () => {
@@ -52,6 +102,37 @@ describe('same-author supersession in conflict detection', () => {
         },
       ],
     });
+  });
+
+  it('a reporter correction that a responder’s earlier agreement now disagrees with is flagged and needs verification', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'Alex is on the second floor.' }).state;
+    const corrected = addReport(s, world.as(ALEX), { text: 'Sorry, the third floor.' });
+    expect(flagged(corrected.events)).toHaveLength(1);
+    expect(lastDelta(corrected.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: true,
+      fields: [{ class: 'correction', reason: 'self_correction', needsVerification: true }],
+    });
+    // The responder's statement is now in dispute too, and both clear when the reporter resolves.
+    expect(deltaOf(corrected.state, corrected.state.reports[1]!.id)).toMatchObject({ overall: 'confirmation', needsVerification: true });
+    const resolved = resolveConflict(corrected.state, world.as(ALEX), {
+      conflictId: corrected.state.contradictions[0]!.id,
+      value: 'Third floor',
+    }).state;
+    expect(allDeltas(resolved).map((d) => d?.needsVerification)).toEqual([false, false, false]);
+    expectDeterministic(corrected.state);
+  });
+
+  it('a repeat of a value already in an open contradiction needs verification without a second flag', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'I think Alex is on the first floor.' }).state;
+    const repeat = addObservation(s, world.as(NOAH), { text: 'First floor, I agree with Mika.' });
+    expect(flagged(repeat.events)).toEqual([]);
+    expect(repeat.state.contradictions).toHaveLength(1);
+    expect(lastDelta(repeat.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
   });
 
   it('a responder who corrects themselves is compared only by their latest statement', () => {
@@ -261,12 +342,7 @@ describe('an explicit move does not conflict with an earlier statement of its or
     });
 
     // Any arrival order of the same events gives the same state, with no conflict to flag.
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const replayed = replay(moved.state.incidentId, shuffled(moved.state.events, seed));
-      expect(replayed).toEqual(moved.state);
-      expect(detectFieldConflicts(replayed)).toEqual([]);
-      expect(lastDelta(replayed)).toEqual(lastDelta(moved.state));
-    }
+    expectDeterministic(moved.state);
   });
 
   it('a contradiction opened before the move, about a third floor, stays open and nothing is withdrawn', () => {
@@ -333,17 +409,92 @@ describe('an explicit move does not conflict with an earlier statement of its or
     });
   });
 
-  it('a responder reporting the move does not contradict the reporter’s earlier origin statement', () => {
+  it('a responder describing a move, the requester’s or their own, states no floor', () => {
     const { world, state } = start();
     const s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
-    const seen = addObservation(s, world.as(MIKA), { text: 'Alex moved from the first floor to the second floor' });
-    expect(flagged(seen.events)).toEqual([]);
-    // The reporter's own statement still leads the field; the responder's is kept in history.
-    expect(seen.state.claims.floor).toMatchObject({ value: 'First floor', tag: 'user_reported' });
-    expect(lastDelta(seen.state)).toMatchObject({
-      overall: 'new_information',
+    for (const text of [
+      // Third person: not the movement rule's business, and two floors name no single floor.
+      'Alex moved from the first floor to the second floor',
+      // First person, but it is the responder who moved, not the requester.
+      'I went from the first floor to the second floor to look for the stairs.',
+      'I was on the first floor, now I’m on the second',
+    ]) {
+      const seen = addObservation(s, world.as(MIKA), { text });
+      expect(flagged(seen.events)).toEqual([]);
+      expect(seen.state.claims.floor.revisions).toHaveLength(1);
+      expect(seen.state.claims.floor).toMatchObject({ value: 'First floor', tag: 'user_reported' });
+      expect(lastDelta(seen.state)).toMatchObject({ overall: 'not_assessed', fields: [], needsVerification: false });
+    }
+  });
+
+  it('a statement about something else moving is not the author’s move and hides no disagreement', () => {
+    const { world, state } = start();
+    const s = addObservation(state, world.as(MIKA), { text: 'Alex is on the first floor.' }).state;
+    const fire = addReport(s, world.as(ALEX), { text: 'The fire is going from the first floor to the second floor.' });
+    expect(flagged(fire.events)).toEqual([]);
+    expect(fire.state.claims.floor.revisions).toHaveLength(1);
+    expect(fire.state.claims.floor).toMatchObject({ value: 'First floor', tag: 'responder_reported' });
+    expect(lastDelta(fire.state)).toEqual({
+      reportId: fire.state.reports[1]!.id,
+      overall: 'not_assessed',
+      fields: [],
       needsVerification: false,
-      fields: [{ class: 'new_information', reason: 'moved', previousValue: 'First floor' }],
+      duplicateOfReportId: null,
+    });
+  });
+
+  it('a second move keeps an earlier agreement explained', () => {
+    const { world, state } = beforeMove('I see them on the first floor');
+    const once = addReport(state, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    const twice = addReport(once.state, world.as(ALEX), { text: 'I moved from the second floor to the third floor' });
+    expect(flagged(twice.events)).toEqual([]);
+    expect(twice.state.contradictions).toEqual([]);
+    expect(twice.state.claims.floor).toMatchObject({ value: 'Third floor', tag: 'user_reported', candidates: [] });
+    expect(lastDelta(twice.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      fields: [{ reason: 'moved', previousValue: 'Second floor' }],
+    });
+
+    // So does a self-correction after the move, and an agreement given between the two moves.
+    const corrected = addReport(once.state, world.as(ALEX), { text: 'Sorry, I meant the third floor.' });
+    expect(flagged(corrected.events)).toEqual([]);
+    expect(corrected.state.claims.floor.value).toBe('Third floor');
+    const agreed = addObservation(once.state, world.as(NOAH), { text: 'Yes, second floor now.' }).state;
+    const later = addReport(agreed, world.as(ALEX), { text: 'I moved from the second floor to the third floor' });
+    expect(flagged(later.events)).toEqual([]);
+    expect(later.state.claims.floor.value).toBe('Third floor');
+    expectDeterministic(later.state);
+    expectDeterministic(twice.state);
+  });
+
+  it('after two moves, a floor the reporter never stated and a statement made after the last move are still flagged', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    // Concurrent with the reporter's first statement, so not yet flagged: a floor Alex never states.
+    const noah = addObservation(state, world.as(NOAH), { text: 'I think it is the fifth floor.' });
+    s = replay(s.incidentId, [...s.events, ...noah.events]);
+    s = addReport(s, world.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    expect(s.contradictions.map((c) => c.status)).toEqual(['open']);
+    s = addReport(s, world.as(ALEX), { text: 'I moved from the second floor to the third floor' }).state;
+    expect(s.contradictions.map((c) => c.status)).toEqual(['open']);
+
+    const { world: w2, state: base } = beforeMove('I see them on the first floor');
+    let t = addReport(base, w2.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    t = addReport(t, w2.as(ALEX), { text: 'I moved from the second floor to the third floor' }).state;
+    const late = addObservation(t, w2.as(MIKA), { text: 'They are on the second floor' });
+    expect(flagged(late.events)).toHaveLength(1);
+    expect(lastDelta(late.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+  });
+
+  it('a move whose stated origin is not what the author had said is a self-correction, not a move', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the third floor.' }).state;
+    const moved = addReport(s, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    expect(moved.state.claims.floor.value).toBe('Second floor');
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'correction',
+      fields: [{ class: 'correction', reason: 'self_correction', previousValue: 'Third floor' }],
     });
   });
 });
@@ -470,20 +621,18 @@ describe('classifyStatementDelta', () => {
     });
   });
 
-  it('a repeat or near-repeat of the author’s own earlier text is no meaningful change', () => {
+  it('only an exact repeat of the author’s own earlier words is no meaningful change', () => {
     const { world, state } = start();
     const original = 'Nadulas ako sa hagdan, masakit paa ko at kailangan ko ng tulong';
     let s = addReport(state, world.as(ALEX), { text: original }).state;
     const firstId = s.reports[0]!.id;
 
     const cases: [text: string, duplicate: boolean][] = [
+      // Case, spacing and punctuation are ignored; the words and their order are not.
       ['  nadulas ako sa hagdan,  MASAKIT paa ko at kailangan ko ng tulong!! ', true],
-      ['Masakit paa ko, kailangan ko ng tulong', true],
-      // 11 of 12 distinct tokens are in the original: 0.92 >= 0.9
-      ['nadulas ako sa hagdan masakit paa ko at kailangan ko ng tulong po', true],
-      // 4 of 6: 0.67 < 0.9
-      ['kailangan ko ng tulong, madilim na', false],
-      // Fewer than three distinct tokens: only an exact repeat would count.
+      ['Masakit paa ko, kailangan ko ng tulong', false],
+      ['nadulas ako sa hagdan masakit paa ko at kailangan ko ng tulong po', false],
+      ['kailangan ko ng tulong, masakit paa ko at nadulas ako sa hagdan', false],
       ['tulong', false],
     ];
     for (const [text, duplicate] of cases) {
@@ -499,10 +648,27 @@ describe('classifyStatementDelta', () => {
     // Somebody else saying the same words is not a duplicate of the reporter's statement.
     s = addObservation(s, world.as(MIKA), { text: original }).state;
     expect(lastDelta(s)).toMatchObject({ overall: 'not_assessed', duplicateOfReportId: null });
-    // An exact repeat of a short statement matches.
     s = addObservation(s, world.as(MIKA), { text: 'On my way' }).state;
     s = addObservation(s, world.as(MIKA), { text: 'on my way.' }).state;
     expect(lastDelta(s)).toMatchObject({ overall: 'no_meaningful_change', duplicateOfReportId: s.reports.at(-2)?.id });
+  });
+
+  it.each([
+    ['a dropped negation', 'I am not hurt and the door is stuck', 'I am hurt'],
+    ['a subset with the opposite meaning', 'The fire is spreading, we cannot get out', 'The fire is out'],
+    ['a changed number', 'We are five people here at the back of the house', 'We are two people here at the back of the house'],
+    ['swapped roles', 'Mika has the keys, not Noah', 'Noah has the keys, not Mika'],
+  ])('%s is not a duplicate', (_label, first, second) => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: first }).state;
+    s = addReport(s, world.as(ALEX), { text: second }).state;
+    expect(lastDelta(s)).toEqual({
+      reportId: s.reports[1]!.id,
+      overall: 'not_assessed',
+      fields: [],
+      needsVerification: false,
+      duplicateOfReportId: null,
+    });
   });
 
   it('gives the same deltas for any arrival order of the same events', () => {
@@ -517,8 +683,7 @@ describe('classifyStatementDelta', () => {
     s = confirmClaim(s, world.as(ALEX), { field: 'building', value: 'Building B' }).state;
     s = addObservation(s, world.as(MIKA), { text: 'Looks like Building C to me.' }).state;
 
-    const deltas = (x: IncidentState) => x.reports.map((r) => classifyStatementDelta(x, r.id));
-    const expected = deltas(s);
+    const expected = allDeltas(s);
     expect(expected.map((d) => d?.overall)).toEqual([
       'new_information',
       'confirmation',
@@ -529,14 +694,8 @@ describe('classifyStatementDelta', () => {
       'no_meaningful_change',
       'possible_contradiction',
     ]);
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const replayed = replay(s.incidentId, shuffled(s.events, seed));
-      expect(replayed).toEqual(s);
-      expect(deltas(replayed)).toEqual(expected);
-    }
-    // A restart: rebuild from serialized events only.
-    const restored = replay(s.incidentId, JSON.parse(JSON.stringify(s.events)) as DomainEvent[]);
-    expect(deltas(restored)).toEqual(expected);
+    expect(s.contradictions.length).toBeGreaterThan(0);
+    expectDeterministic(s, [1, 2, 3, 4, 5, 6, 7, 8]);
     // Classifying is read-only.
     expect(replay(s.incidentId, s.events)).toEqual(s);
   });

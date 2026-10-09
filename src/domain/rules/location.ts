@@ -197,11 +197,11 @@ export function extractBuilding(text: string): LocationMatch | null {
 }
 
 /**
- * A text that says the person moved from one floor to another.
+ * A text in which the author says that they themselves moved from one floor to another.
  *
- * `to` is where the text says the person is now; `from` is where they were. Either side may be an
- * elided ordinal ("moved up to the 3rd floor from the 2nd"), in which case its span covers only
- * the ordinal.
+ * `to` is where the text says the author is now; `from` is where they were. One side may be an
+ * elided English ordinal ("I moved up to the 3rd floor from the 2nd"), in which case its span
+ * covers only the ordinal.
  */
 export interface FloorTransition {
   from: FloorMatch;
@@ -213,8 +213,8 @@ const ELIDED_WORD = Object.keys(ENGLISH_WORDS)
   .join('|');
 
 /**
- * An English ordinal with the word "floor" left out. Only read directly after "from/to/on the" and
- * only when the clause ends there (or "to" follows), so "wait a second" is never a floor.
+ * An English ordinal with the word "floor" left out. Only read directly after a preposition and
+ * "the", and only when the clause ends there (or "to" follows), so "wait a second" is never a floor.
  */
 const ELIDED_FLOOR = new RegExp(
   `\\b(?:from|to|onto|on|at)\\s+the\\s+(?:(${ELIDED_WORD})|(\\d{1,3})(?:st|nd|rd|th))\\b(?=\\s*(?:[.,;!]|$)|\\s+to\\b)`,
@@ -237,103 +237,196 @@ function elidedFloors(text: string): FloorMatch[] {
   return out;
 }
 
-/** Where the person was. Tested against the text that ends right before a mention. */
-const ORIGIN_BEFORE =
-  /(?:\bfrom|\bleft|\b(?:was|were)\s+(?:still\s+)?(?:on|at|in)|\bmula(?:\s+sa)?|\bgaling(?:\s+(?:ako|kami|po|na))*(?:\s+(?:sa|ng))?|\b(?:kanina|dati)(?:\s+(?:ako|kami|po|ay))*\s+(?:nasa|sa))\s+(?:the\s+)?$/i;
-
-/** "now I'm on the ...", "ngayon nasa ...", "nandito na ako sa ...": states the present location outright. */
-const DESTINATION_STATED_BEFORE =
-  /(?:\b(?:now|ngayon)(?:\s+(?:i['’]?m|i\s+am|we['’]?re|we\s+are|ako|kami|ay|po))*(?:\s+(?:on|at|in|nasa|sa))?|\b(?:nandito|andito|narito)\s+na\s+(?:po\s+)?(?:ako|kami)\s+sa)\s+(?:the\s+)?$/i;
-
-/** "nasa <floor> na ako": the Tagalog "already here" marker that follows the mention. */
-const NASA_BEFORE = /\bnasa\s+$/i;
-const NA_AFTER = /^\s+na(?:\s+(?:po\s+)?(?:ako|kami|siya|sila)\b|\s*(?:[.,;!]|$))/i;
-/** "... on the second floor now" */
-const AT_BEFORE = /\b(?:on|at|in)\s+(?:the\s+)?$/i;
-const NOW_AFTER = /^\s+(?:right\s+)?now\b/i;
-
-const MOVED_VERB_TL = 'lumipat|umakyat|bumaba|pumunta|nagpunta|nakaakyat|nakababa|nakalipat';
-
-/** "to the ...", "papunta sa ...", "umakyat ako sa ...": a destination only if a completed movement is stated. */
-const DESTINATION_DIRECTION_BEFORE = new RegExp(
-  `(?:\\b(?:to|onto)|\\bpapunta(?:ng)?(?:\\s+sa)?|\\bpatungo(?:ng)?(?:\\s+sa)?|\\b(?:${MOVED_VERB_TL})(?:\\s+(?:na|ako|kami|po|siya))*\\s+sa)\\s+(?:the\\s+)?$`,
-  'i',
-);
-
 /**
- * Words that say the movement happened. Future and in-progress Tagalog forms ("pupunta",
- * "umaakyat") and bare English infinitives ("move", "go") are deliberately absent.
+ * The transition rule is a whitelist. The two floor mentions are replaced by placeholders and the
+ * text must then contain one of a few complete first-person constructions, with nothing between
+ * the subject, the movement word and the two floors except what the construction allows. Anything
+ * else is not a transition: another subject (the fire, the water, he, they, my son), an object
+ * ("I moved the boxes from ..."), an attempt or intention ("tried", "almost", "going", "gusto"),
+ * reported speech, a question, or a reversal afterwards ("and came back").
  */
-const MOVEMENT_CUE = new RegExp(
-  `\\b(?:moved|went|gone|came|going|climbed|transferred|relocated|now|${MOVED_VERB_TL})\\b`,
-  'gi',
-);
+const SLOT = '\u0001';
+/** A floor placeholder with its optional article; the capture is the mention's position, 0 or 1. */
+const F = `(?:the\\s+)?${SLOT}([01])`;
 
-/** Negated, interrupted ("was going"), hypothetical or future movement is not a movement. */
-const CUE_BLOCKED_BEFORE =
-  /(?:\bnot|n['’]t|\bnever|\bhindi|\bdi|\bwala(?:ng)?|\bwas|\bwere|\bwill|\bwould|\bif|\bkung)\s+(?:\S+\s+){0,2}$/i;
+/** "I", "we", "I've", "we have", with only these adverbs allowed before the verb. */
+const EN_SUBJECT = "(?:i|we)(?:'ve|\\s+have)?(?:\\s+(?:just|already|then|also|now))*";
+/** Completed movement only. No "going", no "moving", no bare infinitive, and no transitive "transferred". */
+const EN_MOVED = '(?:moved|went|gone|came|climbed|walked|ran|relocated)(?:\\s+(?:up|down|over|upstairs|downstairs))?';
+const EN_AM = "(?:i'?m|i\\s+am|we'?re|we\\s+are)";
 
-const NEGATION_NEAR = /(?:\bnot|n['’]t|\bnever|\bhindi|\bwala(?:ng)?)\s+(?:\S+\s+){0,3}$/i;
+const TL_PRONOUN = '(?:ako|kami|tayo)';
+const TL_ENCLITIC = '(?:\\s+(?:na|po|nga|rin|din|lang))*';
+/** Completed-aspect forms only: "pupunta" (will go) and "umaakyat" (is climbing) are absent. */
+const TL_MOVED = '(?:lumipat|umakyat|bumaba|pumunta|nagpunta|nakaakyat|nakababa|nakalipat)';
+const TL_JOIN = '\\s*[,.;]?\\s*(?:(?:at|pero|tapos)\\s+)?';
 
-type TransitionRole = 'origin' | 'stated' | 'direction' | 'none' | 'ambiguous';
-
-function transitionRole(text: string, match: FloorMatch): TransitionRole {
-  const before = text.slice(0, match.span.start);
-  const after = text.slice(match.span.end);
-  const origin = ORIGIN_BEFORE.test(before);
-  const stated =
-    DESTINATION_STATED_BEFORE.test(before) ||
-    (NASA_BEFORE.test(before) && NA_AFTER.test(after)) ||
-    (AT_BEFORE.test(before) && NOW_AFTER.test(after));
-  const direction = DESTINATION_DIRECTION_BEFORE.test(before);
-  if (origin && (stated || direction)) return 'ambiguous';
-  if (origin) return 'origin';
-  if (stated) return 'stated';
-  if (direction) return 'direction';
-  return 'none';
+interface TransitionPattern {
+  regex: RegExp;
+  /** Which capture is the origin; the other is the destination. */
+  originCapture: 1 | 2;
+  /** An elided ordinal is allowed on these sides. */
+  elided: 'either' | 'destination' | 'none';
 }
 
-/** True when the last movement word before `index` is there and is not negated or hypothetical. */
-function movementStatedBefore(text: string, index: number): boolean {
-  const head = text.slice(0, index);
-  MOVEMENT_CUE.lastIndex = 0;
-  let lastCue = -1;
-  let m: RegExpExecArray | null;
-  while ((m = MOVEMENT_CUE.exec(head)) !== null) lastCue = m.index;
-  if (lastCue < 0) return false;
-  return !CUE_BLOCKED_BEFORE.test(head.slice(0, lastCue));
+const TRANSITION_PATTERNS: readonly TransitionPattern[] = [
+  // "I moved from the first floor to the second floor"
+  {
+    regex: new RegExp(`\\b${EN_SUBJECT}\\s+${EN_MOVED}\\s+from\\s+${F}\\s+(?:(?:up|down)\\s+)?to\\s+${F}`),
+    originCapture: 1,
+    elided: 'either',
+  },
+  // "I moved up to the 3rd floor from the 2nd floor"
+  {
+    regex: new RegExp(`\\b${EN_SUBJECT}\\s+${EN_MOVED}\\s+to\\s+${F}\\s+from\\s+${F}`),
+    originCapture: 2,
+    elided: 'either',
+  },
+  // "I was on the first floor, now I'm on the second floor": both clauses are first person.
+  {
+    regex: new RegExp(
+      `\\b(?:i|we)\\s+(?:was|were)\\s+(?:still\\s+)?(?:on|at|in)\\s+${F}\\s*[,.;]?\\s*(?:(?:and|but|then)\\s+)?(?:(?:right\\s+)?now\\s*,?\\s+)?${EN_AM}\\s+(?:now\\s+)?(?:on|at|in)\\s+${F}`,
+    ),
+    originCapture: 1,
+    elided: 'destination',
+  },
+  // "I was on the first floor then went to the second floor"
+  {
+    regex: new RegExp(
+      `\\b(?:i|we)\\s+(?:was|were)\\s+(?:still\\s+)?(?:on|at|in)\\s+${F}\\s*,?\\s*(?:and\\s+|but\\s+)?(?:then\\s+)?(?:(?:i|we)\\s+)?(?:then\\s+)?${EN_MOVED}\\s+to\\s+${F}`,
+    ),
+    originCapture: 1,
+    elided: 'destination',
+  },
+  // "lumipat ako mula first floor papunta sa second floor"
+  {
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])${TL_MOVED}${TL_ENCLITIC}\\s+${TL_PRONOUN}${TL_ENCLITIC}\\s+(?:mula|galing)\\s+(?:sa\\s+)?${F}\\s+(?:papunta|patungo)(?:ng)?\\s+(?:sa\\s+)?${F}`,
+      'u',
+    ),
+    originCapture: 1,
+    elided: 'none',
+  },
+  // "umakyat ako sa 3rd floor galing 2nd floor"
+  {
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])${TL_MOVED}${TL_ENCLITIC}\\s+${TL_PRONOUN}${TL_ENCLITIC}\\s+sa\\s+${F}\\s+(?:mula|galing)\\s+(?:sa\\s+)?${F}`,
+      'u',
+    ),
+    originCapture: 2,
+    elided: 'none',
+  },
+  // "galing ako sa 1st floor, nasa 2nd floor na ako": the destination clause carries the pronoun.
+  {
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])galing(?:${TL_ENCLITIC}\\s+${TL_PRONOUN})?${TL_ENCLITIC}\\s+(?:sa|ng)\\s+${F}${TL_JOIN}(?:ngayon\\s+(?:ay\\s+)?)?nasa\\s+${F}\\s+na${TL_ENCLITIC}\\s+${TL_PRONOUN}(?![\\p{L}\\p{N}])`,
+      'u',
+    ),
+    originCapture: 1,
+    elided: 'none',
+  },
+  // "kanina nasa first floor ako, ngayon nasa second floor na ako"
+  {
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])kanina(?:ng)?(?:${TL_ENCLITIC}\\s+${TL_PRONOUN})?\\s+nasa\\s+${F}(?:\\s+${TL_PRONOUN})?${TL_JOIN}ngayon\\s+(?:ay\\s+)?nasa\\s+${F}\\s+na${TL_ENCLITIC}\\s+${TL_PRONOUN}(?![\\p{L}\\p{N}])`,
+      'u',
+    ),
+    originCapture: 1,
+    elided: 'none',
+  },
+];
+
+/**
+ * Words earlier in the same sentence that make the construction something other than a plain
+ * statement: reported speech, a question, a condition, a wish, an attempt, a negation.
+ */
+const BLOCKED_BEFORE =
+  /(?:^|[^\p{L}\p{N}])(?:said|say|says|saying|told|tell|heard|hear|true|if|whether|when|while|unless|until|before|think|thinks|thought|maybe|perhaps|should|would|could|can|cannot|may|might|must|tried|try|trying|almost|nearly|want|wants|wanted|need|needs|needed|will|shall|not|never|wish|hope|plan|planned|supposed|asked|ask|gusto|gustong|dapat|pwede|pwedeng|puwede|puwedeng|sana|kung|kapag|pag|bago|sabi|daw|raw|hindi|di|wala|walang|baka|siguro|balak|sinubukan|muntik|muntikan|ba|bang)(?![\p{L}\p{N}])|n't/u;
+/** A sentence that opens with an auxiliary is a question whether or not it ends with "?". */
+const QUESTION_OPENING = /^\s*(?:is|are|was|were|did|do|does|have|has|had|am)(?![\p{L}\p{N}])/u;
+/** After the destination, in the same sentence: a question, hearsay or a wish. */
+const BLOCKED_AFTER_IN_SENTENCE = /\?|(?:^|[^\p{L}\p{N}])(?:daw|raw|sana|ba)(?![\p{L}\p{N}])/u;
+/** Anywhere after the destination: the person went back, so the destination is not where they are. */
+const REVERSAL_AFTER = /(?:^|[^\p{L}\p{N}])(?:back|return|returned|returning|bumalik|balik|bumabalik|nakabalik)(?![\p{L}\p{N}])/u;
+
+const SENTENCE_END = /[.!?;\n]/;
+
+/** The floor mentions a transition may be read from: the full ones, plus one elided ordinal beside a single full one. */
+function transitionMentions(text: string): { mentions: FloorMatch[]; elided: Set<FloorMatch> } {
+  const full = extractFloors(text);
+  const extra = full.length === 1 ? elidedFloors(text) : [];
+  const mentions = [...full, ...extra].sort((a, b) => a.span.start - b.span.start);
+  return { mentions, elided: new Set(extra) };
 }
 
 /**
- * The floor the text says the person moved from and the floor it says they are on now, or null.
+ * The floor the author says they moved from and the floor they say they are on now, or null.
  *
- * Conservative by construction. It answers only when the text has exactly two floor mentions (one
- * may be an elided English ordinal), on different levels, one marked as the origin (from ...,
- * was on ..., mula ..., galing ... sa ...) and the other as the destination. A destination marked only
- * by direction ("to", "papunta sa") also needs a completed-movement word ("moved", "went",
- * "lumipat", "umakyat" ...) that is not negated, interrupted or hypothetical. Anything else,
- * including "between the second floor and the third floor", "I was going from ... to ..." and a
- * question, returns null and the caller keeps treating the floor as unstated.
+ * A wrong floor is worse than no floor, so this answers only when all of the following hold:
+ *
+ * - the text has exactly two floor mentions on different levels (one may be an elided English
+ *   ordinal, and then both must be in the same sentence);
+ * - they sit in one of the first-person constructions above: English "I / we" governing a
+ *   completed movement verb or both location clauses; Tagalog "ako / kami / tayo" directly after
+ *   the verb, or closing the destination clause ("nasa 2nd floor na ako");
+ * - nothing earlier in the sentence makes it reported, asked, conditional, wished, attempted or
+ *   negated, and nothing afterwards says the person went back.
+ *
+ * Everything else returns null: other subjects, objects, "I'm going from ... to ...", "between the
+ * second floor and the third floor", three or more mentions. The caller then treats the floor as
+ * unstated.
  */
 export function extractFloorTransition(text: string): FloorTransition | null {
-  const full = extractFloors(text);
-  const mentions = full.length === 1 ? [...full, ...elidedFloors(text)] : full;
+  const { mentions, elided } = transitionMentions(text);
   if (mentions.length !== 2) return null;
-  mentions.sort((a, b) => a.span.start - b.span.start);
   const [first, second] = mentions;
   if (!first || !second || first.level === second.level) return null;
   if (first.span.end > second.span.start) return null;
-  if (mentions.some((m) => NEGATION_NEAR.test(text.slice(0, m.span.start)))) return null;
-  // A question about moving is not a statement that someone moved.
-  if (/^[^.!\n]*\?/.test(text.slice(second.span.end))) return null;
+  const between = text.slice(first.span.end, second.span.start);
+  if (elided.size > 0 && SENTENCE_END.test(between)) return null;
 
-  const roles = [transitionRole(text, first), transitionRole(text, second)];
-  const originIndex = roles.indexOf('origin');
-  if (originIndex < 0 || roles.lastIndexOf('origin') !== originIndex) return null;
-  const from = originIndex === 0 ? first : second;
-  const to = originIndex === 0 ? second : first;
-  const toRole = roles[1 - originIndex];
-  if (toRole === 'stated') return { from, to };
-  if (toRole === 'direction' && movementStatedBefore(text, to.span.start)) return { from, to };
+  const skeleton = (
+    text.slice(0, first.span.start) +
+    `${SLOT}0` +
+    between +
+    `${SLOT}1` +
+    text.slice(second.span.end)
+  )
+    .replace(/[‘’]/g, "'")
+    .toLowerCase();
+
+  for (const pattern of TRANSITION_PATTERNS) {
+    const m = pattern.regex.exec(skeleton);
+    if (!m) continue;
+    const origin = m[pattern.originCapture] === '0' ? first : second;
+    const destination = origin === first ? second : first;
+    if (elided.has(origin) && pattern.elided !== 'either') continue;
+    if (elided.has(destination) && pattern.elided === 'none') continue;
+
+    const before = skeleton.slice(0, m.index);
+    const sentenceStart = Math.max(...['.', '!', '?', ';', '\n'].map((c) => before.lastIndexOf(c))) + 1;
+    const lead = before.slice(sentenceStart);
+    if (BLOCKED_BEFORE.test(lead) || QUESTION_OPENING.test(lead)) return null;
+
+    const after = skeleton.slice(m.index + m[0].length);
+    // Up to the end of the sentence, keeping a question mark so it can be seen.
+    const sentenceRest = after.split(/[.!;\n]/)[0] ?? '';
+    if (BLOCKED_AFTER_IN_SENTENCE.test(sentenceRest) || REVERSAL_AFTER.test(after)) return null;
+    return { from: origin, to: destination };
+  }
   return null;
+}
+
+/**
+ * The floor a statement puts its author on, for use as a claim: the destination of a transition,
+ * otherwise the single floor the text names. Null when the text names none, names two, or names
+ * one floor next to a bare ordinal on another level ("I was at the 3rd. Now I am on the 2nd
+ * floor"), where the single full mention may be the place the person left.
+ */
+export function extractStatedFloor(text: string): FloorMatch | null {
+  const transition = extractFloorTransition(text);
+  if (transition) return transition.to;
+  const floor = extractFloor(text);
+  if (!floor) return null;
+  return elidedFloors(text).some((e) => e.level !== floor.level) ? null : floor;
 }

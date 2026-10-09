@@ -1,7 +1,7 @@
 import { CLAIM_FIELDS, isHumanRevision, type ClaimField, type ClaimRevision } from '../claims';
 import { normalizeValue } from '../primitives';
 import type { IncidentState, OriginalReport } from '../state';
-import { explainedByMove, movedFromValue } from './conflicts';
+import { disputedRevisionIds, explainedByMove, movedFromValue } from './conflicts';
 
 /**
  * Deterministic statement delta: how one stored statement relates to what was already known when
@@ -68,37 +68,24 @@ const CLASS_PRIORITY: readonly FieldDeltaClass[] = [
   'no_meaningful_change',
 ];
 
-/**
- * Share of the new statement's distinct tokens that must also occur in an earlier statement by
- * the same author for it to count as a repeat. Fixed, and applied to token sets so it does not
- * depend on the language.
- */
-export const DUPLICATE_TOKEN_CONTAINMENT = 0.9;
-/** Containment is not tested on fewer distinct tokens than this; only an exact repeat matches then. */
-export const DUPLICATE_MIN_TOKENS = 3;
-
 /** Lower-cased runs of letters and digits in any script. */
-function tokens(text: string): string[] {
-  return text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+function tokens(text: string): string {
+  return (text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(' ');
 }
 
+/**
+ * The nearest earlier statement by the same author with exactly the same words in the same order,
+ * ignoring case, spacing and punctuation. Nothing looser: dropping "not", changing a number or
+ * swapping two names changes the meaning, and a word-overlap measure cannot see that.
+ */
 function findDuplicate(state: IncidentState, report: OriginalReport): string | null {
   const index = state.reports.indexOf(report);
   const own = tokens(report.text);
-  if (own.length === 0) return null;
-  const ownKey = own.join(' ');
-  const ownSet = new Set(own);
-  // Nearest earlier statement by the same author first.
+  if (own === '') return null;
   for (let i = index - 1; i >= 0; i -= 1) {
     const earlier = state.reports[i];
     if (!earlier || earlier.author.deviceId !== report.author.deviceId) continue;
-    const other = tokens(earlier.text);
-    if (other.join(' ') === ownKey) return earlier.id;
-    if (ownSet.size < DUPLICATE_MIN_TOKENS) continue;
-    const otherSet = new Set(other);
-    let shared = 0;
-    for (const token of ownSet) if (otherSet.has(token)) shared += 1;
-    if (shared / ownSet.size >= DUPLICATE_TOKEN_CONTAINMENT) return earlier.id;
+    if (tokens(earlier.text) === own) return earlier.id;
   }
   return null;
 }
@@ -116,7 +103,6 @@ function fieldDelta(
   against: ClaimRevision | null,
   cls: FieldDeltaClass,
   reason: FieldDeltaReason,
-  needsVerification = cls === 'possible_contradiction',
 ): FieldDelta {
   return {
     field: revision.field,
@@ -126,7 +112,8 @@ function fieldDelta(
     value: revision.value,
     previousValue: against?.value ?? null,
     reason,
-    needsVerification,
+    // Filled in by classifyStatementDelta from the incident's contradictions.
+    needsVerification: false,
   };
 }
 
@@ -143,26 +130,18 @@ function fieldDelta(
  *    leading statement by somebody else (the reporter's latest, otherwise the latest) when that
  *    also differs. A responder who changes their mind to something the reporter did not say is
  *    still disagreeing with the reporter, so it is `differs_from_other`, not a quiet correction.
- * 4. The same author's latest earlier statement: `moved` or `self_correction`. The reporter's own
- *    account outranks other participants' statements, so the reporter's change of value is
- *    always a correction here.
+ * 4. The same author's latest earlier statement: a correction. The reason is `moved` when the
+ *    statement is an explicit move whose stated origin is that earlier value, otherwise
+ *    `self_correction` (including a move whose origin is not what the author had said).
  * 5. With no earlier statement by this author, the leading statement by somebody else:
  *    `second_source` or `differs_from_other`.
  * 6. Nothing earlier: `first_value`.
  *
- * An explicit move (`moveOrigin` is the floor the statement's own text says the person came from)
- * mirrors `detectFieldConflicts`: somebody else's earlier statement naming that origin is explained
- * by the move and is not a disagreement. So in rules 3 and 5 such a statement gives `moved`
- * (a correction when the author had an earlier value, otherwise new information) instead of
- * `differs_from_other`. A move by the reporter stays `correction` / `moved` and needs verification
- * only when some other author's latest earlier statement names a floor that is neither the origin
- * nor the destination, which is the case the conflict rule does not explain away.
+ * Rules 3 and 5 use the conflict rule's own test (`explainedByMove`): somebody else's earlier
+ * statement of where the author was before an explicit move is not a disagreement. In rule 5 such
+ * a statement gives `new_information` / `moved`.
  */
-function classifyRevision(
-  revision: ClaimRevision,
-  earlier: readonly ClaimRevision[],
-  moveOrigin: string | null,
-): FieldDelta {
+function classifyRevision(state: IncidentState, revision: ClaimRevision, earlier: readonly ClaimRevision[]): FieldDelta {
   const author = revision.source.actor.deviceId;
 
   const confirmed = last(earlier.filter((r) => r.authority === 'confirmation'));
@@ -178,22 +157,17 @@ function classifyRevision(
   const own = last(earlier.filter((r) => r.source.actor.deviceId === author));
   const others = earlier.filter((r) => r.source.actor.deviceId !== author);
   const other = last(others.filter((r) => r.source.role === 'reporter')) ?? last(others);
-
-  const moved = moveOrigin !== null;
+  const sequence = [...earlier, revision];
   const disagrees = (r: ClaimRevision): boolean =>
-    !sameValue(revision, r) && !explainedByMove(r, true, revision, moveOrigin);
+    !sameValue(revision, r) && !explainedByMove(state, sequence, revision, r);
 
   if (own) {
     if (sameValue(revision, own)) return fieldDelta(revision, own, 'no_meaningful_change', 'restated');
     if (revision.source.role !== 'reporter' && other && disagrees(other)) {
       return fieldDelta(revision, other, 'possible_contradiction', 'differs_from_other');
     }
-    if (!moved) return fieldDelta(revision, own, 'correction', 'self_correction');
-    // Each other author counts by their latest statement only, as in detectFieldConflicts.
-    const latestByOther = new Map<string, ClaimRevision>();
-    for (const r of others) latestByOther.set(r.source.actor.deviceId, r);
-    const unexplained = [...latestByOther.values()].some(disagrees);
-    return fieldDelta(revision, own, 'correction', 'moved', unexplained);
+    const movedFromOwn = movedFromValue(state, revision) === normalizeValue(own.value);
+    return fieldDelta(revision, own, 'correction', movedFromOwn ? 'moved' : 'self_correction');
   }
   if (other) {
     if (sameValue(revision, other)) return fieldDelta(revision, other, 'confirmation', 'second_source');
@@ -212,9 +186,12 @@ function classifyRevision(
  *   incident-creation revisions and AI proposals are neither classified nor compared against.
  * - `overall` is the highest-priority field class: possible_contradiction > correction >
  *   new_information > confirmation > no_meaningful_change.
- * - A statement that produced no revision is `no_meaningful_change` when it repeats an earlier
- *   statement by the same author (equal token sequence, or at least DUPLICATE_TOKEN_CONTAINMENT of
- *   its distinct tokens contained in the earlier one), otherwise `not_assessed`.
+ * - `needsVerification` on a field is read from the incident as it stands, not predicted: it is
+ *   true while that revision is in dispute (`disputedRevisionIds`), which means it is in an open
+ *   contradiction or the conflict rule currently finds it disagreeing with another statement. It
+ *   therefore agrees with what CONFLICT_FLAGGED records, and it clears when the reporter resolves.
+ * - A statement that produced no revision is `no_meaningful_change` when its words are exactly
+ *   those of an earlier statement by the same author (same token sequence), otherwise `not_assessed`.
  * - The result is a pure function of the replayed state, so every device that holds the same
  *   events computes the same delta.
  */
@@ -226,6 +203,7 @@ export function classifyStatementDelta(state: IncidentState, reportId: string): 
   const fields: FieldDelta[] = [];
   for (const field of CLAIM_FIELDS) {
     const revisions = state.claims[field].revisions;
+    let disputed: Set<string> | undefined;
     revisions.forEach((revision, index) => {
       if (revision.source.eventId !== report.eventId || !isHumanRevision(revision)) return;
       const earlier = revisions
@@ -233,7 +211,9 @@ export function classifyStatementDelta(state: IncidentState, reportId: string): 
         .filter(
           (r) => isHumanRevision(r) && r.source.eventId !== report.eventId && r.source.eventId !== createdEventId,
         );
-      fields.push(classifyRevision(revision, earlier, movedFromValue(state, revision)));
+      const delta = classifyRevision(state, revision, earlier);
+      disputed ??= disputedRevisionIds(state, field);
+      fields.push({ ...delta, needsVerification: disputed.has(revision.id) });
     });
   }
 
