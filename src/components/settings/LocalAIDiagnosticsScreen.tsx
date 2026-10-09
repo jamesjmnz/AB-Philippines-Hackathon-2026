@@ -1,14 +1,28 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Share, Text, View } from 'react-native';
 
 import { PROPOSAL_FIELDS, type AIResult, type IncidentProposal, type OutputProbeLine } from '@/ai';
+import type { EvaluationOutcome } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Banner, Button, Card, ChoiceChip, GroupedList, MicroPill, Screen, SectionHeader, TextField } from '@/ui';
 
 import { routes } from '../nav';
 import { FIELD_LABELS, presentAIState } from '../present';
 import { CapabilityRows } from './CapabilityRows';
+
+const EVAL_SPLITS = [
+  { id: 'development', label: 'Development' },
+  { id: 'validation', label: 'Validation' },
+  { id: 'held_out', label: 'Held-out' },
+] as const;
+
+const EVAL_VARIANTS = [
+  { id: 'staged', label: 'Staged' },
+  { id: 'single', label: 'Single call' },
+  { id: 'quotes', label: 'Extract: phrases' },
+  { id: 'nested', label: 'Extract: value + evidence' },
+] as const;
 
 /**
  * Diagnostics for the on-device provider, through the service contract only. Extraction runs either
@@ -25,6 +39,11 @@ export function LocalAIDiagnosticsScreen() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<AIResult<IncidentProposal> | null>(null);
   const [probe, setProbe] = useState<OutputProbeLine[] | null>(null);
+  const [split, setSplit] = useState<(typeof EVAL_SPLITS)[number]['id']>('development');
+  const [variant, setVariant] = useState<(typeof EVAL_VARIANTS)[number]['id']>('staged');
+  const [conditions, setConditions] = useState('');
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [outcome, setOutcome] = useState<EvaluationOutcome | null>(null);
 
   const stored = snapshot.incidents.flatMap((view) =>
     view.originalReport === null ? [] : view.state.reports.filter((r) => r.kind === 'report').map((r) => ({ key: `${view.id}:${r.id}`, incidentId: view.id, reportId: r.id, label: view.shortId })),
@@ -56,6 +75,25 @@ export function LocalAIDiagnosticsScreen() {
     setProbe(null);
     setProbe(await actions.probeLocalAI());
     setRunning(false);
+  };
+
+  const share = async (fileUri: string) => {
+    try {
+      await Share.share({ url: fileUri });
+    } catch {
+      // Closing the share sheet is not an error; the file stays where it is for another try.
+    }
+  };
+
+  const runEvaluation = async () => {
+    setRunning(true);
+    setOutcome(null);
+    setProgress({ done: 0, total: 0 });
+    const finished = await actions.runEvaluation({ split, variant, conditions }, (done, total) => setProgress({ done, total }));
+    setOutcome(finished);
+    setProgress(null);
+    setRunning(false);
+    if (finished.ok) await share(finished.fileUri);
   };
 
   const simulated = result?.meta.source === 'simulated';
@@ -139,6 +177,54 @@ export function LocalAIDiagnosticsScreen() {
                   </View>
                 ))
               )}
+            </Card>
+          ) : null}
+        </View>
+      )}
+
+      {demo ? null : (
+        <View className="gap-2">
+          <SectionHeader title="Evaluation run" />
+          <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">
+            Runs built-in synthetic scenarios through the on-device pipeline, in memory, and exports the outputs and timings as one file for scoring on the Mac. It creates no request and sends nothing. Answers are not on this phone.
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {EVAL_SPLITS.map((o) => (
+              <ChoiceChip key={o.id} label={o.label} selected={split === o.id} onPress={() => setSplit(o.id)} />
+            ))}
+          </View>
+          <View className="flex-row flex-wrap gap-2">
+            {EVAL_VARIANTS.map((o) => (
+              <ChoiceChip key={o.id} label={o.label} selected={variant === o.id} onPress={() => setVariant(o.id)} />
+            ))}
+          </View>
+          <TextField testID="diag-eval-conditions" label="Test conditions" placeholder="Airplane mode on, phone language English…" value={conditions} onChangeText={setConditions} maxLength={300} />
+          <Button
+            testID="diag-eval-run"
+            label={progress ? (progress.total > 0 ? `Running ${progress.done} of ${progress.total}…` : 'Starting…') : 'Run and export'}
+            icon="auto_awesome"
+            disabled={running || !textReady}
+            onPress={() => void runEvaluation()}
+          />
+          {outcome ? (
+            <Card className="gap-2">
+              <Text testID="diag-eval-outcome" accessibilityLiveRegion="polite" className="text-[14px] font-semibold text-ink">
+                {outcome.ok
+                  ? `${outcome.scenarios} scenarios · ${outcome.calls} model calls · ${outcome.failedCalls} failed`
+                  : outcome.reason === 'busy'
+                    ? 'A run is already in progress.'
+                    : outcome.reason === 'export_failed'
+                      ? 'The run finished but the file could not be written.'
+                      : 'Evaluation needs the on-device provider on a physical iPhone.'}
+              </Text>
+              {outcome.ok ? (
+                <>
+                  <Text selectable className="text-[12.5px] text-gray-1">
+                    {outcome.fileName}
+                  </Text>
+                  <Button testID="diag-eval-share" label="Share the result file" size="sm" variant="secondary" onPress={() => void share(outcome.fileUri)} />
+                </>
+              ) : null}
             </Card>
           ) : null}
         </View>

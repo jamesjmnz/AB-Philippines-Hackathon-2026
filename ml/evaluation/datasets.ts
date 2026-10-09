@@ -16,6 +16,8 @@ import {
 export const ML_ROOT = join(__dirname, '..');
 export const DATASET_FILES = ['extraction.json', 'incident_deltas.json', 'contradictions.json', 'adversarial.json'] as const;
 export const FROZEN_PATH = join(ML_ROOT, 'datasets', 'FROZEN.json');
+/** sha256 of each split's inputs.json, bundled with the app so a device run can name the inputs it saw. */
+export const MANIFEST_PATH = join(ML_ROOT, 'fixtures', 'manifest.json');
 
 export const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 export const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'));
@@ -78,6 +80,10 @@ export function verify(): string[] {
       if (!existsSync(path)) problems.push(`missing fixtures/${split}/${file}`);
       else if (readFileSync(path, 'utf8') !== rendered[file === 'inputs.json' ? 'inputs' : 'reference']) problems.push(`fixtures/${split}/${file} is out of date`);
     }
+  }
+  const manifest = existsSync(MANIFEST_PATH) ? (readJson(MANIFEST_PATH) as Record<string, string>) : {};
+  for (const split of SPLITS) {
+    if (existsSync(fixturePath(split, 'inputs.json')) && manifest[split] !== sha256(readFileSync(fixturePath(split, 'inputs.json'), 'utf8'))) problems.push(`fixtures/manifest.json is out of date for ${split}`);
   }
   if (!existsSync(FROZEN_PATH)) return [...problems, 'datasets/FROZEN.json is missing: answers are not frozen'];
   const frozen = readJson(FROZEN_PATH) as Frozen;

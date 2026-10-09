@@ -1,3 +1,4 @@
+import type { Split as EvaluationSplit, Variant as EvaluationVariant } from '@/eval';
 import type { AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, OutputProbeLine, ProposalField, TaskKind, TaskProposal } from '@/ai';
 import type { ClaimField, DisclosureLevel, IncidentState, ProvenanceTag } from '@/domain';
 
@@ -128,6 +129,10 @@ export type RecipientPolicyInput = {
   levels: Record<string, DisclosureLevel | 'off'>;
 };
 
+export type EvaluationOutcome =
+  | { ok: true; fileUri: string; fileName: string; scenarios: number; calls: number; failedCalls: number }
+  | { ok: false; reason: 'unavailable' | 'busy' | 'export_failed' };
+
 export interface PulseActions {
   completeOnboarding(input: { name: string }): Promise<void>;
 
@@ -148,6 +153,12 @@ export interface PulseActions {
   diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>>;
   /** Device probe on a built-in sentence: which output shapes the provider can produce. Empty when there is no real provider. */
   probeLocalAI(): Promise<OutputProbeLine[]>;
+  /**
+   * Diagnostics: runs one split of the synthetic evaluation scenarios through the on-device pipeline, in
+   * memory, and writes the outputs and timings to a file to be shared off the phone for scoring. It
+   * creates no incident and sends nothing. Only where the real provider is loaded on a physical iPhone.
+   */
+  runEvaluation(input: { split: EvaluationSplit; variant: EvaluationVariant; conditions: string }, onProgress?: (done: number, total: number) => void): Promise<EvaluationOutcome>;
   /** Records the proposal in the ledger as AI-proposed claims. */
   attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult>;
   /** A human confirms (optionally editing) one proposed or reported field. */

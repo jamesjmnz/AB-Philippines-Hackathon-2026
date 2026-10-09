@@ -43,34 +43,54 @@ export interface ScenarioWorld {
   as(author: ScenarioInput['statements'][number]['author']): CommandContext;
 }
 
-export function buildScenario(scenario: ScenarioInput): ScenarioWorld {
+/** A scenario being replayed one statement at a time, so a model stage can run between statements. */
+export interface ScenarioSession {
+  state: IncidentState;
+  steps: ScenarioStep[];
+  statementOfEvent: Map<string, string>;
+  as: ScenarioWorld['as'];
+  /** Applies a command result that belongs to `statementId` (a recorded proposal, for example). */
+  apply(statementId: string, result: { state: IncidentState; events: readonly { id: string }[] }): void;
+  /** Adds the statement, its rule conflicts and any confirmation that follows it. */
+  add(statement: ScenarioInput['statements'][number]): ScenarioStep;
+}
+
+export function startScenario(scenario: ScenarioInput): ScenarioSession {
   const clock = createFixedClock(1_760_000_000_000);
   const ids = createSequentialIds(`eval-${scenario.id}`);
   const actorOf = ({ deviceId, userName }: TrustedPeer): Actor => ({ deviceId, userName });
-  const as: ScenarioWorld['as'] = (author) => ({ actor: author === 'reporter' ? REPORTER : actorOf(RESPONDERS[author]), clock, ids });
+  const session: ScenarioSession = {
+    state: createManualSOS({ actor: REPORTER, clock, ids }, { recipients: Object.values(RESPONDERS) }).state,
+    steps: [],
+    statementOfEvent: new Map(),
+    as: (author) => ({ actor: author === 'reporter' ? REPORTER : actorOf(RESPONDERS[author]), clock, ids }),
+    apply(statementId, result) {
+      session.state = result.state;
+      result.events.forEach((e) => session.statementOfEvent.set(e.id, statementId));
+    },
+    add(statement) {
+      const add = statement.author === 'reporter' ? addReport : addObservation;
+      session.apply(statement.id, add(session.state, session.as(statement.author), { text: statement.text }));
+      const reportId = session.state.reports[session.state.reports.length - 1]?.id ?? '';
+      for (const [field, value] of Object.entries(statement.confirms ?? {})) {
+        session.apply(statement.id, confirmClaim(session.state, session.as('reporter'), { field: field as ClaimField, value }));
+      }
+      const step = { statementId: statement.id, reportId, state: session.state };
+      session.steps.push(step);
+      return step;
+    },
+  };
+  return session;
+}
 
-  let state = createManualSOS(as('reporter'), { recipients: Object.values(RESPONDERS) }).state;
-  const steps: ScenarioStep[] = [];
-  const statementOfEvent = new Map<string, string>();
-
-  for (const statement of scenario.statements) {
-    const add = statement.author === 'reporter' ? addReport : addObservation;
-    const added = add(state, as(statement.author), { text: statement.text });
-    state = added.state;
-    added.events.forEach((e) => statementOfEvent.set(e.id, statement.id));
-    const reportId = state.reports[state.reports.length - 1]?.id ?? '';
-    for (const [field, value] of Object.entries(statement.confirms ?? {})) {
-      const confirmed = confirmClaim(state, as('reporter'), { field: field as ClaimField, value });
-      state = confirmed.state;
-      confirmed.events.forEach((e) => statementOfEvent.set(e.id, statement.id));
-    }
-    steps.push({ statementId: statement.id, reportId, state });
-  }
-  return { steps, final: state, statementOfEvent, as };
+export function buildScenario(scenario: ScenarioInput): ScenarioWorld {
+  const session = startScenario(scenario);
+  scenario.statements.forEach((statement) => session.add(statement));
+  return { steps: session.steps, final: session.state, statementOfEvent: session.statementOfEvent, as: session.as };
 }
 
 /** Open contradictions as pairs of statement ids, the form the reference answers use. */
-export function openConflicts(world: ScenarioWorld): ScenarioRecord['conflicts'] {
+export function openConflicts(world: Pick<ScenarioWorld, 'final' | 'statementOfEvent'>): ScenarioRecord['conflicts'] {
   const conflicts: ScenarioRecord['conflicts'] = [];
   for (const c of world.final.contradictions) {
     if (c.status !== 'open') continue;

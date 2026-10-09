@@ -12,8 +12,13 @@ import { CLARIFIABLE_FIELDS, DELTA_CLASSES, FIELDS, FIELD_DELTA_CLASSES, SPLITS 
 export const RUNNERS = ['device', 'mac-baseline', 'mac-simulated'] as const;
 export type Runner = (typeof RUNNERS)[number];
 
-/** rules = deterministic baseline; staged = extraction then per-statement assessment; single = one call per statement. */
-export const VARIANTS = ['rules', 'staged', 'single'] as const;
+/**
+ * rules = deterministic baseline. staged = copy phrases, then a comparison call only when needed.
+ * single = one combined call per statement. quotes / nested = extraction only on the first statement,
+ * with the phrase-only or the value-plus-evidence output shape (the prompt ablation).
+ */
+export const VARIANTS = ['rules', 'staged', 'single', 'quotes', 'nested'] as const;
+export type Variant = (typeof VARIANTS)[number];
 
 export const CALL_STATES = [
   'ready',

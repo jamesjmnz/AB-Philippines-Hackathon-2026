@@ -159,6 +159,29 @@ async function boot(): Promise<PulseCore> {
     () => lazy.ai().createCallstackAppleAI(),
     () => unavailableAI(deviceInfo),
   );
+  const evaluation = attempt<ConstructorParameters<typeof PulseCore>[0]['evaluation']>(
+    () => {
+      const callstack = lazy.ai();
+      return {
+        promptVersion: callstack.promptFingerprint(),
+        packageVersion: callstack.providerPackageVersion,
+        isPhysicalDevice: lazy.device().isDevice,
+        createAI: (variant) =>
+          callstack.createCallstackAppleAI({
+            extraction: variant === 'nested' ? 'nested' : 'quotes',
+            assessment: variant === 'single' ? 'single' : 'staged',
+          }),
+        exportFile: async (name, contents) => {
+          const { File, Paths } = lazy.fileSystem();
+          const file = new File(Paths.cache, name);
+          file.create({ overwrite: true });
+          file.write(contents);
+          return file.uri;
+        },
+      };
+    },
+    () => undefined,
+  );
   const transport = attempt(() => lazy.transport().createNativePeerTransport(), unavailableTransport);
   const crypto = attempt(() => lazy.capsuleCrypto().createNativeCapsuleCrypto(), unavailableCrypto);
 
@@ -179,6 +202,7 @@ async function boot(): Promise<PulseCore> {
     ids,
     deviceInfo,
     readFile,
+    ...(evaluation ? { evaluation } : {}),
   });
 }
 

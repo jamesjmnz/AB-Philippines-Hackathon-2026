@@ -5,6 +5,7 @@ import { SPLITS, type Split } from '../datasets/schema';
 import { runBaseline } from './baseline';
 import {
   FROZEN_PATH,
+  MANIFEST_PATH,
   ML_ROOT,
   fixturePath,
   frozenFiles,
@@ -77,13 +78,16 @@ const [command, ...args] = process.argv.slice(2);
 switch (command) {
   case 'fixtures': {
     const scenarios = loadScenarios();
+    const manifest: Record<string, string> = {};
     for (const split of SPLITS) {
       const rendered = renderFixtures(split, scenarios);
+      manifest[split] = sha256(rendered.inputs);
       mkdirSync(dirname(fixturePath(split, 'inputs.json')), { recursive: true });
       writeFileSync(fixturePath(split, 'inputs.json'), rendered.inputs);
       writeFileSync(fixturePath(split, 'reference.json'), rendered.reference);
       console.log(`${split}: ${scenarios.filter((s) => s.split === split).length} scenarios`);
     }
+    writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
     break;
   }
   case 'freeze': {

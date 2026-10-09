@@ -69,6 +69,7 @@ import type {
   AppMode,
   AppSettings,
   DiscoveryState,
+  EvaluationOutcome,
   FactView,
   IncidentView,
   PairingSession,
@@ -79,6 +80,7 @@ import type {
   RecipientPolicyInput,
   SendFailureCode,
 } from './api';
+import { runSplit, type Variant as EvaluationVariant } from '@/eval';
 import { readJson, writeJson } from './kv';
 import { buildIncidentView, policyFromInput, projectionFacts } from './views';
 
@@ -126,6 +128,19 @@ export interface PulseCoreDeps {
   /** Reads a recorded WAV file. Injected so Jest never loads expo-file-system. */
   readFile?: (uri: string) => Promise<Uint8Array>;
   config?: Partial<CoreConfig>;
+  /**
+   * Evaluation runs against the real on-device provider. Present only where that provider loaded;
+   * the Demo Lab and tests leave it out, so a simulated run can never be exported as a device result.
+   */
+  evaluation?: {
+    promptVersion: string;
+    packageVersion: string;
+    isPhysicalDevice: boolean;
+    /** A provider configured for one evaluation arm. Not queued, cached or shared with the app's own calls. */
+    createAI(variant: EvaluationVariant): LocalAIService;
+    /** Writes the result where the share sheet can read it and returns its URI. */
+    exportFile(name: string, contents: string): Promise<string>;
+  };
   /** Preset profile and pairings. Used by the Demo Lab and tests; LIVE pairs over the transport. */
   seed?: { name?: string; onboarded?: boolean; peers?: readonly PeerRecord[]; settings?: Partial<AppSettings> };
 }
@@ -785,6 +800,42 @@ export class PulseCore implements PulseApp {
     return this.guardAI(() => this.deps.ai.extractIncidentReport({ text: bounded }));
   }
 
+  private evaluating = false;
+
+  /** One split of synthetic scenarios through the on-device pipeline, in memory. Touches no ledger, outbox or radio. */
+  private async runEvaluation(input: Parameters<PulseActions['runEvaluation']>[0], onProgress?: (done: number, total: number) => void): Promise<EvaluationOutcome> {
+    const evaluation = this.deps.evaluation;
+    if (!evaluation) return { ok: false, reason: 'unavailable' };
+    if (this.evaluating) return { ok: false, reason: 'busy' };
+    this.evaluating = true;
+    try {
+      const result = await runSplit({
+        split: input.split,
+        variant: input.variant,
+        ai: evaluation.createAI(input.variant),
+        promptVersion: evaluation.promptVersion,
+        commit: process.env.EXPO_PUBLIC_GIT_SHA ?? 'unrecorded',
+        device: { ...this.deps.deviceInfo, isPhysicalDevice: evaluation.isPhysicalDevice },
+        packageVersion: evaluation.packageVersion,
+        conditions: input.conditions.trim().slice(0, 300),
+        now: () => new Date(this.deps.clock.nowMs()),
+        ...(onProgress ? { onProgress } : {}),
+      });
+      const calls = result.records.flatMap((r) => r.calls);
+      const fileName = `sagip-eval-${input.split}-${input.variant}-${result.header.startedAt.replace(/[:.]/g, '-')}.json`;
+      try {
+        const fileUri = await evaluation.exportFile(fileName, `${JSON.stringify(result, null, 2)}\n`);
+        return { ok: true, fileUri, fileName, scenarios: result.records.length, calls: calls.length, failedCalls: calls.filter((c) => c.state !== 'ready').length };
+      } catch {
+        return { ok: false, reason: 'export_failed' };
+      }
+    } catch {
+      return { ok: false, reason: 'unavailable' };
+    } finally {
+      this.evaluating = false;
+    }
+  }
+
   private attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult> {
     return this.simple(incidentId, (state, ctx) => {
       const report = state.reports.find((r) => r.id === reportId);
@@ -980,6 +1031,7 @@ export class PulseCore implements PulseApp {
       },
       analyzeReport: (incidentId, reportId) => this.analyzeReport(incidentId, reportId),
       diagnoseExtraction: (text) => this.diagnoseExtraction(text),
+      runEvaluation: (input, onProgress) => this.runEvaluation(input, onProgress),
       probeLocalAI: async () => {
         try {
           return (await this.deps.ai.probeOutputShapes?.()) ?? [];
