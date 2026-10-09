@@ -103,6 +103,7 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
     addReport: async () => ({ ok: true as const, value: { reportId: 'rpt-test-0001' } }),
     analyzeReport: async () => aiUnavailable(),
     diagnoseExtraction: async () => aiUnavailable(),
+    probeLocalAI: async () => [],
     attachProposal: async () => okResult,
     confirmFact: async () => okResult,
     suggestClarification: async () => aiUnavailable(),

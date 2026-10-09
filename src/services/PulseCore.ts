@@ -980,6 +980,13 @@ export class PulseCore implements PulseApp {
       },
       analyzeReport: (incidentId, reportId) => this.analyzeReport(incidentId, reportId),
       diagnoseExtraction: (text) => this.diagnoseExtraction(text),
+      probeLocalAI: async () => {
+        try {
+          return (await this.deps.ai.probeOutputShapes?.()) ?? [];
+        } catch {
+          return [];
+        }
+      },
       attachProposal: (incidentId, reportId, proposal) => this.attachProposal(incidentId, reportId, proposal),
       confirmFact: (incidentId, field, value) =>
         this.simple(incidentId, (state, ctx) => {

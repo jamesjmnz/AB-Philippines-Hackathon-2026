@@ -84,6 +84,9 @@ export type Transcript = { text: string; locale: string; durationSeconds: number
 
 export type OriginalReportInput = { text: string };
 
+/** One line of the device probe: an output shape tried on a built-in sentence, never on user text. */
+export type OutputProbeLine = { variant: string; ok: boolean; latencyMs: number; detail: string };
+
 /**
  * Everything the app may ask of on-device AI. Every method resolves (never rejects) with a typed result,
  * and none of them is on the path of creating or queueing an SOS.
@@ -96,4 +99,6 @@ export interface LocalAIService {
   proposeNonMedicalTasks(context: IncidentContext): Promise<AIResult<TaskProposal[]>>;
   compareSemanticReports(a: string, b: string): Promise<SimilarityResult>;
   transcribeLocal(audio: LocalAudioInput, locale: string): Promise<AIResult<Transcript>>;
+  /** Diagnostics only, and only where a real provider is loaded: which output shapes it can produce. */
+  probeOutputShapes?(): Promise<OutputProbeLine[]>;
 }

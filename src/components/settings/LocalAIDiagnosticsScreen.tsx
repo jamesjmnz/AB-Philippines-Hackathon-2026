@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { PROPOSAL_FIELDS, type AIResult, type IncidentProposal } from '@/ai';
+import { PROPOSAL_FIELDS, type AIResult, type IncidentProposal, type OutputProbeLine } from '@/ai';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Banner, Button, Card, ChoiceChip, GroupedList, MicroPill, Screen, SectionHeader, TextField } from '@/ui';
 
@@ -24,6 +24,7 @@ export function LocalAIDiagnosticsScreen() {
   const [text, setText] = useState('');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<AIResult<IncidentProposal> | null>(null);
+  const [probe, setProbe] = useState<OutputProbeLine[] | null>(null);
 
   const stored = snapshot.incidents.flatMap((view) =>
     view.originalReport === null ? [] : view.state.reports.filter((r) => r.kind === 'report').map((r) => ({ key: `${view.id}:${r.id}`, incidentId: view.id, reportId: r.id, label: view.shortId })),
@@ -47,6 +48,13 @@ export function LocalAIDiagnosticsScreen() {
     setRunning(true);
     setResult(null);
     setResult(await actions.diagnoseExtraction(body));
+    setRunning(false);
+  };
+
+  const runProbe = async () => {
+    setRunning(true);
+    setProbe(null);
+    setProbe(await actions.probeLocalAI());
     setRunning(false);
   };
 
@@ -105,6 +113,36 @@ export function LocalAIDiagnosticsScreen() {
           Runs the model on the text above. Nothing is saved or sent, and no request is created.
         </Text>
       </View>
+
+      {demo ? null : (
+        <View className="gap-2">
+          <SectionHeader title="Output shape probe" />
+          <Button testID="diag-probe" label={running ? 'Running on device…' : 'Run output probe'} variant="secondary" disabled={running || !textReady} onPress={() => void runProbe()} />
+          <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">
+            Sends one built-in test sentence through each output shape, one at a time. It uses no report from this device, and nothing is saved or sent.
+          </Text>
+          {probe ? (
+            <Card className="gap-2">
+              {probe.length === 0 ? (
+                <Text testID="diag-probe-empty" className="text-[13px] text-gray-1">
+                  No on-device provider is loaded, so nothing was run.
+                </Text>
+              ) : (
+                probe.map((p) => (
+                  <View key={p.variant} testID="diag-probe-line" className="gap-0.5">
+                    <Text className="text-[14px] font-semibold text-ink">
+                      {p.ok ? 'Returned' : 'Failed'} · {p.variant} · {p.latencyMs} ms
+                    </Text>
+                    <Text selectable className="text-[12.5px] leading-[17px] text-gray-1">
+                      {p.detail}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </Card>
+          ) : null}
+        </View>
+      )}
 
       {result ? (
         <View testID="diag-result">

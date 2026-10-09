@@ -19,6 +19,7 @@ import {
   type LocalAIService,
   type LocalAudioInput,
   type OriginalReportInput,
+  type OutputProbeLine,
   type ProposalField,
   type ProposedField,
   type SimilarityResult,
@@ -45,6 +46,8 @@ export type AdapterOptions = {
   embeddingLanguage?: string;
   transcriptionLocale?: string;
   now?: () => number;
+  /** Device probe for the diagnostics screen. Injected so the adapter itself never imports the provider. */
+  probe?: () => Promise<OutputProbeLine[]>;
 };
 
 /** Reports longer than this are truncated before prompting; the model has a 4096-token window. */
@@ -70,7 +73,10 @@ export class CallstackAppleAIAdapter implements LocalAIService {
     this.embeddingLanguage = options.embeddingLanguage ?? 'en';
     this.transcriptionLocale = options.transcriptionLocale ?? 'en-US';
     this.now = options.now ?? Date.now;
+    if (options.probe) this.probeOutputShapes = options.probe;
   }
+
+  probeOutputShapes?: () => Promise<OutputProbeLine[]>;
 
   async inspectCapabilities(): Promise<CapabilityMatrix> {
     const text: CapabilityStatus = this.safeTextAvailable()

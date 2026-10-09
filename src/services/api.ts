@@ -1,4 +1,4 @@
-import type { AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, ProposalField, TaskKind, TaskProposal } from '@/ai';
+import type { AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, OutputProbeLine, ProposalField, TaskKind, TaskProposal } from '@/ai';
 import type { ClaimField, DisclosureLevel, IncidentState, ProvenanceTag } from '@/domain';
 
 /**
@@ -146,6 +146,8 @@ export interface PulseActions {
    * empty text returns `invalid_output` / `empty_input` without calling the model.
    */
   diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>>;
+  /** Device probe on a built-in sentence: which output shapes the provider can produce. Empty when there is no real provider. */
+  probeLocalAI(): Promise<OutputProbeLine[]>;
   /** Records the proposal in the ledger as AI-proposed claims. */
   attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult>;
   /** A human confirms (optionally editing) one proposed or reported field. */
