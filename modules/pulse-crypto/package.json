@@ -1,0 +1,8 @@
+{
+  "name": "pulse-crypto",
+  "version": "0.1.0",
+  "description": "Device identity, pairing and Rescue Capsule encryption for PULSE (CryptoKit + Keychain).",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "index.ts"
+}
