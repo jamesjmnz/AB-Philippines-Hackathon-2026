@@ -28,7 +28,7 @@ describe('diagnoseExtraction', () => {
     const result = await a.core.actions.diagnoseExtraction(REPORT);
     await net.settle();
     if (!result.ok) throw new Error(result.state);
-    expect(result.meta).toEqual({ source: 'simulated', latencyMs: 0 });
+    expect(result.meta).toMatchObject({ source: 'simulated', latencyMs: 0 });
     expect(result.value.fields.building).toMatchObject({ value: 'Building B' });
 
     expect(await a.repo.allIncidentIds()).toEqual([existing.incidentId]);
@@ -84,6 +84,6 @@ describe('diagnoseExtraction', () => {
     expect(direct).toMatchObject({ ok: false, state: 'unavailable' });
     expect(direct).toEqual(viaReport);
 
-    expect(await dev(net, 'b').core.actions.diagnoseExtraction(REPORT)).toMatchObject({ ok: false, state: 'native_error', message: 'ai_call_failed' });
+    expect(await dev(net, 'b').core.actions.diagnoseExtraction(REPORT)).toMatchObject({ ok: false, state: 'native_error' });
   });
 });

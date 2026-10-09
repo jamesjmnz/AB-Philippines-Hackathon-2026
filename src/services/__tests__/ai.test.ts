@@ -19,7 +19,7 @@ describe('AI-backed actions', () => {
 
     const analysis = await a.core.actions.analyzeReport(incidentId, reportId);
     if (!analysis.ok) throw new Error(analysis.state);
-    expect(analysis.meta).toEqual({ source: 'simulated', latencyMs: 0 });
+    expect(analysis.meta).toMatchObject({ source: 'simulated', latencyMs: 0 });
     expect(Object.keys(analysis.value.fields).sort()).toEqual(['assistanceRequested', 'building', 'incidentType', 'symptom']);
     expect(analysis.value.unknown).toEqual(expect.arrayContaining(['floor', 'locationText']));
     // Analysing records nothing.

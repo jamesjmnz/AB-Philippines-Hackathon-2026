@@ -57,6 +57,11 @@ export interface SyncHost {
   changed(): void;
   /** Tracks background work so tests and Demo scripts can wait for the device to go quiet. */
   track<T>(work: Promise<T>): Promise<T>;
+  /**
+   * New statements from other people were stored for an incident this device owns. Called after the
+   * ledger section, never awaited: whatever the host does with it cannot delay or fail the sync.
+   */
+  statementsArrived?(incidentId: string): void;
 }
 
 export interface SyncConfig {
@@ -666,8 +671,16 @@ export class SyncEngine {
           }
           await this.queueSync(tx, current, eventIds);
         }
-        return { state, fromReporter };
+        const owned = !!state?.incident && host.isLocalDevice(state.incident.reporter.deviceId);
+        return { state, fromReporter, newStatements: owned && result.applied.some((e) => e.type === 'REPORT_ADDED') };
       });
+      if (merged?.newStatements && accepted) {
+        try {
+          host.statementsArrived?.(accepted.incidentId);
+        } catch {
+          // Analysis is optional; the statements are stored and synced regardless.
+        }
+      }
       if (merged && accepted) {
         if (merged.fromReporter && accepted.projection) await host.storeProjection(accepted.incidentId, accepted.projection);
         if (via) await host.noteVia(accepted.incidentId, via);

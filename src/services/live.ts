@@ -57,12 +57,13 @@ function unavailableCrypto(): CapsuleCrypto {
 }
 
 function unavailableAI(device: { model: string; osVersion: string }): LocalAIService {
-  const meta: AIMeta = { source: 'callstack-apple', latencyMs: 0 };
+  // No provider answered: the module did not load. Saying 'callstack-apple' here would pass a failure off as a real call.
+  const meta: AIMeta = { source: 'none', latencyMs: 0 };
   const down = async () => ({ ok: false as const, state: 'native_error' as const, message: 'ai_module_unavailable', meta });
   const status = { state: 'native_error' as const, detail: 'ai_module_unavailable' };
   const matrix: CapabilityMatrix = {
     provider: 'Callstack Apple',
-    source: 'callstack-apple',
+    source: 'none',
     packageVersion: 'unknown',
     device,
     text: status,
@@ -202,7 +203,7 @@ async function boot(): Promise<PulseCore> {
     ids,
     deviceInfo,
     readFile,
-    ...(evaluation ? { evaluation } : {}),
+    ...(evaluation ? { evaluation, aiPromptVersion: evaluation.promptVersion } : {}),
   });
 }
 

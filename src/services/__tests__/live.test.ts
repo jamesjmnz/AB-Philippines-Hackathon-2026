@@ -94,8 +94,9 @@ describe('createLiveApp', () => {
       await waitFor(() => app.getSnapshot().ready);
       const snapshot = app.getSnapshot();
       expect(snapshot.incidents.map((i) => [i.id, i.role, i.state.status.reason])).toEqual([[sos.value.incidentId, 'reporter', 'no_trusted_peer']]);
-      // Nothing is dressed up as working: capabilities report the failure, and nothing is simulated.
-      expect(snapshot.capabilities).toMatchObject({ provider: 'Callstack Apple', source: 'callstack-apple', text: { state: 'native_error' }, device: { model: 'iPhone 17 Pro Max' } });
+      // Nothing is dressed up as working: capabilities report the failure, no provider is named as the
+      // source of an answer it never gave, and nothing is simulated.
+      expect(snapshot.capabilities).toMatchObject({ provider: 'Callstack Apple', source: 'none', text: { state: 'native_error' }, device: { model: 'iPhone 17 Pro Max' } });
       expect(snapshot.me.hardwareBackedKeys).toBeNull();
       expect(snapshot.peers).toEqual([]);
       const report = await app.actions.addReport(sos.value.incidentId, 'second floor near the stairs', 'typed');
