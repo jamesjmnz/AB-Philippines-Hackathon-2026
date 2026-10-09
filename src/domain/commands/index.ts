@@ -5,7 +5,7 @@ import type { ClaimInput, EventSpec, TaskKind } from '../events';
 import { newOutboxMessage, type PacketReceipt } from '../outbox';
 import type { TextSpan } from '../primitives';
 import { detectFieldConflicts } from '../rules/conflicts';
-import { extractBuilding, extractFloor } from '../rules/location';
+import { extractBuilding, extractFloor, extractFloorTransition } from '../rules/location';
 import type { IncidentState } from '../state';
 import { buildEvent, buildEvents, type CommandContext, type CommandResult } from './build';
 
@@ -37,7 +37,10 @@ function statementClaims(input: StatementInput): ClaimInput[] {
   }));
   if (input.deriveLocation !== false) {
     const explicit = new Set(claims.map((c) => c.field));
-    const floor = extractFloor(input.text);
+    // "I moved from the first floor to the second floor": the destination is the floor stated,
+    // and its span is the evidence. Checked first because an elided origin or destination
+    // ("... from the 2nd", "now I'm on the second") leaves extractFloor with a single mention.
+    const floor = extractFloorTransition(input.text)?.to ?? extractFloor(input.text);
     if (floor && !explicit.has('floor')) {
       claims.push({ field: 'floor', value: floor.value, extraction: 'rule', evidence: floor.span });
     }

@@ -1,4 +1,4 @@
-import { extractBuilding, extractFloor, extractFloors, floorLabel } from '../rules';
+import { extractBuilding, extractFloor, extractFloorTransition, extractFloors, floorLabel } from '../rules';
 
 describe('floor extraction, English and Tagalog', () => {
   const cases: [text: string, value: string, span: string][] = [
@@ -80,6 +80,71 @@ describe('floor extraction, English and Tagalog', () => {
       '101st floor',
       '111th floor',
     ]);
+  });
+});
+
+describe('floor transition extraction, English and Tagalog', () => {
+  const cases: [text: string, from: string, fromSpan: string, to: string, toSpan: string][] = [
+    ['I moved from the first floor to the second floor', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['We went from the 2nd floor to the 3rd floor.', 'Second floor', '2nd floor', 'Third floor', '3rd floor'],
+    ["I'm going from the first floor to the second floor", 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['came down from the third floor to the ground floor', 'Third floor', 'third floor', 'Ground floor', 'ground floor'],
+    ['now from the first floor to the second floor', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['moved up to the 3rd floor from the 2nd floor', 'Second floor', '2nd floor', 'Third floor', '3rd floor'],
+    ['moved up to the 3rd floor from the 2nd', 'Second floor', '2nd', 'Third floor', '3rd floor'],
+    ['I moved from the first to the second floor', 'First floor', 'first', 'Second floor', 'second floor'],
+    ["I was on the first floor, now I'm on the second", 'First floor', 'first floor', 'Second floor', 'second'],
+    ['I was on the first floor. Now I am on the second floor.', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['I was on the first floor, I am on the second floor now', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['Lumipat ako mula first floor papunta sa second floor', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['umakyat ako mula unang palapag papunta sa ikalawang palapag', 'First floor', 'unang palapag', 'Second floor', 'ikalawang palapag'],
+    ['Bumaba ako mula 3rd floor papunta sa 2nd floor', 'Third floor', '3rd floor', 'Second floor', '2nd floor'],
+    ['pumunta ako mula first floor papunta sa second floor', 'First floor', 'first floor', 'Second floor', 'second floor'],
+    ['umakyat ako sa 3rd floor galing 2nd floor', 'Second floor', '2nd floor', 'Third floor', '3rd floor'],
+    ['galing ako sa 1st floor, nasa 2nd floor na ako', 'First floor', '1st floor', 'Second floor', '2nd floor'],
+    ['Galing sa unang palapag, nasa ikalawang palapag na po ako.', 'First floor', 'unang palapag', 'Second floor', 'ikalawang palapag'],
+    ['kanina nasa first floor ako, ngayon nasa second floor na ako', 'First floor', 'first floor', 'Second floor', 'second floor'],
+  ];
+
+  it.each(cases)('%s', (text, from, fromSpan, to, toSpan) => {
+    const transition = extractFloorTransition(text);
+    expect(transition?.from.value).toBe(from);
+    expect(transition?.to.value).toBe(to);
+    expect(transition && text.slice(transition.from.span.start, transition.from.span.end)).toBe(fromSpan);
+    expect(transition && text.slice(transition.to.span.start, transition.to.span.end)).toBe(toSpan);
+    expect(transition?.from.span.text).toBe(fromSpan);
+    expect(transition?.to.span.text).toBe(toSpan);
+  });
+
+  it.each([
+    // One floor, or none: nothing moved.
+    'I am on the second floor',
+    'I fell on the stairs',
+    'wait a second, I am on the first floor',
+    '',
+    // Two floors with no stated direction.
+    'I was between the second floor and the ikatlong palapag',
+    'second floor or third floor',
+    'Smoke from the first floor to the second floor',
+    'Fire on the first floor, now I am on the second floor',
+    // Interrupted, negated, future or hypothetical movement.
+    'I was going from the second floor to the third floor.',
+    'I did not move from the first floor to the second floor',
+    'I moved from the first floor, not to the second floor',
+    'I will have moved from the first floor to the second floor',
+    'hindi ako lumipat mula first floor papunta sa second floor',
+    'pupunta ako mula first floor papunta sa second floor',
+    'Should I have moved from the first floor to the second floor?',
+    // Contradictory markers, the same floor twice, or more than two mentions.
+    'I was on the second floor now, from the first floor',
+    'I went from the second floor to the second floor',
+    'I moved from the first floor to the second floor then the third floor',
+  ])('returns null for %j', (text) => {
+    expect(extractFloorTransition(text)).toBeNull();
+  });
+
+  it('leaves extractFloor unchanged: two different floors still yield no single floor', () => {
+    expect(extractFloor('I moved from the first floor to the second floor')).toBeNull();
   });
 });
 
