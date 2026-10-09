@@ -33,4 +33,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-build-properties', { ios: { deploymentTarget: '17.0' } }],
   ],
   experiments: { typedRoutes: true },
+  owner: 'jamesjimenezzz',
+  extra: { eas: { projectId: '9e895006-4cfc-4e99-a4f1-782c32f57b79' } },
 });

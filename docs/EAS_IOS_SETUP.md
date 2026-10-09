@@ -82,3 +82,30 @@ Record each real attempt here.
 ## Troubleshooting
 
 Empty until a real problem has been met and solved.
+
+## EAS Build (added 2026-10-10)
+
+EAS project: `@jamesjimenezzz/pulse` (linked in `app.config.ts`). Profiles are in `eas.json`.
+
+| Profile | What it produces | Use |
+| --- | --- | --- |
+| `development` | Dev client, internal distribution | Day-to-day development. Needs Metro running on the Mac, so it is not an offline build. |
+| `preview` | Release build with the JS bundle embedded, internal distribution | Offline tests and the demo: runs in airplane mode with no Mac. |
+| `production` | Store build | Not used for the hackathon. |
+
+Status: profiles added and the project linked. The first build has not run. A non-interactive attempt stopped at
+"couldn't find any credentials suitable for internal distribution"; credentials must be created once, interactively.
+
+One-time interactive steps (they ask for the Apple ID and need a paid Apple Developer Program membership,
+because internal distribution uses ad hoc provisioning):
+
+```bash
+eas device:create                               # register each iPhone (open the link on the phone)
+eas build -p ios --profile development          # creates the certificate and provisioning profile, then builds
+eas build -p ios --profile preview              # offline-capable build for the demo
+```
+
+After the first interactive build, later builds can run with `--non-interactive`.
+
+UNVERIFIED: that the EAS build image used for SDK 57 ships an Xcode with the iOS 26 SDK that
+`@react-native-ai/apple` needs for Foundation Models; and that the two local Swift modules compile there.
