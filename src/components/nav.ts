@@ -6,7 +6,7 @@ export const routes = {
   network: '/network' as Href,
   activity: '/activity' as Href,
   settings: '/settings' as Href,
-  onboarding: '/(onboarding)' as Href,
+  onboarding: '/welcome' as Href,
   sos: '/sos' as Href,
   pair: '/pair' as Href,
   demoLab: '/demo-lab' as Href,

@@ -98,7 +98,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
       .catch((error: unknown) => {
         if (cancelled) return;
         const missing = error instanceof Error && error.message === 'missing_factory';
-        setLoaded({ mode, app: null, error: missing ? 'App services are not available in this build.' : 'PULSE could not start its local services.' });
+        setLoaded({ mode, app: null, error: missing ? 'App services are not available in this build.' : 'SAGIP could not start its local services.' });
       });
     return () => {
       cancelled = true;
