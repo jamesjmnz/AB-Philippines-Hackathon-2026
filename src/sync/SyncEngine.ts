@@ -65,6 +65,8 @@ export interface SyncConfig {
   capsuleTtlMs: number;
   maxRelayPackets: number;
   pairingHelloTimeoutMs: number;
+  /** How long a requested connection may take to come up before the peer counts as unreachable. */
+  connectTimeoutMs: number;
   /** A send still unresolved after this long may be attempted again. */
   inFlightTimeoutMs: number;
 }
@@ -74,6 +76,7 @@ export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   capsuleTtlMs: 6 * 60 * 60 * 1000,
   maxRelayPackets: 200,
   pairingHelloTimeoutMs: 8_000,
+  connectTimeoutMs: 6_000,
   inFlightTimeoutMs: 15_000,
 };
 
@@ -130,6 +133,7 @@ export class SyncEngine {
   readonly relay: RelayStore;
   private readonly config: SyncConfig;
   private readonly connected = new Set<string>();
+  private readonly connectWaiters = new Map<string, Set<(up: boolean) => void>>();
   private readonly discovered = new Map<string, number>();
   private readonly lastSeen = new Map<string, number>();
   private readonly inFlight = new Map<string, number>();
@@ -254,16 +258,49 @@ export class SyncEngine {
     if (state === 'connected') {
       this.connected.add(peerId);
       this.seen(peerId);
+      this.settleConnect(peerId, true);
       void this.deps.host.track(this.onPeerUsable(peerId));
     } else if (state === 'disconnected') {
       this.connected.delete(peerId);
+      this.settleConnect(peerId, false);
     }
     this.deps.host.changed();
   }
 
+  private settleConnect(peerId: string, up: boolean): void {
+    const waiters = this.connectWaiters.get(peerId);
+    if (!waiters) return;
+    this.connectWaiters.delete(peerId);
+    for (const waiter of waiters) waiter(up);
+  }
+
+  /**
+   * Resolves once the link to `peerId` is up. The transport's `connect` only requests a dial, so the
+   * link is not usable when it returns; this waits for the `connected` state, bounded by a timeout.
+   */
   private async ensureConnected(peerId: string): Promise<void> {
     if (this.connected.has(peerId)) return;
-    await this.deps.transport.connect(peerId);
+    const { timers } = this.deps;
+    const up = new Promise<boolean>((resolve) => {
+      const waiters = this.connectWaiters.get(peerId) ?? new Set<(up: boolean) => void>();
+      this.connectWaiters.set(peerId, waiters);
+      const timer = timers.setTimeout(() => {
+        waiters.delete(done);
+        resolve(false);
+      }, this.config.connectTimeoutMs);
+      const done = (ok: boolean) => {
+        timers.clearTimeout(timer);
+        resolve(ok);
+      };
+      waiters.add(done);
+    });
+    try {
+      await this.deps.transport.connect(peerId);
+    } catch (error) {
+      this.settleConnect(peerId, false);
+      throw error;
+    }
+    if (!this.connected.has(peerId) && !(await up)) throw new Error('peer_unreachable');
   }
 
   /** Connects to every trusted peer that is in range. Called after pairing and when discovery starts. */

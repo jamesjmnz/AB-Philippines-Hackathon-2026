@@ -148,6 +148,38 @@ describe('pairing', () => {
     expect(a.core.getSnapshot().pairing?.stage).toBe('failed');
   });
 
+  it('waits for the link before sending its hello when connect returns early', async () => {
+    net = await createTestNet({ devices: ['a', 'b'] });
+    const a = dev(net, 'a');
+    const b = dev(net, 'b');
+    // The native transport resolves `connect` as soon as the dial is requested; the link comes up later.
+    const dial = a.transport.connect.bind(a.transport);
+    let finishDial: (() => Promise<void>) | null = null;
+    a.transport.connect = async (peerId) => {
+      finishDial = () => dial(peerId);
+    };
+
+    const started = a.core.actions.startPairing(b.id);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(finishDial).not.toBeNull();
+    await finishDial!();
+    must(await started);
+    await net.settle();
+    expect(a.core.getSnapshot().pairing).toMatchObject({ peerDeviceId: b.id, stage: 'compare' });
+    expect(b.core.getSnapshot().pairing).toMatchObject({ peerDeviceId: a.id, stage: 'compare' });
+  });
+
+  it('gives up when the link never comes up', async () => {
+    net = await createTestNet({ devices: ['a', 'b'] });
+    const a = dev(net, 'a');
+    a.transport.connect = async () => undefined;
+    const started = a.core.actions.startPairing(dev(net, 'b').id);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    a.timers.fireTimeouts();
+    expect(await started).toMatchObject({ ok: false, code: 'peer_unreachable' });
+    expect(a.core.getSnapshot().pairing).toBeNull();
+  });
+
   it('reports an unreachable device instead of hanging', async () => {
     net = await createTestNet({ devices: ['a', 'b'], links: [] });
     const result = await dev(net, 'a').core.actions.startPairing(dev(net, 'b').id);
