@@ -75,8 +75,9 @@ export async function runScenarioWithModel(ai: LocalAIService, scenario: Scenari
       }
     }
     // Later statements are compared with what the model proposed earlier, exactly as in the app.
-    if (analysis.findings.length > 0) {
-      session.apply(statement.id, recordAIProposal(session.state, session.as('reporter'), { provider: 'evaluation', reportId: step.reportId, findings: analysis.findings }));
+    const recordable = analysis.findings.filter((f) => f.record).map(({ field, value, evidence }) => ({ field, value, evidence }));
+    if (recordable.length > 0) {
+      session.apply(statement.id, recordAIProposal(session.state, session.as('reporter'), { provider: 'evaluation', reportId: step.reportId, findings: recordable }));
     }
 
     if (index === 0 && options.clarify) {

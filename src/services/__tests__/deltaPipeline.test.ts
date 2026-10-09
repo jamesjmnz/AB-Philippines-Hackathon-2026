@@ -56,8 +56,8 @@ describe('analyzeStatement', () => {
     const analysis = await analyzeStatement(modelSaying({ fields: { locationText: { value: 'near the canteen', evidence: 'near the canteen' }, symptom: { value: 'My ankle hurts', evidence: 'My ankle hurts' } } }), s, lastReport(s));
     expect(analysis?.overall).toBe('new_information');
     expect(analysis?.findings).toEqual([
-      { field: 'locationText', value: 'near the canteen', evidence: { start: 10, end: 26, text: 'near the canteen' } },
-      { field: 'symptom', value: 'My ankle hurts', evidence: { start: 28, end: 42, text: 'My ankle hurts' } },
+      { field: 'locationText', value: 'near the canteen', evidence: { start: 10, end: 26, text: 'near the canteen' }, record: true },
+      { field: 'symptom', value: 'My ankle hurts', evidence: { start: 28, end: 42, text: 'My ankle hurts' }, record: true },
     ]);
     expect(analysis?.items.every((i) => i.source === 'model' && !i.needsVerification)).toBe(true);
   });
@@ -143,6 +143,47 @@ describe('analyzeStatement', () => {
     expect(failed?.model).toMatchObject({ state: 'timeout' });
     expect(await analyzeStatement({}, s, lastReport(s))).toEqual(rules);
     expect(await analyzeStatement(failingModel, s, 'no-such-report')).toBeNull();
+  });
+
+  it('does not let another person\'s different reading become the field\'s proposal', async () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am near the canteen.' }).state;
+    s = await propose(world, s, { fields: { locationText: { value: 'near the canteen', evidence: 'near the canteen' } } });
+    const place = { locationText: { value: 'by the gym', evidence: 'by the gym' } };
+
+    const responder = addObservation(s, world.as(MIKA), { text: 'They are by the gym.' }).state;
+    const other = await analyzeStatement(modelSaying({ fields: place, relations: { locationText: 'different' } }), responder, lastReport(responder));
+    expect(other?.findings).toEqual([expect.objectContaining({ field: 'locationText', record: false })]);
+
+    const reporter = addReport(s, world.as(ALEX), { text: 'Sorry, I am by the gym.' }).state;
+    const own = await analyzeStatement(modelSaying({ fields: place, relations: { locationText: 'different' } }), reporter, lastReport(reporter));
+    expect(own?.findings).toEqual([expect.objectContaining({ field: 'locationText', record: true })]);
+  });
+
+  it('compares with what else is on record even when the statement sorts ahead of it in replay order', async () => {
+    // A responder who has not received the report writes with a lower logical clock, so their
+    // observation replays before the report. It must still be compared with the reporter's detail.
+    const { world, state } = start();
+    const observed = addObservation(state, world.as(MIKA), { text: 'They are by the gym.' });
+    const observationId = lastReport(observed.state);
+    let s = addReport(observed.state, world.as(ALEX), { text: 'I am near the canteen.' }).state;
+    s = await propose(world, s, { fields: { locationText: { value: 'near the canteen', evidence: 'near the canteen' } } });
+    const seen: StatementAssessmentInput[] = [];
+    const analysis = await analyzeStatement(modelSaying({ fields: { locationText: { value: 'by the gym', evidence: 'by the gym' } }, relations: { locationText: 'different' } }, seen), s, observationId);
+    expect(seen[0]?.known).toEqual({ locationText: 'near the canteen' });
+    expect(analysis?.items[0]).toMatchObject({ class: 'possible_contradiction', needsVerification: true });
+    expect(analysis?.findings[0]?.record).toBe(false);
+  });
+
+  it('refuses a value the phrase does not support, and severity wording, whatever service returned it', async () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I hit my head and I feel dizzy near the canteen.' }).state;
+    const analysis = await analyzeStatement(
+      modelSaying({ fields: { symptom: { value: 'Critical head trauma, severe concussion', evidence: 'my head' }, locationText: { value: 'the library', evidence: 'near the canteen' } } }),
+      s,
+      lastReport(s),
+    );
+    expect(analysis?.findings.map((f) => [f.field, f.value])).toEqual([['locationText', 'near the canteen']]);
   });
 
   it('never changes the state it reads', async () => {

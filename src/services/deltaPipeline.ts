@@ -1,4 +1,4 @@
-import { RELATED_FIELDS, locateEvidence, type AIMeta, type AIState, type LocalAIService, type ProposalField, type RelatedField, type StatementAssessmentProposal } from '@/ai';
+import { RELATED_FIELDS, groundValue, locateEvidence, type AIMeta, type AIState, type LocalAIService, type ProposalField, type RelatedField, type StatementAssessmentProposal } from '@/ai';
 import {
   CLAIM_FIELDS,
   classifyStatementDelta,
@@ -41,8 +41,13 @@ export interface StatementAnalysis {
   reportId: string;
   overall: DeltaClass | 'not_assessed';
   items: AssessedItem[];
-  /** Model-proposed values for fields the rules did not read, ready to record as an AI proposal. */
-  findings: { field: ClaimField; value: string; evidence: TextSpan }[];
+  /**
+   * Values the model read from this statement for fields the rules did not read. Only those marked
+   * `record` may become an AI proposal: a first value for the field, or the same person revising their
+   * own. A different person's differing value is never recorded as the field's proposal, because it
+   * would then be displayed in place of what the first person said; it is raised as a question instead.
+   */
+  findings: { field: ClaimField; value: string; evidence: TextSpan; record: boolean }[];
   /** What the rules alone concluded, kept so a failed model call still leaves a deterministic answer. */
   rule: StatementDelta;
   /** How the model stage went. 'not_run' when no model was asked. */
@@ -72,11 +77,6 @@ interface Prior {
   confirmed: boolean;
 }
 
-/** Position of each event in replay order, so "said before this statement" does not depend on device clocks. */
-function replayOrder(state: IncidentState): Map<string, number> {
-  return new Map(state.timeline.map((entry, index) => [entry.eventId, index]));
-}
-
 /** Who made the statement a revision came from. For a model finding that is the author of the text it read. */
 function authorOf(state: IncidentState, revision: ClaimRevision): string {
   if (isHumanRevision(revision)) return revision.source.actor.deviceId;
@@ -88,15 +88,19 @@ function reportOf(state: IncidentState, revision: ClaimRevision): string | null 
   return state.reports.find((r) => r.id === revision.evidence?.reportId || r.eventId === revision.source.eventId)?.id ?? null;
 }
 
-/** What was on record for a field before this statement: the leading human value, else the latest model proposal. */
-function priorFor(state: IncidentState, field: ClaimField, before: number, order: Map<string, number>): Prior | null {
-  const earlier = state.claims[field].revisions.filter((r) => {
-    const at = order.get(r.source.eventId);
-    if (at === undefined || at >= before) return false;
+/**
+ * What is on record for a field apart from this statement: the leading human value, else the latest
+ * model proposal. Position in replay order is deliberately not used. A responder who has not received
+ * the requester's events writes with a lower logical clock, so their statement can sort ahead of a
+ * report made earlier; "what else is on record" is the comparison that holds on every device.
+ */
+function priorFor(state: IncidentState, field: ClaimField, report: { id: string; eventId: string }): Prior | null {
+  const others = state.claims[field].revisions.filter((r) => {
+    if (r.source.eventId === report.eventId || r.evidence?.reportId === report.id) return false;
     // Values set by the SOS itself ("Manual SOS", assistance requested) are defaults, not statements.
     return !r.id.endsWith('#incidentType') && !r.id.endsWith('#assistanceRequested');
   });
-  const leading = leadingRevision(earlier);
+  const leading = leadingRevision(others);
   if (!leading) return null;
   const revision = leading.revision;
   return {
@@ -173,17 +177,21 @@ function modelItems(state: IncidentState, proposal: StatementAssessmentProposal,
   for (const field of CLAIM_FIELDS) {
     const proposed = proposal.fields[field as ProposalField];
     if (!proposed || ruled.has(field)) continue;
+    // Second line of defence, whatever service produced this: the phrase must be in the statement and
+    // the value must follow from it, with no severity or diagnosis wording.
     const evidence = locateEvidence(reportText, proposed.evidence);
-    if (!evidence) continue;
-    findings.push({ field, value: proposed.value, evidence });
+    const grounded = evidence ? groundValue(field as ProposalField, proposed.value, evidence.text) : null;
+    if (!evidence || !grounded?.ok) continue;
+    const value = grounded.value;
 
     const prior = priors[field];
+    findings.push({ field, value, evidence, record: !prior || (prior.authorDeviceId === authorDeviceId && !prior.confirmed) });
     if (!prior) {
       items.push({ field, class: 'new_information', againstRevisionId: null, againstReportId: null, evidence, source: 'model', needsVerification: false });
       continue;
     }
     let relation: 'same' | 'different' | 'adds_detail' | undefined;
-    if (field === 'floor' || field === 'building') relation = normalizeValue(prior.value) === normalizeValue(proposed.value) ? 'same' : 'different';
+    if (field === 'floor' || field === 'building') relation = normalizeValue(prior.value) === normalizeValue(value) ? 'same' : 'different';
     else if ((RELATED_FIELDS as readonly string[]).includes(field)) relation = proposal.relations[field as RelatedField];
     // No comparison available (the comparison call failed, or the field is not one the model compares):
     // the value is still proposed, but nothing is claimed about how it relates.
@@ -203,11 +211,9 @@ export async function analyzeStatement(ai: Pick<LocalAIService, 'assessStatement
   const report = state.reports.find((r) => r.id === reportId);
   if (!base || !report || !ai.assessStatement) return base;
 
-  const order = replayOrder(state);
-  const before = order.get(report.eventId) ?? Number.MAX_SAFE_INTEGER;
   const priors: Partial<Record<ClaimField, Prior>> = {};
   for (const field of CLAIM_FIELDS) {
-    const prior = priorFor(state, field, before, order);
+    const prior = priorFor(state, field, report);
     if (prior) priors[field] = prior;
   }
 

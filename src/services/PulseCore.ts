@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import {
+  groundValue,
   guardLocalAI,
   locateEvidence,
   type GuardedLocalAI,
@@ -233,6 +234,20 @@ function alreadyProposed(state: IncidentState, reportId: string, field: ClaimFie
 
 /** Statements analysed per pass, and the most that may wait at once. */
 const MAX_PENDING_ANALYSES = 4;
+/** Questions the model stage may raise in one incident. */
+const MAX_AI_QUESTIONS = 3;
+/** A statement whose analysis keeps failing is left to the deterministic rules after this many tries. */
+const MAX_ANALYSIS_ATTEMPTS = 2;
+
+/**
+ * The only wording a suggested task may carry. The model picks a kind; it never writes what people read,
+ * so it cannot say that help is coming, that anyone was called, or suggest anything medical.
+ */
+const TASK_TITLES: Record<Exclude<TaskProposal['kind'], 'other'>, string> = {
+  communicate: 'Contact building staff or security',
+  go_to_requester: 'Go to the person who asked',
+  confirm_location: 'Confirm the location',
+};
 const DELTA_PRIORITY = ['possible_contradiction', 'correction', 'new_information', 'confirmation', 'no_meaningful_change'] as const;
 
 const CLARIFICATION_PROMPTS: Record<ClaimField, string> = {
@@ -282,6 +297,8 @@ export class PulseCore implements PulseApp {
   private readonly ai: GuardedLocalAI;
   /** Statements whose analysis is queued or running, so one statement is never analysed twice at once. */
   private readonly analysing = new Set<string>();
+  /** Tries per statement this session, so a statement the model cannot handle is not retried on every trigger. */
+  private readonly analysisAttempts = new Map<string, number>();
 
   constructor(private readonly deps: PulseCoreDeps) {
     this.config = { ...DEFAULT_CORE_CONFIG, ...(deps.config ?? {}) };
@@ -854,10 +871,14 @@ export class PulseCore implements PulseApp {
       const findings = (Object.keys(proposal.fields) as ProposalField[]).flatMap((field) => {
         const proposed = proposal.fields[field];
         if (!proposed) return [];
-        // The background analysis may already have proposed this exact value from this statement.
-        if (alreadyProposed(state, reportId, field, proposed.value)) return [];
+        // Whatever produced the proposal, a value is recorded only with words from the statement that
+        // support it; a paraphrase becomes the person's own words, and an unsupported value is left out.
         const evidence = locateEvidence(report.text, proposed.evidence);
-        return [{ field, value: proposed.value.slice(0, 500), ...(evidence ? { evidence } : {}) }];
+        const grounded = evidence ? groundValue(field, proposed.value, evidence.text) : null;
+        if (!evidence || !grounded?.ok) return [];
+        // The background analysis may already have proposed this exact value from this statement.
+        if (alreadyProposed(state, reportId, field, grounded.value)) return [];
+        return [{ field, value: grounded.value, evidence }];
       });
       if (findings.length === 0) return { events: [], outbox: [], state };
       return recordAIProposal(state, ctx, { provider: this.capabilities?.provider ?? 'unknown', reportId, findings });
@@ -881,6 +902,9 @@ export class PulseCore implements PulseApp {
         for (const report of pending) {
           const key = `${incidentId}:${report.id}`;
           if (this.analysing.has(key) || this.analysing.size >= MAX_PENDING_ANALYSES) continue;
+          const attempts = this.analysisAttempts.get(key) ?? 0;
+          if (attempts >= MAX_ANALYSIS_ATTEMPTS) continue;
+          this.analysisAttempts.set(key, attempts + 1);
           this.analysing.add(key);
           try {
             await this.analyse(incidentId, report.id);
@@ -912,7 +936,9 @@ export class PulseCore implements PulseApp {
       if (state.closure || state.assessments.some((a) => a.id === id)) return { events: [], outbox: [], state };
       const fresh = (field: ClaimField) => basisStillHolds(state, analysis, field);
       const items = analysis.items.filter((i) => fresh(i.field));
-      const findings = analysis.findings.filter((f) => fresh(f.field) && !alreadyProposed(state, reportId, f.field, f.value));
+      const findings = analysis.findings
+        .filter((f) => f.record && fresh(f.field) && !alreadyProposed(state, reportId, f.field, f.value))
+        .map(({ field, value, evidence }) => ({ field, value, evidence }));
       const overall = items.length === analysis.items.length ? analysis.overall : (DELTA_PRIORITY.find((c) => items.some((i) => i.class === c)) ?? 'not_assessed');
       if (overall === 'not_assessed') return { events: [], outbox: [], state };
 
@@ -936,7 +962,9 @@ export class PulseCore implements PulseApp {
       // A disagreement only the model can see is never settled by it: the person is asked.
       for (const item of items) {
         if (item.source !== 'model' || !item.needsVerification) continue;
-        if (current.questions.some((q) => q.field === item.field && q.status === 'open')) continue;
+        // Never ask again what is already being asked or what the person chose to skip, and never pile up questions.
+        if (current.questions.some((q) => q.field === item.field && (q.status === 'open' || q.status === 'skipped'))) continue;
+        if (current.questions.filter((q) => q.origin === 'ai').length >= MAX_AI_QUESTIONS) continue;
         apply(requestClarification(current, ctx, { field: item.field, prompt: CLARIFICATION_PROMPTS[item.field], origin: 'ai' }));
       }
       return { events, outbox: [], state: current };
@@ -1101,7 +1129,11 @@ export class PulseCore implements PulseApp {
       suggestClarification: async (incidentId): Promise<AIResult<ClarificationProposal>> => {
         const context = await this.contextFor(incidentId);
         if (!context) return this.aiFailure('invalid_output', 'incident_not_found');
-        return this.guardAI(() => this.ai.suggestClarification(context));
+        const result = await this.guardAI(() => this.ai.suggestClarification(context));
+        // The model chooses what to ask about; the words shown are fixed, so it cannot ask a medical
+        // question, promise anything or ask for something unrelated.
+        if (result.ok && result.value) return { ...result, value: { field: result.value.field, question: CLARIFICATION_PROMPTS[result.value.field] } };
+        return result;
       },
       answerClarification: async (incidentId, field, answer) => {
         const result = await this.simple(incidentId, (state, ctx) => {
@@ -1158,7 +1190,10 @@ export class PulseCore implements PulseApp {
       suggestTasks: async (incidentId): Promise<AIResult<TaskProposal[]>> => {
         const context = await this.contextFor(incidentId);
         if (!context) return this.aiFailure('invalid_output', 'incident_not_found');
-        return this.guardAI(() => this.ai.proposeNonMedicalTasks(context));
+        const result = await this.guardAI(() => this.ai.proposeNonMedicalTasks(context));
+        if (!result.ok) return result;
+        const kinds = [...new Set(result.value.map((t) => t.kind))].filter((k): k is keyof typeof TASK_TITLES => k !== 'other');
+        return { ...result, value: kinds.map((kind) => ({ kind, title: TASK_TITLES[kind] })) };
       },
       offerTask: (incidentId, input) =>
         this.simple(incidentId, (state, ctx) =>

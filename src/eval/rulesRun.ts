@@ -130,10 +130,8 @@ export function runRules(scenario: ScenarioInput): ScenarioRecord {
   const missing = (['floor', 'building'] as const).find((f) => first[f] === undefined);
   return {
     scenarioId: scenario.id,
-    calls: extraction.map((e) => {
-      const n = Object.keys(e.fields).length;
-      return { op: 'extract' as const, statementId: e.statementId, state: 'ready' as const, source: 'rules' as const, latencyMs: 0, proposed: n, kept: n };
-    }),
+    // No model is called, so there are no calls to report: completion and validation rates do not apply.
+    calls: [],
     extraction,
     deltas: world.steps.slice(1).flatMap((step) => ruleDelta(step) ?? []),
     conflicts: openConflicts(world),

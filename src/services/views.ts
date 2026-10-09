@@ -6,6 +6,7 @@ import {
   projectForLevel,
   type Actor,
   type ClaimField,
+  type ClaimRevision,
   type DisclosureLevel,
   type DisclosurePolicy,
   type IncidentProjection,
@@ -51,13 +52,22 @@ export function ownerFacts(state: IncidentState, nameOf: NameOf): FactView[] {
       field,
       value: claim.value,
       tag: claim.tag,
-      by: displayed ? nameOf(displayed.source.actor) : null,
+      // A value the model read is attributed to whoever wrote the words it was read from, not to the
+      // device that ran the model.
+      by: displayed ? nameOf(saidBy(state, displayed)) : null,
       evidence: evidence && evidence.length > 0 ? evidence : null,
       protected: false,
       candidates,
     };
   });
 }
+
+function saidBy(state: IncidentState, revision: ClaimRevision): Actor {
+  if (revision.source.kind !== 'ai_proposal') return revision.source.actor;
+  return state.reports.find((r) => r.id === revision.evidence?.reportId)?.author ?? revision.source.actor;
+}
+
+const UPDATE_PRIORITY = ['possible_contradiction', 'correction', 'new_information', 'confirmation', 'no_meaningful_change'] as const;
 
 /**
  * How each statement after the first relates to what was known before it. The deterministic rules
@@ -75,15 +85,23 @@ export function statementUpdates(state: IncidentState, nameOf: NameOf): UpdateVi
     const rules = analyzeWithRules(state, report.id);
     if (!rules) return [];
     const assessed = [...state.assessments].reverse().find((a) => a.reportId === report.id);
+    // An assessment may add to what the rules found; it can never remove or soften it. For every field
+    // the rules read, the rules' class stands, and the overall class is the stronger of the two.
+    const ruled = new Set(rules.items.map((i) => i.field));
+    const added = (assessed?.items ?? []).filter((i) => !ruled.has(i.field));
+    const fields = [...rules.items, ...added].map((i) => ({ field: i.field, class: i.class }));
+    const strongest = UPDATE_PRIORITY.find((c) => fields.some((f) => f.class === c));
+    const contributed = added.length > 0 || (rules.overall === 'not_assessed' && assessed !== undefined);
+    const overall = strongest ?? (rules.overall !== 'not_assessed' ? rules.overall : (assessed?.overall ?? 'not_assessed'));
     return [
       {
         reportId: report.id,
         by: nameOf(report.author),
         kind: report.kind,
-        overall: assessed?.overall ?? rules.overall,
-        basis: assessed ? ('model' as const) : ('rules' as const),
+        overall,
+        basis: contributed ? ('model' as const) : ('rules' as const),
         needsVerification: rules.items.some((i) => i.needsVerification && open(i.field)) || (assessed?.items.some((i) => i.class === 'possible_contradiction' && open(i.field)) ?? false),
-        fields: (assessed?.items ?? rules.items).map((i) => ({ field: i.field, class: i.class })),
+        fields,
       },
     ];
   });
