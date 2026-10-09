@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
 
 import { CLARIFIABLE_FIELDS, type ClarifiableField } from '@/ai';
 import { canAddReport, canRequestClarification, canResolveConflict, canSkipClarification, type Actor, type ClaimField } from '@/domain';
 import type { FactView, IncidentView, UpdateView } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Avatar, ChoiceChip, Enter, Icon, LinkButton, Pill, colors, design, tones } from '@/ui';
+import { Text, TextInput } from '@/ui/Text';
 
 import { routes } from '../nav';
 import { BRAND, displayName, FIELD_LABELS, firstName, presentUpdate, PROVENANCE, TAG_LOOK, timeLabel } from '../present';

@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Share, Text, View } from 'react-native';
+import { Share, View } from 'react-native';
 
 import { PROPOSAL_FIELDS, type AICallRecord, type AIGuardStats, type AIResult, type AIState, type IncidentProposal, type OutputProbeLine } from '@/ai';
 import type { EvaluationOutcome } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Banner, Button, Card, ChoiceChip, GroupedList, MicroPill, Screen, SectionHeader, TextField } from '@/ui';
+import { Text } from '@/ui/Text';
 
 import { routes } from '../nav';
 import { FIELD_LABELS, presentAISource, presentAIState } from '../present';
