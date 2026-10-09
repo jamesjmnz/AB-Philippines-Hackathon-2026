@@ -1,6 +1,6 @@
 # Local AI benchmarks
 
-**No measurements yet.** As of 2026-10-09 no inference has been run on any device. This document defines how measurements will be taken. Numbers are added only when they come from a real call on a named physical iPhone.
+**No measurements yet.** As of 2026-10-10 no inference has been run on any device or simulator; the adapter has only been run against a fake runtime in Jest, which produces no numbers. This document defines how measurements will be taken. Numbers are added only when they come from a real call on a named physical iPhone.
 
 ## Rules
 

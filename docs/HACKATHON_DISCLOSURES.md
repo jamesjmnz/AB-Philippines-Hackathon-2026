@@ -1,14 +1,14 @@
 # Hackathon disclosures
 
-Event: AppBuildersPH 2026, theme "Local AI". Last updated: 2026-10-09.
+Event: AppBuildersPH 2026, theme "Local AI". Last updated: 2026-10-10.
 
-**Current state:** the project is at the start of development. Nothing described below as planned has been built or demonstrated yet. This document will be updated to state only what was actually shown.
+**Current state:** the code described below is written and unit-tested, and a development build compiles. Nothing has run on a physical iPhone and nothing has been demonstrated: no on-device inference, no transfer between phones and no Keychain use has been observed. This document will be updated to state only what was actually shown.
 
 ## What PULSE is and is not
 
 PULSE 2.0 is a prototype for coordinating assistance between nearby iPhones without internet. It is not an emergency service, not a medical device, and not a guaranteed rescue channel. Demonstrations use synthetic personas and synthetic incidents only.
 
-## What runs locally (planned)
+## What runs locally (as coded; not yet observed on a device)
 
 | Function | Where it runs | Implementation |
 | --- | --- | --- |
@@ -20,6 +20,8 @@ PULSE 2.0 is a prototype for coordinating assistance between nearby iPhones with
 | Storage | On the iPhone | SQLite |
 | Peer discovery and transfer | Between iPhones, local link | Apple Network framework and Bonjour, PULSE Swift module |
 | Encryption and signatures | On the iPhone | Apple CryptoKit and Keychain, PULSE Swift module |
+
+Not yet in the app: text to speech is not started, and the embeddings call exists in the adapter but nothing uses it.
 
 The on-device text model is expected to be available only on the iPhone 17 Pro Max. The iPhone 14 Pro Max and iPhone 13 act as responders and relays and do not run it.
 
@@ -74,7 +76,7 @@ The "confirmed" column records whether the licence has been checked against the 
 
 ## Demo Lab is simulated
 
-The app will contain a Demo Lab with scripted personas (Alex, Mika, Noah) and scripted scenarios. Everything in Demo Lab is simulated: the AI responses, the transport and the encryption. Every Demo Lab screen carries a SIMULATED banner. No performance number comes from Demo Lab.
+The app contains a Demo Lab with scripted personas (Alex, Mika, Noah) and six scripted scenarios. Everything in Demo Lab is simulated: the AI responses, the transport and the encryption. Every Demo Lab screen carries a SIMULATED banner. No performance number comes from Demo Lab.
 
 ## Pre-existing work
 

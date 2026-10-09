@@ -1,6 +1,6 @@
 # Device capabilities
 
-Last updated: 2026-10-09. **No feature has been tested on any device.** The "Expected" column is a prediction from platform requirements and package source. The "Tested" column records only what has been observed.
+Last updated: 2026-10-10. **No feature has been tested on any device.** A development build exists (EAS `fbc85457`) but has not been installed on a phone. The "Expected" column is a prediction from platform requirements and package source. The "Tested" column records only what has been observed.
 
 ## Devices
 
@@ -10,7 +10,7 @@ Last updated: 2026-10-09. **No feature has been tested on any device.** The "Exp
 | iPhone 14 Pro Max | Responder and relay (Mika) | not confirmed | No | Owner plans to update to iOS 26. |
 | iPhone 13 | Responder (Noah) | not confirmed | No | Owner plans to update to iOS 26. |
 
-There are no Android test devices and no simulator runtimes installed. The app's deployment target is iOS 17.0, with per-feature runtime gating.
+There are no Android test devices. One simulator runtime (iOS 26.3) is installed; it is not a test device and nothing observed there is entered in the "Tested" column. The app's deployment target is iOS 17.0, with per-feature runtime gating.
 
 ## Platform requirements (from package source and the master specification)
 
@@ -72,4 +72,4 @@ Status words follow [README.md](README.md). "Not tested" means exactly that.
 
 ## How to fill this in
 
-For each row, on the named device: open `Demo Lab > Local AI` (planned), read the reported state, run the probe once with external internet disabled, and record date, iOS version, locale and the observed result.
+For each row, on the named device: open `Demo Lab > Local AI` (implemented, not yet seen on a device), read the reported state, run the probe once with external internet disabled, and record date, iOS version, locale and the observed result.

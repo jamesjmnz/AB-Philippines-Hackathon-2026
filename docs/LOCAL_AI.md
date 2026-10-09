@@ -1,6 +1,6 @@
 # Local AI
 
-Status: **planned design**. No adapter code exists and no inference has been run (2026-10-09). The package facts in "Verified package behaviour" come from reading the `@react-native-ai/apple` 0.12.0 source, not from running it.
+Status (2026-10-10): the adapter is **implemented and unit-tested against a fake runtime** (`npx jest src/ai`: 24 passed), and the package's native pod compiles on React Native 0.86.3 (EAS build `fbc85457`). **No inference has been run on any device or simulator.** The package facts in "Verified package behaviour" come from reading the `@react-native-ai/apple` 0.12.0 source, not from running it. How the real model behaves, including the error wording the classifier matches, is UNVERIFIED.
 
 ## Position
 
@@ -24,38 +24,46 @@ Status: **planned design**. No adapter code exists and no inference has been run
 | Text to speech | Uses the system synthesizer. |
 | Native config | No config plugin, entitlements or Info.plist keys needed by the package. |
 
-**UNVERIFIED:** `fil-PH` transcription support (unknown until probed on a phone). Whether the package builds on RN 0.86. Embeddings and transcription on the iPhone 14 Pro Max and iPhone 13.
+**UNVERIFIED:** `fil-PH` transcription support (unknown until probed on a phone). Embeddings and transcription on the iPhone 14 Pro Max and iPhone 13. Whether the package runs on RN 0.86 (it builds: EAS build `fbc85457`).
 
-## Planned architecture
+## Architecture
+
+As built.
 
 ```
-UI / store
+Screens -> PulseProvider -> PulseCore            (src/services)
    |
-LocalAIService            (interface, src/ai)
+LocalAIService            (interface, src/ai/types.ts)
    |
-   +-- rules engine       (deterministic; explicit floor/building conflicts; no model)
-   +-- evidence check     (deterministic; verbatim span must exist in the report)
-   +-- error classifier   (maps provider errors to typed states)
+   +-- evidence check     (src/ai/evidence.ts; verbatim span must exist in the report;
+   |                       proposals containing medical-judgement words are discarded)
+   +-- error classifier   (src/ai/classifyError.ts; maps provider errors to typed states)
    |
 CallstackAppleAIAdapter   (src/ai/callstack; only importer of @react-native-ai/apple and ai)
+   +-- prompts.ts         (system prompts and model-facing schemas)
+   +-- appleRuntime.ts    (the thin wrapper over the package; replaced by a fake in tests)
 ```
 
-The DEMO bundle supplies a scripted implementation of the same interface, labelled SIMULATED.
+The deterministic rules engine (floor and building extraction, explicit conflict detection, no model) is not in `src/ai/`. It lives in `src/domain/rules/` and runs inside the domain commands.
+
+The DEMO bundle supplies `src/demo/SimulatedAI.ts`, a keyword-matching implementation of the same interface. Every result it returns carries `source: 'simulated'` and `latencyMs: 0`. If the Callstack adapter cannot be loaded in LIVE, every AI call returns a `native_error` result (`ai_module_unavailable`) and the rest of the app carries on (`src/services/__tests__/live.test.ts`).
 
 ## `LocalAIService` interface
 
-From the PULSE master specification. Exact TypeScript shapes will be frozen in Phase 2 (contracts) and Phase 4 (adapter).
+As in `src/ai/types.ts`:
 
 ```
 LocalAIService:
   inspectCapabilities(): Promise<CapabilityMatrix>
-  extractIncidentReport(raw: OriginalReport): Promise<AIResult<IncidentProposal>>
+  extractIncidentReport(raw: { text }): Promise<AIResult<IncidentProposal>>
   suggestClarification(context: IncidentContext): Promise<AIResult<ClarificationProposal>>
-  findConflicts(statements: Claim[]): Promise<AIResult<ConflictProposal[]>>
+  findConflicts(statements: { id, author, text }[]): Promise<AIResult<ConflictProposal[]>>
   proposeNonMedicalTasks(context: IncidentContext): Promise<AIResult<TaskProposal[]>>
-  compareSemanticReports?(a: string, b: string): Promise<SimilarityResult>
-  transcribeLocal?(audio: LocalAudioInput, language: string): Promise<AIResult<Transcript>>
+  compareSemanticReports(a: string, b: string): Promise<SimilarityResult>
+  transcribeLocal(audio: { wavBytes }, locale: string): Promise<AIResult<Transcript>>
 ```
+
+Every method resolves and never rejects. There is no text-to-speech method.
 
 ## Typed result states
 
@@ -76,14 +84,18 @@ In every non-`ready` state the incident is already persisted and queued.
 
 ## Error classification
 
-Because 0.12.0 gives only `MODEL_UNAVAILABLE` a distinct code, the adapter will classify by message text:
+Because 0.12.0 gives only `MODEL_UNAVAILABLE` a distinct code, `classifyAIError` (`src/ai/classifyError.ts`) classifies by message text, in this order:
 
-1. Code `MODEL_UNAVAILABLE` → `unavailable`.
-2. Code `AppleLLM` with a message matching known refusal or language wording → `guardrail_refusal` or `unsupported_locale`.
-3. Code `AppleLLM` with context-overflow wording → state to be decided in Phase 4 (there is no dedicated overflow state; `native_error` is the default until then).
-4. Anything unmatched → `native_error`.
+1. The adapter's own timeout (20 s by default) → `timeout`.
+2. Code `MODEL_UNAVAILABLE`, or "not available" wording → `unavailable`.
+3. Abort or time-out wording → `timeout`.
+4. Guardrail, safety or refusal wording → `guardrail_refusal`.
+5. Unsupported language or locale wording → `unsupported_locale`.
+6. Missing or undownloaded assets wording → `model_assets_missing`.
+7. No-object or parse-failure wording from the AI SDK → `invalid_output`.
+8. Anything unmatched → `native_error`. This includes context overflow: "Exceeded model context window size" is tested to map to `native_error`.
 
-This is fragile by nature: message wording can change between OS releases. The match patterns will live in one file with tests, and the fallback is always `native_error`, never a guess.
+This is fragile by nature: message wording can change between OS releases. The patterns live in one file with tests, and the fallback is always `native_error`, never a guess. The patterns were written from the package source and from expected wording; none has been compared with an error from a real device.
 
 ## Structured-output constraints
 
@@ -97,45 +109,48 @@ This is fragile by nature: message wording can change between OS releases. The m
 
 ## Evidence-span check
 
-Planned for extraction:
+Implemented in `src/ai/evidence.ts` and applied by the adapter to extraction:
 
 1. Each extracted field must carry a verbatim span quoted from the original report.
-2. A deterministic check looks for that span in the original text.
-3. If the span is not found, the field is dropped to `unknown`.
-4. The model is never asked for, and the schema has no field for, diagnosis, injury severity, priority, age or coordinates.
+2. A deterministic check looks for that span in the original text, ignoring case and whitespace.
+3. If the span is not found, the field is discarded and listed under `dropped`; fields with no value are listed under `unknown`.
+4. A value or span containing a medical-judgement word (severity, diagnosis, triage and similar) is discarded.
+5. The model is never asked for, and the strict schema has no field for, diagnosis, injury severity, priority, age or coordinates; output with such extra keys fails validation.
 
-Example the tests will cover: for "Nadulas ako sa hagdan sa Building B. Masakit paa ko." the floor must remain `unknown`.
+The reducer repeats the span check when the proposal is recorded (`AIFinding.evidenceVerified`).
 
 ## Other capabilities
 
-| Capability | Planned use | Constraint |
-| --- | --- | --- |
-| Clarification | At most one optional question at a time; skipping leaves the field `unknown`. | Non-blocking. |
-| Conflict notes | Model may describe a possible contradiction. | The deterministic rules engine detects explicit floor/building conflicts without the model. Nothing is auto-resolved. |
-| Task proposals | Simple non-medical coordination tasks. | A human must accept voluntarily. |
-| Embeddings | Possible-duplicate hints, language `en`. | Tagalog will be reported as unsupported unless probing shows otherwise. No percent-confidence UI. |
-| Transcription | `expo-audio` records to WAV; `prepare()` per locale. | `fil-PH` is UNVERIFIED; fallback is typed text. |
-| Text to speech | Optional readout (P8). | Never blocks SOS. |
+| Capability | Use | Constraint | Code status |
+| --- | --- | --- | --- |
+| Clarification | At most one optional question at a time; skipping leaves the field `unknown`. | Non-blocking. Medical questions and questions about known or skipped fields are rejected. | IMPLEMENTED, UNIT-TESTED |
+| Conflict notes | Model may describe a possible contradiction. | The deterministic rules engine detects explicit floor/building conflicts without the model. Nothing is auto-resolved. | IMPLEMENTED, UNIT-TESTED. In the app the path runs only when text is `ready`, and no test shows it adding a flag the rules had not already raised. |
+| Task proposals | Simple non-medical coordination tasks, at most three. | A human must accept voluntarily. | IMPLEMENTED, UNIT-TESTED |
+| Embeddings | Possible-duplicate hints, language `en`. | Tagalog is reported as unsupported unless probing shows otherwise. No percent-confidence UI. | Adapter method IMPLEMENTED, UNIT-TESTED; nothing in the app calls it, so there are no duplicate hints yet. |
+| Transcription | `expo-audio` records to WAV; the file bytes go to the adapter. | `fil-PH` is UNVERIFIED; fallback is typed text. | IMPLEMENTED, UNIT-TESTED with a fake runtime and an injected file reader. Recording has never run. |
+| Text to speech | Optional readout (P8). | Never blocks SOS. | NOT STARTED |
 
 ## Privacy
 
-- Raw reports, prompts and model output will not be written to logs, crash reports or analytics.
-- Diagnostics will show package version, per-feature state, measured latency and whether the source is real or simulated, with no report text.
-- A proposal received from another device will be labelled as received, not as local inference on this device.
+- Raw reports, prompts and model output are not written to logs, crash reports or analytics. This holds by absence of logging in `src/ai/`, `src/services/` and `src/sync/`, not by a test.
+- Diagnostics show package version, per-feature state, latency and whether the source is real or simulated.
+- Planned, not confirmed in code: a proposal received from another device is labelled as received, not as local inference on this device.
 
-## Diagnostics screen (planned)
+## Diagnostics screen
 
-`Demo Lab > Local AI`: provider name, package version, per-capability state, measured latency of the last real call, device model, real or simulated source.
+`Demo Lab > Local AI` (`src/app/demo-lab/local-ai.tsx`, `src/components/settings/LocalAIDiagnosticsScreen.tsx`): provider name, package version, per-capability state, latency of the last call, device model, real or simulated source. Unit-tested in `src/components/__tests__/screens.test.tsx`; not yet looked at in the simulator or on a phone. In LIVE it re-runs extraction on a report already stored on the device; free text is offered in Demo only, because the service contract has no free-text extraction call.
 
 ## Test evidence
 
-No tests exist and no on-device inference has been run.
+No on-device inference has been run. All AI tests use a fake runtime.
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Adapter unit tests with a fake model (refusal, malformed output, timeout, invented floor or severity) | NOT STARTED | — |
-| Error classifier tests | NOT STARTED | — |
-| Evidence-span check tests | NOT STARTED | — |
-| Real inference on iPhone 17 Pro Max, external internet disabled, unseen input | NOT STARTED | — |
+| Adapter unit tests with a fake model (refusal, malformed output, timeout, invented floor or severity) | UNIT-TESTED | `src/ai/__tests__/CallstackAppleAIAdapter.test.ts`: 24 passed (2026-10-09; whole suite re-run 2026-10-10). |
+| Error classifier tests | UNIT-TESTED | Same file, seven provider-error cases. The wording is assumed, not captured from a device. |
+| Evidence-span check tests | UNIT-TESTED | Same file ("keeps only fields whose evidence is verbatim in the report"). |
+| Service-level AI actions, clarification, transcription with an injected reader | UNIT-TESTED | `src/services/__tests__/ai.test.ts`. |
+| Native pod compiles on RN 0.86.3 | BUILT | EAS build `fbc85457` contains `AppleLLM` and links `FoundationModels`. |
+| Real inference on iPhone 17 Pro Max, external internet disabled, unseen input | BLOCKED | No build installed on the phone (install failed: device locked). Needs Apple Intelligence enabled and the model downloaded. |
 | `fil-PH` transcription probe | NOT STARTED | — |
 | Embeddings probe on each device | NOT STARTED | — |

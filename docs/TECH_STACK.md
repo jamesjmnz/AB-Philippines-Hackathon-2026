@@ -1,8 +1,8 @@
 # Tech stack
 
-Last checked: 2026-10-09. Versions below were selected from the npm registry and from reading package source. `package.json` and `package-lock.json` are the source of truth for what is actually installed; the Phase 1 install is `IN PROGRESS`, so some rows may not be in `package.json` yet.
+Last checked: 2026-10-09. Versions below were selected from the npm registry and from reading package source. `package.json` and `package-lock.json` are the source of truth for what is actually installed. The toolchain table was audited on 2026-10-09, except the simulator row (2026-10-10).
 
-Nothing has been built or run yet. "Selected" does not mean "proven to work together".
+As of 2026-10-10 the selected set compiles together: EAS development build `fbc85457` finished, including `@react-native-ai/apple` 0.12.0 on React Native 0.86.3, and EAS simulator build `66901962` runs in the iOS 26.3 simulator. Nothing has run on a physical iPhone, so "builds together" does not yet mean "proven to work together".
 
 ## Toolchain on the development Mac (audited)
 
@@ -14,7 +14,7 @@ Nothing has been built or run yet. "Selected" does not mean "proven to work toge
 | Swift | 6.2.4 | |
 | CocoaPods | 1.16.2 | |
 | eas-cli | 20.5.1 | Installed, not logged in. |
-| Simulator runtimes | none installed | Verification is on physical iPhones. |
+| Simulator runtimes | iOS 26.3 | Used to look at screens in Demo mode. Verification is on physical iPhones. |
 | Signing | one valid "Apple Development" identity | |
 
 ## Selected version matrix

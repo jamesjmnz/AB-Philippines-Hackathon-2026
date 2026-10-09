@@ -1,6 +1,6 @@
 # Phase plan
 
-Current status of each phase is tracked in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md). As of 2026-10-09: P0 `IN PROGRESS`, P1 scaffold install `IN PROGRESS`, everything else `NOT STARTED`. No gate has been passed.
+Current status of each phase is tracked in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md). As of 2026-10-10: G0 is passed and no other gate is. Code for P1 to P7 is committed, `IMPLEMENTED` and `UNIT-TESTED`, and the native parts are `BUILT` (EAS development build `fbc85457`); G2 and G3 are `IN PROGRESS` and undecided, and the device gates G1 (device part), G4, G5, G6 (device part) and G7 are `BLOCKED` on the human steps listed under "What needs the human", because nothing has run on a physical iPhone. P8 and P9 are `NOT STARTED`.
 
 ## Rules for every phase
 

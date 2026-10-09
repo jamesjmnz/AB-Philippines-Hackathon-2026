@@ -2,22 +2,24 @@
 
 Last updated: 2026-10-10.
 
-Nothing has run on a physical iPhone yet. The app runs in the iOS 26.3 simulator (iPhone 17 Pro Max) from the EAS simulator build, in Demo mode only. Code for P2 to P7 is committed with unit tests, but none of their gates has been verified on a device; the rows below still describe gate status, not code status. See the evidence log.
+Nothing has run on a physical iPhone yet. The app runs in the iOS 26.3 simulator (iPhone 17 Pro Max) from the EAS simulator build `66901962`, observed in Demo mode only. No LIVE-mode behaviour, real model inference, real radio link or real Keychain use has been observed anywhere.
+
+Code for P2 to P7 is committed and unit-tested (2026-10-10: typecheck clean, lint clean, 42 Jest suites and 450 tests passed). Only gate G0 is passed. In the tracker each row gives the gate status first and the code status second; they are different things, and a phase whose code is `IMPLEMENTED`, `UNIT-TESTED` can still have a gate that is `BLOCKED` on a device observation. Feature-level status is in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). See the evidence log.
 
 ## Phase tracker
 
-Push status is one of `PUSHED`, `NOT_ATTEMPTED`, `BLOCKED`. `PUSHED` is written only after Git confirms.
+Push status is one of `PUSHED`, `NOT_ATTEMPTED`, `BLOCKED`. `PUSHED` is written only after Git confirms. For P1 to P7 it rests on the push recorded in the evidence log (2026-10-10) and on the remote-tracking ref `origin/feat/pulse-2`, which is at `2cc6425`, the same commit as the local branch (not re-fetched while writing this).
 
 | phase | gate/tests | local commits | branch | push status | blocker |
 | --- | --- | --- | --- | --- | --- |
 | P0 Audit and contracts | G0: PASSED (audit recorded, docs and agent profiles written, versions selected). No code tests apply. | `5daff31` `b5242b2` `a98a621` `7cb9ab4` | `feat/pulse-2` | see P1 row | — |
-| P1 Scaffold and native spike | G1: native build VERIFIED on EAS (2026-10-10); install on device still pending. Local history: `tsc --noEmit`, `expo lint`, `expo-doctor` (21/21) pass; `expo prebuild` and `pod install` succeed with `AppleLLM 0.12.0` autolinked. Native build: BLOCKED, not verified. | see `git log` | `feat/pulse-2` | recorded in evidence log | Xcode 26.3 has no iOS 26.2 platform component installed, so `xcodebuild` rejects every iOS destination. Needs `xcodebuild -downloadPlatform iOS` (several GB); the Mac had about 11 GB free, so this was left for the owner. |
-| P2 Domain and SQLite | G2: NOT STARTED | — | — | NOT_ATTEMPTED | — |
-| P3 UI and Live/Demo | G3: IN PROGRESS. Screens ported from the 2.6 export and checked in the simulator (Demo mode) for Welcome, onboarding steps 1 and 2, Home, Network, Activity, Settings, SOS countdown and incident detail. Not compared yet: report flow, Demo Lab, Safety Session, sheets and dialogs, onboarding steps 3 to 5. | see `git log` | `feat/pulse-2` | recorded in evidence log | Incident detail uses four segments where the export has one scroll (owner decision pending). Tab bar has no backdrop blur (needs `expo-blur` and a new build). |
-| P4 Callstack Apple AI | G4: NOT STARTED | — | — | NOT_ATTEMPTED | — |
-| P5 Peer transport | G5: NOT STARTED | — | — | NOT_ATTEMPTED | — |
-| P6 Crypto and capsules | G6: NOT STARTED | — | — | NOT_ATTEMPTED | — |
-| P7 Multi-device integration | G7: NOT STARTED | — | — | NOT_ATTEMPTED | — |
+| P1 Scaffold and native spike | G1: not passed. Device part BLOCKED: install of build `fbc85457` on the iPhone 17 Pro Max failed because the phone was locked, so nothing has launched on an iPhone. Code and build: `IMPLEMENTED`, `BUILT`. `tsc --noEmit`, `expo lint` and `expo-doctor` (21/21) pass; `expo prebuild` and `pod install` succeed with `AppleLLM 0.12.0` autolinked; EAS development build `fbc85457` FINISHED (2026-10-10); EAS simulator build `66901962` runs in the iOS 26.3 simulator. Local `expo run:ios --device` still fails. | `21226be` `bd98790` `80157cb` `5451416` | `feat/pulse-2` | PUSHED | Human: unlock the iPhone 17 Pro Max, Developer Mode on, trust the developer certificate on first install. Local Xcode builds only: Xcode 26.3 has no iOS 26.2 platform component, so `xcodebuild` rejects every iOS destination; needs `xcodebuild -downloadPlatform iOS` (several GB), left for the owner. EAS builds do not need it. |
+| P2 Domain and SQLite | G2: IN PROGRESS, not passed; the lead has not decided it. Code: `IMPLEMENTED`, `UNIT-TESTED`. `npx jest src/domain src/storage`: 13 suites, 180 tests passed (SQLite through `better-sqlite3`, including close-and-reopen replay). 22-event vocabulary (D-P2-1). | `25b5cd2` `f09c715` | `feat/pulse-2` | PUSHED | `src/storage/expoDriver.ts` (the `expo-sqlite` driver used in LIVE) typechecks and has no test and no recorded run. |
+| P3 UI and Live/Demo | G3: IN PROGRESS, not passed. Code: `IMPLEMENTED`, `UNIT-TESTED` (`npx jest src/components`: 13 suites, 156 tests). Screens ported from the 2.6 export and checked in the simulator (Demo mode) for Welcome, onboarding steps 1 and 2, Home, Network, Activity, Settings, SOS countdown and incident detail. Not compared yet: report flow, Demo Lab, Safety Session, sheets and dialogs, onboarding steps 3 to 5. Nothing looked at in LIVE mode or on a phone. | `6c73040` `0455fc0` `012e1d4` `b4dfd27` `cdec0f2` `061a8bd` `d466414` `1a2ae4a` `b97b4a3` `e336991` | `feat/pulse-2` | PUSHED | Settled: incident detail keeps four segments where the export has one scroll (owner decision 2026-10-10, D-20). Open: tab bar has no backdrop blur (needs `expo-blur` and a new build); VoiceOver, Dynamic Type and Reduce Motion never exercised. |
+| P4 Callstack Apple AI | G4: BLOCKED, needs device observation. No inference has been run. Code: `IMPLEMENTED`, `UNIT-TESTED` (`npx jest src/ai`: 24 passed, fake runtime); `AppleLLM` is `BUILT` in `fbc85457`. | `f1e865b` | `feat/pulse-2` | PUSHED | Human: iPhone 17 Pro Max unlocked with the build installed, Apple Intelligence enabled and the model downloaded; then enter an unseen report with external internet disabled and report what the phone shows. |
+| P5 Peer transport | G5: BLOCKED, needs device observation. No packet has been exchanged between two devices. Code: `IMPLEMENTED`, `UNIT-TESTED` for the frame codec only (`swift test`: 6 passed); the Network framework code is `BUILT` in `fbc85457` and has never run. The TypeScript protocol is unit-tested against an in-memory radio (see P7). | `04ab601` `d9b716e` | `feat/pulse-2` | PUSHED | Human: update the iPhone 14 Pro Max and iPhone 13 to iOS 26, pair them with the Mac, install a build, run the offline scene (airplane mode with Wi-Fi and Bluetooth on) and report what the phones show. |
+| P6 Crypto and capsules | G6: tests IN PROGRESS (recorded, not decided); device part BLOCKED, needs device observation. Code: `IMPLEMENTED`, `UNIT-TESTED` (`swift test`: 15 passed with software keys on macOS; `src/crypto` 12 Jest tests); `BUILT` in `fbc85457`. Keychain and Secure Enclave paths have never run. | `4353c88` `d9b716e` | `feat/pulse-2` | PUSHED | Human: same phones as P5, paired in the app with the six-digit code compared on both; observe a relay-only phone and a trusted recipient. |
+| P7 Multi-device integration | G7: BLOCKED, needs device observation (two phones first; three-phone relay is a separate check). Code: `IMPLEMENTED`, `UNIT-TESTED` (`npx jest src/sync src/services src/demo src/crypto`: 14 suites, 87 tests) with several cores on an in-memory radio and a simulated crypto. LIVE composition has not been observed running. | `ecc415a` `7b103b3` | `feat/pulse-2` | PUSHED | Human: as P5 and P6, plus a `preview` build (never built) so the phones run without Metro. |
 | P8 Optional enhancements | G8: NOT STARTED | — | — | NOT_ATTEMPTED | — |
 | P9 Verification and handoff | G9: NOT STARTED | — | — | NOT_ATTEMPTED | — |
 
@@ -26,22 +28,24 @@ Push status is one of `PUSHED`, `NOT_ATTEMPTED`, `BLOCKED`. `PUSHED` is written 
 | Item | Value |
 | --- | --- |
 | Remote | `origin` = `github.com/jamesjmnz/AB-Philippines-Hackathon-2026` (public) |
-| Default branch | `main` (one commit: "Initial commit") |
-| Working branch | `feat/pulse-2` |
+| Default branch | `main` (started as one commit, "Initial commit"; `origin/main` is now the merge commit `f17dccf`) |
+| Working branch | `feat/pulse-2`. On 2026-10-10 work continues on `feat/pulse-2-overnight`, a local branch at the same commit (`2cc6425`) with no remote branch yet. |
 | Publishing rule | Feature branch, then pull request to `main`. No direct pushes to `main`. |
 | Pull request | #1 merged into `main` on 2026-10-10 (`f17dccf`) |
 
-## Known upcoming human-only steps
+## Human-only steps
 
-These are not blockers yet because the phases that need them have not reached their gates.
+These now block gates G1 (device part), G4, G5, G6 (device part) and G7: the code for those phases is written and no build has been installed on a phone.
 
 - iPhone 17 Pro Max: unlocked, Developer Mode on, Apple Intelligence enabled and model downloaded, developer certificate trusted on first install.
 - iPhone 14 Pro Max and iPhone 13: update to iOS 26 and pair with the Mac.
+- Register the two older phones for internal distribution (`eas device:create`) before a build can be installed on them.
+- A `preview` EAS build for runs without Metro; it has never been built and needs the owner's credentials.
 - Offline scenes must be run and observed by a person.
 
 ## Evidence log
 
-Append one entry per verified item: date, phase, command or device action, and a short summary of the real output. Empty until evidence exists.
+Append one entry per verified item: date, phase, command or device action, and a short summary of the real output.
 
 | Date | Phase | What was run or observed | Result summary |
 | --- | --- | --- | --- |
@@ -57,7 +61,16 @@ Append one entry per verified item: date, phase, command or device action, and a
 | 2026-10-09 | P4 (code only) | `npx jest src/ai` | 24 passed, 0 failed (adapter with a fake runtime; no real model involved). |
 | 2026-10-09 | P5 (code only) | `swift test` in `modules/pulse-peer` | 6 passed (frame codec). Network code typechecks against the iOS SDK; not run on a device. |
 | 2026-10-09 | P6 (code only) | `swift test` in `modules/pulse-crypto` | 15 passed (capsule seal/open, tamper, wrong key, expiry, relay-only, pairing code) using software keys on macOS. Keychain and Secure Enclave paths typecheck only. |
+| 2026-10-10 | P2 to P7 (code only) | On `feat/pulse-2-overnight` at `2cc6425`: `npm run typecheck`; `npm run lint`; `npm test` | Exit 0 each. No type errors; lint clean; `Test Suites: 42 passed, 42 total`, `Tests: 450 passed, 450 total`. By directory: domain 11 suites / 136 tests, storage 2 / 44, components 13 / 156, ai 1 / 24, services 9 / 41, demo 3 / 27, crypto 1 / 12, sync 1 / 7, transport 1 / 3. Jest only: in-memory radio, simulated crypto, fake AI runtime. `swift test`, `expo-doctor`, prebuild and device builds were not re-run. |
 
 ## Agents
 
-No delegated agent has produced a handoff yet. Handoffs are stored in [agent-handoffs/](agent-handoffs/README.md).
+Three handoffs have been filed in [agent-handoffs/](agent-handoffs/README.md). Each lists what is implemented, what is unit-tested, what is unverified, deviations and known limits.
+
+| Handoff | Agent | Phase | Covers | Counts recorded in the handoff |
+| --- | --- | --- | --- | --- |
+| [P2-domain.md](agent-handoffs/P2-domain.md) | pulse-domain-engineer | P2 | `src/domain/`, `src/storage/`, `DOMAIN_MODEL.md` | 13 suites, 180 tests |
+| [P3-ui.md](agent-handoffs/P3-ui.md) | pulse-mobile-ui | P3 | `src/app/`, `src/components/`, `src/ui/` | 8 suites, 83 tests |
+| [P7-integration.md](agent-handoffs/P7-integration.md) | integration engineer | P7 | `src/sync/`, `src/services/`, `src/demo/`, `src/crypto/capsule.ts`, `NETWORK_PROTOCOL.md` | 14 suites, 87 tests |
+
+The P3 handoff predates the later UI commits (`b4dfd27` to `e336991`): `src/components` now has 13 suites and 156 tests, and several entries in its deviation table no longer hold (the map, the Safety Session, the unusual-movement sheet, Contact and Relay history were ported afterwards). [UI_REFERENCE.md](UI_REFERENCE.md) has the current list. No handoff was filed for P4, P5 or P6; their evidence is in the log above.
