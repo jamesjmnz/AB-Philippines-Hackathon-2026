@@ -20,4 +20,15 @@ module.exports = defineConfig([
       ],
     },
   },
+  {
+    // Test fixtures and the Jest-only SQLite driver must never ship in app code.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/__tests__/**', 'src/**/testing/**', 'src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['**/testing/*', '@/*/testing/*'], message: 'testing/ helpers are for tests only.' }] },
+      ],
+    },
+  },
 ]);

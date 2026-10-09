@@ -47,3 +47,16 @@ Dated log. Newest entries are appended at the bottom of the table. Larger decisi
 ## How to add an entry
 
 Append a row with the date, the decision in one sentence, the reason and the status. If a decision is reversed, add a new row that references the old number; do not edit history.
+
+## Decisions recorded after Phase 2 (2026-10-10)
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| D-P2-1 | Two event types added to the 20-event vocabulary: `CLARIFICATION_SKIPPED` and `RESPONDER_DECLINED`. | A skipped question must stop being asked while the field stays unknown; declining the whole request is different from declining one task. |
+| D-P2-2 | Well-formed remote events that fail authorization are stored in the ledger but never applied. Only malformed, wrong-incident and bad-signature events are quarantined. | An event refused today (an acceptance that arrives before its offer) can become valid when its context arrives. Keeping it lets devices converge. |
+| D-P2-3 | Recipients are named in `INCIDENT_CREATED`; a device not named there or in a later capsule policy is not a participant. | Delivery state needs a recipient to attach to, and outsiders must not be able to author events. |
+| D-P2-4 | Accepting a task does not imply acknowledgment, and `in_progress` requires an in-person task. | The design export merged these; the product rules require them to stay distinct. |
+| D-P2-5 | The Swift crypto cores are tested with `swift test` on macOS. JS tests use an in-memory test double for `CapsuleCrypto` rather than a second real implementation. | One real implementation to audit; the JS layer is tested for policy, replay and expiry handling. |
+| D-P2-6 | Every packet between devices is a signed, encrypted capsule envelope. Events that carry the requester's own words or symptom travel only in the `detail` section; coordination events travel in `summary`. | Relay-only devices must never hold readable incident content, and trusted responders must not receive what is reserved for authorized ones. |
+
+Known gaps accepted for the prototype: event ordering trusts the author's Lamport value; an event id reused with different content is not detected; quarantined bodies have no retention rule.
