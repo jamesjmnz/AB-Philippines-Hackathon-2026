@@ -57,7 +57,7 @@ describe('Demo app', () => {
     expect(app.getSnapshot()).toBe(app.getSnapshot());
   });
 
-  it('says demo and simulated everywhere, per device, and exposes the six scenarios', async () => {
+  it('says demo and simulated everywhere, per device, and exposes the seven scenarios', async () => {
     await ready();
     expect(app.internals.failures()).toEqual([]);
     const alex = as('alex');
@@ -65,8 +65,8 @@ describe('Demo app', () => {
     expect(alex.me).toMatchObject({ name: DEMO_PERSONAS.alex.name, onboarded: true, hardwareBackedKeys: false });
     expect(alex.capabilities).toMatchObject({ provider: 'Simulation', source: 'simulated', device: { model: 'iPhone 17 Pro Max' }, text: { state: 'ready' } });
     expect(alex.demo).toMatchObject({ viewingAs: 'alex', aiReady: true, links: { mika: true, noah: true }, runningScenario: null });
-    expect(alex.demo?.scenarios.map((s) => s.key)).toEqual(['normal', 'intelligence', 'multi-responder', 'privacy', 'offline-recovery', 'complete']);
-    expect(DEMO_SCENARIOS).toHaveLength(6);
+    expect(alex.demo?.scenarios.map((s) => s.key)).toEqual(['normal', 'intelligence', 'multi-responder', 'privacy', 'offline-recovery', 'complete', 'incident-updates']);
+    expect(DEMO_SCENARIOS).toHaveLength(7);
 
     // Alex reaches Mika directly and Noah only through Mika.
     const reach = Object.fromEntries(alex.peers.map((p) => [p.name, [p.trusted, p.reach]]));
@@ -133,6 +133,7 @@ describe('Demo app', () => {
     ['privacy', 'delivered'],
     ['offline-recovery', 'acknowledged'],
     ['complete', 'resolved'],
+    ['incident-updates', 'delivered'],
   ] as const)('runs the %s scenario to completion and ends %s on all three devices', async (key, status) => {
     await ready();
     await run(key);
@@ -180,6 +181,67 @@ describe('Demo app', () => {
     expect(view.state.claims.floor.revisions.map((r) => r.value)).toEqual(expect.arrayContaining(['First floor', 'Second floor']));
     expect(fact(incidentAs('mika', id), 'floor')).toMatchObject({ value: 'Second floor', tag: 'user_confirmed' });
     expect(fact(incidentAs('noah', id), 'symptom')).toMatchObject({ value: 'Leg pain', protected: false });
+  });
+
+  it('incident-updates: a second source, a move read as a correction, a different floor kept open until Alex resolves it', async () => {
+    await ready();
+    app.actions.demo.runScenario('incident-updates');
+    const done = app.internals.scenarioFinished();
+    // On Alex's phone the simulated model may add to a reading, so only who and the overall class are pinned there.
+    const classes = (view: IncidentView) => view.updates.map((u) => [u.by, u.overall]);
+    const contradictions = (view: IncidentView, status: 'open' | 'resolved') => view.state.contradictions.filter((c) => c.status === status).length;
+
+    // Alex reported the second floor, Mika said the same, and Alex then moved to the third.
+    await jest.advanceTimersByTimeAsync(12_000);
+    const id = app.internals.lastIncidentId();
+    const moved = incidentAs('alex', id);
+    expect(moved.state.reports.map((r) => [r.author.userName, r.kind])).toEqual([
+      ['Alex Rivera', 'report'],
+      ['Mika Santos', 'observation'],
+      ['Alex Rivera', 'report'],
+    ]);
+    expect(classes(moved)).toEqual([
+      ['Mika Santos', 'confirmation'],
+      ['You', 'correction'],
+    ]);
+    // A move by the same person is not a disagreement, with themselves or with Mika's earlier words.
+    expect(moved.state.contradictions).toEqual([]);
+    expect(moved.updates.some((u) => u.needsVerification)).toBe(false);
+    expect(fact(moved, 'floor')).toMatchObject({ value: 'Third floor', candidates: [] });
+
+    // Noah names a different floor after the move: both statements are kept and only Alex can settle it.
+    await jest.advanceTimersByTimeAsync(4_000);
+    const disputed = incidentAs('alex', id);
+    expect(classes(disputed)).toEqual([
+      ['Mika Santos', 'confirmation'],
+      ['You', 'correction'],
+      ['Noah Cruz', 'possible_contradiction'],
+    ]);
+    expect([contradictions(disputed, 'open'), contradictions(disputed, 'resolved')]).toEqual([1, 0]);
+    expect(disputed.updates[2]?.needsVerification).toBe(true);
+    expect(fact(disputed, 'floor')).toMatchObject({ tag: 'unresolved' });
+    expect(fact(disputed, 'floor')?.candidates.map((c) => c.value).sort()).toEqual(['Fourth floor', 'Third floor']);
+    // Noah's phone runs no text model, simulated or not: the same reading comes from the rules alone.
+    const onNoah = incidentAs('noah', id);
+    expect(onNoah.updates.map((u) => [u.by, u.overall, u.basis, u.fields.map((f) => `${f.field}:${f.class}`).join(',')])).toEqual([
+      ['Mika Santos', 'confirmation', 'rules', 'floor:confirmation'],
+      ['Alex Rivera', 'correction', 'rules', 'floor:correction'],
+      ['You', 'possible_contradiction', 'rules', 'floor:possible_contradiction'],
+    ]);
+    expect(contradictions(onNoah, 'open')).toBe(1);
+
+    await jest.advanceTimersByTimeAsync(60_000);
+    await done;
+    expect(app.internals.failures()).toEqual([]);
+    const settled = incidentAs('alex', id);
+    expect([contradictions(settled, 'open'), contradictions(settled, 'resolved')]).toEqual([0, 1]);
+    expect(settled.state.contradictions[0]?.resolution).toMatchObject({ value: 'Third floor', resolvedBy: { userName: 'Alex Rivera' } });
+    expect(fact(settled, 'floor')).toMatchObject({ value: 'Third floor', tag: 'user_confirmed', candidates: [] });
+    // The classes are a record of how each statement read; resolving does not rewrite them or drop a statement.
+    expect(settled.updates.map((u) => u.overall)).toEqual(['confirmation', 'correction', 'possible_contradiction']);
+    expect(settled.updates.some((u) => u.needsVerification)).toBe(false);
+    expect(settled.state.claims.floor.revisions.map((r) => r.value)).toEqual(expect.arrayContaining(['Second floor', 'Third floor', 'Fourth floor']));
+    for (const device of ['alex', 'mika', 'noah'] as const) expect(as(device).capabilities?.source).toBe('simulated');
   });
 
   it('multi-responder: Mika communicates, Noah goes in person through the relay', async () => {

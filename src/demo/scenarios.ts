@@ -2,12 +2,13 @@ import type { IncidentProposal, ProposalField } from '@/ai';
 import type { TaskKind } from '@/domain';
 import type { ActionResult, DemoDevice, IncidentView, RecipientPolicyInput } from '@/services/api';
 
-import { DEMO_PERSONAS, SAMPLE_REPORT } from './personas';
+import { DELTA_STATEMENTS, DEMO_PERSONAS, SAMPLE_REPORT } from './personas';
 import type { DemoWorld } from './world';
 
 /**
- * The six scripted Demo Lab scenarios from the design. Each step drives one of the three simulated
- * devices through the same actions a person would tap; nothing writes state directly.
+ * The six scripted Demo Lab scenarios from the design, and one more for incident updates. Each step
+ * drives one of the three simulated devices through the same actions a person would tap; nothing
+ * writes state directly.
  */
 
 export interface ScenarioContext {
@@ -177,12 +178,21 @@ const reportFlow: ScenarioStep[] = [
 const mikaConflict = (afterMs: number) =>
   respond('mika', 'observe', afterMs, (ctx, id) => ctx.world.cores.mika.actions.addObservation(id, 'I think Alex is on the first floor.'));
 
-const alexResolveConflict = (afterMs: number) =>
+const alexResolveConflict = (afterMs: number, value = 'Second floor') =>
   respond('alex', 'resolve-conflict', afterMs, async (ctx, id) => {
     const open = incidentOn(ctx.world, 'alex', id)?.state.contradictions.find((c) => c.status === 'open');
     if (!open) return { ok: false, code: 'no_open_conflict', message: '' };
-    return ctx.world.cores.alex.actions.resolveConflict(id, open.id, 'Second floor');
+    return ctx.world.cores.alex.actions.resolveConflict(id, open.id, value);
   });
+
+/** A typed statement by the requester. The first is the report; later ones are updates to it. */
+const alexStates = (label: string, text: string, afterMs: number) => respond('alex', label, afterMs, (ctx, id) => ctx.world.cores.alex.actions.addReport(id, text, 'typed'));
+
+/** Responders read a statement by the requester only once it is in a capsule the requester sent them. */
+const shareCapsule = (afterMs: number) => respond('alex', 'capsule', afterMs, (ctx, id) => ctx.world.cores.alex.actions.updateCapsule(id, defaultPolicy(ctx.world)));
+
+const observes = (device: Exclude<DemoDevice, 'alex'>, label: string, text: string, afterMs: number) =>
+  respond(device, label, afterMs, (ctx, id) => ctx.world.cores[device].actions.addObservation(id, text));
 
 const preview = (level: 'relay' | 'trusted' | 'authorized', afterMs: number): ScenarioStep => ({
   afterMs,
@@ -289,6 +299,21 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
       taskStep('mika', 'report', 'communicate', 1200),
       taskStep('alex', 'confirm', 'communicate', 1200),
       respond('alex', 'resolve', 3000, (ctx, id) => ctx.world.cores.alex.actions.resolveIncident(id)),
+    ],
+  },
+  {
+    key: 'incident-updates',
+    title: 'Incident updates: correction, second source, disagreement',
+    description: 'Same floor twice, a move, a different floor, resolved by Alex',
+    steps: [
+      createSOS(0),
+      alexStates('report', DELTA_STATEMENTS.report, 1700),
+      shareCapsule(1200),
+      observes('mika', 'observe:same-floor', DELTA_STATEMENTS.sameFloor, 3200),
+      alexStates('report:moved', DELTA_STATEMENTS.moved, 3400),
+      shareCapsule(1200),
+      observes('noah', 'observe:other-floor', DELTA_STATEMENTS.otherFloor, 3600),
+      alexResolveConflict(3400, DELTA_STATEMENTS.resolvedFloor),
     ],
   },
 ];

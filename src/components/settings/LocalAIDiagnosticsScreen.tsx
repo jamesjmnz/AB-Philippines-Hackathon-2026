@@ -2,13 +2,13 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Share, Text, View } from 'react-native';
 
-import { PROPOSAL_FIELDS, type AIResult, type IncidentProposal, type OutputProbeLine } from '@/ai';
+import { PROPOSAL_FIELDS, type AICallRecord, type AIGuardStats, type AIResult, type AIState, type IncidentProposal, type OutputProbeLine } from '@/ai';
 import type { EvaluationOutcome } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
 import { Banner, Button, Card, ChoiceChip, GroupedList, MicroPill, Screen, SectionHeader, TextField } from '@/ui';
 
 import { routes } from '../nav';
-import { FIELD_LABELS, presentAIState } from '../present';
+import { FIELD_LABELS, presentAISource, presentAIState } from '../present';
 import { CapabilityRows } from './CapabilityRows';
 
 const EVAL_SPLITS = [
@@ -24,10 +24,25 @@ const EVAL_VARIANTS = [
   { id: 'nested', label: 'Extract: value + evidence' },
 ] as const;
 
+type Activity = { stats: AIGuardStats; recent: readonly AICallRecord[] };
+
+const ACTIVITY_CALLS_SHOWN = 10;
+
+const ms = (value: number | null) => (value === null ? '—' : `${Math.round(value)} ms`);
+
+/** One finished call. Numbers and enumerated words only: the record holds no report text or model output. */
+function callLine(c: AICallRecord): string {
+  return [c.operation, c.state, `queued ${Math.round(c.queuedMs)} ms`, `${Math.round(c.latencyMs)} ms`, c.cached ? 'cached' : null, c.deduped ? 'deduped' : null, `${c.inputChars} chars`]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+}
+
 /**
  * Diagnostics for the on-device provider, through the service contract only. Extraction runs either
  * on a report already stored on this device or on typed text; both show a proposal and neither
  * creates, records or sends anything. A simulated result is labelled and its latency is not shown.
+ * "Model activity" (Live only) is read from the model lane on mount, after each run here and on
+ * Refresh; it is never polled and is never read in Demo.
  */
 export function LocalAIDiagnosticsScreen() {
   const snapshot = usePulse();
@@ -44,6 +59,8 @@ export function LocalAIDiagnosticsScreen() {
   const [conditions, setConditions] = useState('');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<EvaluationOutcome | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(() => (demo ? null : actions.aiDiagnostics()));
+  const refreshActivity = () => setActivity(demo ? null : actions.aiDiagnostics());
 
   const stored = snapshot.incidents.flatMap((view) =>
     view.originalReport === null ? [] : view.state.reports.filter((r) => r.kind === 'report').map((r) => ({ key: `${view.id}:${r.id}`, incidentId: view.id, reportId: r.id, label: view.shortId })),
@@ -59,6 +76,7 @@ export function LocalAIDiagnosticsScreen() {
     // Report text and model output are shown on screen only and never logged.
     setResult(await actions.analyzeReport(target.incidentId, target.reportId));
     setRunning(false);
+    refreshActivity();
   };
 
   const runFreeText = async () => {
@@ -68,6 +86,7 @@ export function LocalAIDiagnosticsScreen() {
     setResult(null);
     setResult(await actions.diagnoseExtraction(body));
     setRunning(false);
+    refreshActivity();
   };
 
   const runProbe = async () => {
@@ -75,6 +94,7 @@ export function LocalAIDiagnosticsScreen() {
     setProbe(null);
     setProbe(await actions.probeLocalAI());
     setRunning(false);
+    refreshActivity();
   };
 
   const share = async (fileUri: string) => {
@@ -93,10 +113,22 @@ export function LocalAIDiagnosticsScreen() {
     setOutcome(finished);
     setProgress(null);
     setRunning(false);
+    refreshActivity();
     if (finished.ok) await share(finished.fileUri);
   };
 
   const simulated = result?.meta.source === 'simulated';
+  const capsSource = caps ? presentAISource(caps.source) : null;
+  // 'none' on a result means no provider produced it. Only when none is loaded is that the whole story;
+  // otherwise the call ended without a model answer (cancelled, displaced, timed out, failed).
+  const resultSource = !result ? '' : result.meta.source === 'none' && caps?.source !== 'none' ? 'No model answer' : presentAISource(result.meta.source).label;
+  const resultMeta = !result
+    ? ''
+    : [`${result.meta.latencyMs} ms`, resultSource, result.meta.cached ? 'from cache' : null, result.meta.queuedMs !== undefined && result.meta.queuedMs > 0 ? `queued ${Math.round(result.meta.queuedMs)} ms` : null]
+        .filter((part): part is string => part !== null)
+        .join(' · ');
+  const states = activity ? (Object.entries(activity.stats.byState) as [AIState, number][]).filter(([, n]) => n > 0) : [];
+  const latency = activity?.stats.latencyMs ?? null;
   const names = (fields: readonly (typeof PROPOSAL_FIELDS)[number][]) => fields.map((f) => FIELD_LABELS[f]).join(', ') || 'none';
 
   return (
@@ -111,8 +143,18 @@ export function LocalAIDiagnosticsScreen() {
             </Text>
             <Text className="mt-1 text-[13px] font-semibold text-gray-1">Provider</Text>
             <Text testID="diag-provider" className="text-[16px] text-ink">
-              {caps ? `${caps.provider}${caps.source === 'simulated' ? '' : ` · @react-native-ai/apple ${caps.packageVersion}`}` : '—'}
+              {caps ? `${caps.provider}${caps.source === 'callstack-apple' ? ` · @react-native-ai/apple ${caps.packageVersion}` : ''}` : '—'}
             </Text>
+            <Text className="mt-1 text-[13px] font-semibold text-gray-1">Source of these readings</Text>
+            {capsSource?.simulated ? (
+              <View testID="diag-source">
+                <MicroPill label={capsSource.label} />
+              </View>
+            ) : (
+              <Text testID="diag-source" className="text-[16px] text-ink">
+                {capsSource ? capsSource.label : '—'}
+              </Text>
+            )}
           </View>
           {caps ? (
             <View className="border-t border-hairline">
@@ -230,12 +272,56 @@ export function LocalAIDiagnosticsScreen() {
         </View>
       )}
 
+      {demo ? null : (
+        <View testID="diag-activity" className="gap-2">
+          <SectionHeader title="Model activity" />
+          <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">
+            What the model lane on this iPhone has done since the app started. Counts, states and timings only; no report text or model output is kept.
+          </Text>
+          {activity ? (
+            <Card className="gap-2">
+              <Text testID="diag-activity-totals" className="text-[14px] font-semibold text-ink">
+                {activity.stats.total} {activity.stats.total === 1 ? 'call' : 'calls'}
+                {states.length > 0 ? ` · ${states.map(([state, n]) => `${state} ${n}`).join(' · ')}` : ''}
+              </Text>
+              <Text testID="diag-activity-lane" className="text-[13px] text-gray-1">
+                Cache hits {activity.stats.cacheHits} · Dedup hits {activity.stats.dedupHits} · Displaced {activity.stats.displaced} · Queue high-water {activity.stats.queueHighWater}
+              </Text>
+              <Text testID="diag-activity-latency" className="text-[13px] text-gray-1">
+                {latency === null || latency.samples === 0
+                  ? 'Latency: no completed model call yet'
+                  : `Latency: p50 ${ms(latency.p50)} · p90 ${ms(latency.p90)} · max ${ms(latency.max)} · ${latency.samples} ${latency.samples === 1 ? 'sample' : 'samples'}`}
+              </Text>
+              {activity.recent.length === 0 ? (
+                <Text testID="diag-activity-empty" className="text-[13px] text-gray-1">
+                  No call recorded yet.
+                </Text>
+              ) : (
+                [...activity.recent]
+                  .sort((a, b) => b.seq - a.seq)
+                  .slice(0, ACTIVITY_CALLS_SHOWN)
+                  .map((c) => (
+                    <Text key={c.seq} testID="diag-activity-call" className="text-[12.5px] leading-[17px] text-gray-1">
+                      {callLine(c)}
+                    </Text>
+                  ))
+              )}
+            </Card>
+          ) : (
+            <Text testID="diag-activity-unread" className="px-1 text-[13px] text-gray-1">
+              Not read yet.
+            </Text>
+          )}
+          <Button testID="diag-activity-refresh" label="Refresh" size="sm" variant="secondary" icon="replay" onPress={refreshActivity} />
+        </View>
+      )}
+
       {result ? (
         <View testID="diag-result">
           <Card className="gap-2">
             {simulated ? <MicroPill label="SIMULATED" /> : null}
             <Text testID="diag-result-meta" accessibilityLiveRegion="polite" className="text-[13px] font-semibold text-gray-1">
-              {result.ok ? 'Proposal' : `Failed: ${result.state}`} · {simulated ? 'simulated, not measured' : `${result.meta.latencyMs} ms · ${result.meta.source}`}
+              {result.ok ? 'Proposal' : `Failed: ${result.state}`} · {simulated ? 'simulated, not measured' : resultMeta}
             </Text>
             {result.ok ? (
               <>

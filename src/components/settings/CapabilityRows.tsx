@@ -16,7 +16,13 @@ export function CapabilityRows({ caps }: { caps: CapabilityMatrix }) {
   return (
     <View>
       {rows.map((r, i) => {
-        const p = caps.source === 'simulated' ? { label: r.status.state === 'ready' ? 'Simulation' : 'Simulation · off', tone: 'gray' as const } : presentAIState(r.status.state);
+        // With no provider loaded nothing was asked, so the row must not read as an answer from the Apple model.
+        const p =
+          caps.source === 'simulated'
+            ? { label: r.status.state === 'ready' ? 'Simulation' : 'Simulation · off', tone: 'gray' as const }
+            : caps.source === 'none'
+              ? { label: 'Not loaded', tone: 'gray' as const }
+              : presentAIState(r.status.state);
         return (
           <View key={r.key} testID={`capability-${r.key}`} className={`flex-row items-center gap-3 px-4 py-3 ${i === 0 ? '' : 'border-t border-hairline'}`}>
             <View className="flex-1">

@@ -4,12 +4,12 @@ import { Text, TextInput, View } from 'react-native';
 
 import { CLARIFIABLE_FIELDS, type ClarifiableField } from '@/ai';
 import { canAddReport, canRequestClarification, canResolveConflict, canSkipClarification, type Actor, type ClaimField } from '@/domain';
-import type { FactView, IncidentView } from '@/services/api';
+import type { FactView, IncidentView, UpdateView } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, ChoiceChip, Enter, Icon, LinkButton, Pill, colors, design } from '@/ui';
+import { Avatar, ChoiceChip, Enter, Icon, LinkButton, Pill, colors, design, tones } from '@/ui';
 
 import { routes } from '../nav';
-import { BRAND, displayName, FIELD_LABELS, firstName, PROVENANCE, TAG_LOOK, timeLabel } from '../present';
+import { BRAND, displayName, FIELD_LABELS, firstName, presentUpdate, PROVENANCE, TAG_LOOK, timeLabel } from '../present';
 import { DetailsSheet } from './DetailsSheet';
 import { CardBox, INK_LINES, MoreRow, SectionTitle, TagPill } from './parts';
 import { useRun } from './useRun';
@@ -247,8 +247,59 @@ function Evidence({ view, actor }: { view: IncidentView; actor: Actor }) {
   );
 }
 
+const UPDATES_SHOWN = 5;
+
 /**
- * Intelligence segment: conflict cards, resolved note, clarification card, Details facts, and the
+ * One later statement and how it reads against what was already known. A derived reading or an AI
+ * proposal, never a fact, and never the statement's words (those follow the disclosure rules elsewhere).
+ */
+function UpdateRow({ update, role, first }: { update: UpdateView; role: IncidentView['role']; first: boolean }) {
+  const p = presentUpdate(update, role);
+  const look = tones[p.tone];
+  return (
+    <View
+      testID={`update-${update.reportId}`}
+      accessible
+      accessibilityLabel={p.accessibilityLabel}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 12, color: colors.gray1 }}>{p.fields.length > 0 ? `${update.by} · ${p.fields}` : update.by}</Text>
+        <Text style={{ fontSize: 15, fontWeight: '600', marginTop: 1, color: colors.ink }}>{p.label}</Text>
+        <Text testID={`update-basis-${update.reportId}`} style={{ fontSize: 12, marginTop: 2, color: p.fromModel ? colors.indigo : colors.gray1 }}>
+          {p.basis}
+        </Text>
+      </View>
+      {p.flag !== null ? <TagPill testID={`update-flag-${update.reportId}`} label={p.flag} fg={look.fg} bg={look.bg} /> : null}
+    </View>
+  );
+}
+
+/** "Updates": every statement after the first, newest first, five at a time. Renders nothing without one. */
+function UpdatesCard({ view }: { view: IncidentView }) {
+  const [all, setAll] = useState(false);
+  if (view.updates.length === 0) return null;
+  const newestFirst = [...view.updates].reverse();
+  const shown = all ? newestFirst : newestFirst.slice(0, UPDATES_SHOWN);
+  const more = newestFirst.length - shown.length;
+  return (
+    <>
+      <SectionTitle>Updates</SectionTitle>
+      <CardBox testID="updates-card">
+        {shown.map((u, i) => (
+          <UpdateRow key={u.reportId} update={u} role={view.role} first={i === 0} />
+        ))}
+        {more > 0 ? (
+          <View style={{ alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.hairline }}>
+            <LinkButton testID="updates-show-all" label={`Show ${more} earlier`} size={14} h={44} color={colors.gray1} onPress={() => setAll(true)} />
+          </View>
+        ) : null}
+      </CardBox>
+    </>
+  );
+}
+
+/**
+ * Intelligence segment: conflict cards, resolved note, clarification card, Details facts, Updates, and the
  * design's "More" card with "How SAGIP understood this", Add observation and Incident details.
  */
 export function IntelligenceTab({ view, actor }: { view: IncidentView; actor: Actor }) {
@@ -304,6 +355,8 @@ export function IntelligenceTab({ view, actor }: { view: IncidentView; actor: Ac
           </View>
         ) : null}
       </CardBox>
+
+      <UpdatesCard view={view} />
 
       <SectionTitle>More</SectionTitle>
       <CardBox testID="more-card">

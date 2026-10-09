@@ -2,6 +2,8 @@ import { mockRouter } from '../testing/mocks';
 
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
+import type { AICallRecord } from '@/ai';
+
 import { ActivityScreen } from '../activity/ActivityScreen';
 import { useAppMode } from '../appMode';
 import { useSafetySession } from '../demo/safetySession';
@@ -230,7 +232,7 @@ describe('demo lab', () => {
 });
 
 describe('local AI diagnostics', () => {
-  it('re-runs extraction on a stored report through the contract and shows latency and source', async () => {
+  it('re-runs extraction on a stored report through the contract and shows latency and a named source', async () => {
     const view = viewOf(sosFloorConflict().state);
     const reportId = view.state.reports.find((r) => r.kind === 'report')?.id ?? '';
     const app = createFakePulseApp({ incidents: [view] });
@@ -242,10 +244,11 @@ describe('local AI diagnostics', () => {
     renderWithApp(<LocalAIDiagnosticsScreen />, app);
 
     expect(screen.getByTestId('diag-provider')).toHaveTextContent('Callstack Apple · @react-native-ai/apple 0.12.0');
+    expect(screen.getByTestId('diag-source')).toHaveTextContent('Apple on-device model');
     expect(screen.getByTestId('capability-speech')).toHaveTextContent(/Ready offline/);
 
     fireEvent.press(screen.getByTestId('diag-run'));
-    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 873 ms · callstack-apple'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 873 ms · Apple on-device model'));
     expect(app.actions.analyzeReport).toHaveBeenCalledWith(view.id, reportId);
     // Diagnostics never create or change an incident in live mode.
     expect(app.actions.sendSOS).not.toHaveBeenCalled();
@@ -259,7 +262,7 @@ describe('local AI diagnostics', () => {
     renderWithApp(<LocalAIDiagnosticsScreen />, app);
     expect(screen.getByTestId('diag-unavailable')).toHaveTextContent(/Manual SOS does not depend on it/);
     fireEvent.press(screen.getByTestId('diag-run'));
-    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent(/Failed: unavailable · 0 ms · callstack-apple/));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: unavailable · 0 ms · Apple on-device model'));
   });
 
   it('Live: extracts from typed text through diagnoseExtraction and creates, records and sends nothing', async () => {
@@ -276,7 +279,7 @@ describe('local AI diagnostics', () => {
     expect(app.actions.diagnoseExtraction).not.toHaveBeenCalled();
     fireEvent.changeText(screen.getByTestId('diag-text'), '  I am stuck in Building B  ');
     fireEvent.press(screen.getByTestId('diag-run-text'));
-    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 412 ms · callstack-apple'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 412 ms · Apple on-device model'));
     expect(app.actions.diagnoseExtraction).toHaveBeenCalledWith('I am stuck in Building B');
 
     expect(screen.getByTestId('diag-field-building')).toHaveTextContent(/Building: Building B/);
@@ -295,7 +298,8 @@ describe('local AI diagnostics', () => {
     fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
     fireEvent.press(screen.getByTestId('diag-run-text'));
     await waitFor(() => expect(screen.getByTestId('diag-result-state')).toHaveTextContent('Refused by the model. No proposal was produced.'));
-    expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: guardrail_refusal · 95 ms · callstack-apple');
+    expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: guardrail_refusal · 95 ms · Apple on-device model');
+    expect(screen.queryByText(/callstack-apple/)).toBeNull();
     expect(screen.queryByTestId('diag-unknown')).toBeNull();
 
     // The fake's default answer is "unavailable".
@@ -330,5 +334,129 @@ describe('local AI diagnostics', () => {
     fireEvent.press(screen.getByTestId('diag-run'));
     await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: unavailable · simulated, not measured'));
     expect(screen.queryByText(/\bms\b/)).toBeNull();
+  });
+
+  it('Demo: names the source SIMULATED and hides model activity, the probe and the evaluation run', async () => {
+    const app = createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated') });
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({ ok: true, value: { fields: {}, dropped: [], unknown: [] }, meta: { source: 'simulated', latencyMs: 640, queuedMs: 12, cached: true } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    expect(within(screen.getByTestId('diag-source')).getByText('SIMULATED')).toBeTruthy();
+    expect(screen.getByTestId('diag-provider')).toHaveTextContent('Simulation');
+    for (const id of ['diag-activity', 'diag-activity-refresh', 'diag-probe', 'diag-eval-run', 'diag-eval-conditions']) expect(screen.queryByTestId(id)).toBeNull();
+    expect(screen.queryByText(/Model activity|Output shape probe|Evaluation run/)).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · simulated, not measured'));
+    // No lane figure of a simulated call is read or shown, before or after a run.
+    expect(app.actions.aiDiagnostics).not.toHaveBeenCalled();
+    expect(screen.queryByText(/\bms\b|from cache|queued/)).toBeNull();
+  });
+
+  it('Live with no provider loaded: says so everywhere and does not present the Apple model as the source', async () => {
+    const app = createFakePulseApp({ capabilities: { ...capabilities('native_error', 'none'), packageVersion: 'unknown' } });
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({ ok: false, state: 'native_error', message: 'ai_module_unavailable', meta: { source: 'none', latencyMs: 0 } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    expect(screen.getByTestId('diag-source')).toHaveTextContent('No provider loaded');
+    expect(screen.getByTestId('diag-provider')).toHaveTextContent('Callstack Apple');
+    expect(screen.queryByText(/@react-native-ai\/apple unknown/)).toBeNull();
+    for (const key of ['text', 'embeddings', 'transcription', 'speech']) expect(screen.getByTestId(`capability-${key}`)).toHaveTextContent(/Not loaded/);
+    expect(screen.queryByText(/Ready offline|Unsupported locale|SIMULATED/)).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: native_error · 0 ms · No provider loaded'));
+    expect(within(screen.getByTestId('diag-result')).queryByText(/Apple on-device model/)).toBeNull();
+  });
+
+  it('Live: a call the lane ended without a model answer is not blamed on a missing provider', async () => {
+    const app = createFakePulseApp();
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({ ok: false, state: 'queue_full', message: 'queue_full', meta: { source: 'none', latencyMs: 0, queuedMs: 0 } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: queue_full · 0 ms · No model answer'));
+  });
+
+  it('Live: says when a result came from the cache or waited in the queue', async () => {
+    const app = createFakePulseApp();
+    const value = { fields: {}, dropped: [], unknown: [] };
+    app.actions.diagnoseExtraction
+      .mockResolvedValueOnce({ ok: true, value, meta: { source: 'callstack-apple', latencyMs: 0, queuedMs: 0, cached: true } })
+      .mockResolvedValueOnce({ ok: true, value, meta: { source: 'callstack-apple', latencyMs: 910, queuedMs: 240.4 } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 0 ms · Apple on-device model · from cache'));
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 910 ms · Apple on-device model · queued 240 ms'));
+  });
+
+  it('Live: shows model activity from the lane, read on mount, after a run and on Refresh, never on a timer', async () => {
+    jest.useFakeTimers();
+    try {
+      const app = createFakePulseApp();
+      const call = (seq: number, patch: Partial<AICallRecord> = {}): AICallRecord => ({
+        seq,
+        operation: 'extract',
+        source: 'callstack-apple',
+        state: 'ready',
+        queuedMs: 0,
+        latencyMs: 800 + seq,
+        inputChars: 60 + seq,
+        cached: false,
+        deduped: false,
+        priority: 'interactive',
+        timestamp: 1_760_000_000_000 + seq,
+        ...patch,
+      });
+      const recent = [
+        ...Array.from({ length: 10 }, (_, i) => call(i + 1)),
+        call(11, { operation: 'assess', state: 'timeout', source: 'none', queuedMs: 1200.4, latencyMs: 15000, inputChars: 212, priority: 'background' }),
+        call(12, { latencyMs: 0, cached: true, deduped: true, inputChars: 48 }),
+      ];
+      app.actions.aiDiagnostics.mockReturnValue({
+        stats: { total: 14, byState: { ready: 12, timeout: 1, queue_full: 1 }, cacheHits: 3, dedupHits: 2, displaced: 1, queueHighWater: 4, latencyMs: { samples: 9, p50: 820.4, p90: 1410, max: 2975 } },
+        recent,
+      });
+      renderWithApp(<LocalAIDiagnosticsScreen />, app);
+      expect(app.actions.aiDiagnostics).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByTestId('diag-activity-totals')).toHaveTextContent('14 calls · ready 12 · timeout 1 · queue_full 1');
+      expect(screen.getByTestId('diag-activity-lane')).toHaveTextContent('Cache hits 3 · Dedup hits 2 · Displaced 1 · Queue high-water 4');
+      expect(screen.getByTestId('diag-activity-latency')).toHaveTextContent('Latency: p50 820 ms · p90 1410 ms · max 2975 ms · 9 samples');
+      // The last ten, newest first, one line each.
+      const lines = screen.getAllByTestId('diag-activity-call');
+      expect(lines).toHaveLength(10);
+      expect(lines[0]).toHaveTextContent('extract · ready · queued 0 ms · 0 ms · cached · deduped · 48 chars');
+      expect(lines[1]).toHaveTextContent('assess · timeout · queued 1200 ms · 15000 ms · 212 chars');
+      expect(lines[9]).toHaveTextContent('extract · ready · queued 0 ms · 803 ms · 63 chars');
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60_000);
+      });
+      expect(app.actions.aiDiagnostics).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(screen.getByTestId('diag-activity-refresh'));
+      expect(app.actions.aiDiagnostics).toHaveBeenCalledTimes(2);
+
+      fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+      fireEvent.press(screen.getByTestId('diag-run-text'));
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByTestId('diag-result-meta')).toBeTruthy();
+      expect(app.actions.aiDiagnostics).toHaveBeenCalledTimes(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('Live: says there is no completed model call yet instead of showing empty percentiles', () => {
+    renderWithApp(<LocalAIDiagnosticsScreen />, createFakePulseApp());
+    expect(screen.getByTestId('diag-activity-totals')).toHaveTextContent('0 calls');
+    expect(screen.getByTestId('diag-activity-latency')).toHaveTextContent('Latency: no completed model call yet');
+    expect(screen.getByTestId('diag-activity-empty')).toHaveTextContent('No call recorded yet.');
+    expect(screen.queryByTestId('diag-activity-call')).toBeNull();
   });
 });
