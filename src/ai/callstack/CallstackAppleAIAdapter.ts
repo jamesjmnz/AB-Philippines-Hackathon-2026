@@ -92,7 +92,7 @@ export class CallstackAppleAIAdapter implements LocalAIService {
     try {
       transcription = this.runtime.isTranscriptionAvailable(this.transcriptionLocale)
         ? { state: 'ready', locale: this.transcriptionLocale, detail: 'Locale assets are checked when a recording is transcribed.' }
-        : { state: 'unavailable', locale: this.transcriptionLocale, detail: 'On-device transcription needs iOS 26.' };
+        : { state: 'unavailable', locale: this.transcriptionLocale, detail: 'On-device transcription is not available on this device.' };
     } catch (error) {
       const c = classifyAIError(error);
       transcription = { state: c.state, locale: this.transcriptionLocale, detail: c.message };
