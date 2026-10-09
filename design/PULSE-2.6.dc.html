@@ -980,7 +980,7 @@ function hist(id,type,rep,mins,bld,resp,state){const ms=Date.now()-mins*60000,M=
   if(state==='cancelled'){inc.events.push(ev('cancelled',ms+20000,R,'Request cancelled','Cancelled during countdown'));inc.tasks=[];return inc;}
   const to=resp;inc.recips[to]={d:1,a:1};
   inc.events.push(ev('delivered',ms+20000,P[to].name,'Delivered to '+P[to].first,'Receipt from '+P[to].device));
-  inc.events.push(ev('ack',ms+M,P[to].name,P[to].first+' acknowledged','Seen on '+P[to].first+'’s device'));
+  inc.events.push(ev('ack',ms+M,P[to].name,P[to].first+' has seen it','Opened on '+P[to].first+'’s device'));
   const t=inc.tasks.find(x=>x.kind==='inperson');t.assignee=to;t.suggested=to;t.state='confirmed';t.ms=ms+18*M;t.title='Go to '+P[rep].first;
   const loc=inc.tasks.find(x=>x.kind==='location');loc.state='confirmed';inc.tasks=[t,loc];
   inc.events.push(ev('accepted',ms+2*M,P[to].name,P[to].first+' took the in-person role',t.title));
@@ -1086,7 +1086,7 @@ class Component extends DCLogic {
   nextCand(c,t){return ['mika','noah','alex'].find(p=>p!==c.reporter&&!t.declined.includes(p)&&!(c.recips[p]&&c.recips[p].x));}
   ensureReach(id){const c=this.find(id);if(!c||this.closed(c))return;this.inflight=this.inflight||{};c.tasks.forEach(t=>{const p=t.suggested;if(t.state==='offered'&&p&&p!==c.reporter&&!c.recips[p]&&!this.inflight[id+':'+p])this.deliver(id,p,p==='noah'&&c.reporter==='alex'?'mika':null);});}
   respond(id,who,act){const n=P[who].first,nm=P[who].name,inc=this.find(id);if(!inc||this.closed(inc))return;
-    if(act==='ack'){this.mut(id,c=>{const r=c.recips[who];if(!r||r.a)return;r.a=1;this.addEv(c,'ack',nm,n+' acknowledged','Seen on '+n+'’s device · not yet accepted');});this.toast(n+' acknowledged','visibility');}
+    if(act==='ack'){this.mut(id,c=>{const r=c.recips[who];if(!r||r.a)return;r.a=1;this.addEv(c,'ack',nm,n+' has seen it','Opened on '+n+'’s device · no role taken yet');});this.toast(n+' has seen it','visibility');}
     if(act==='decline'){this.mut(id,c=>{const r=c.recips[who];if(!r)return;r.x=1;this.addEv(c,'declined',nm,n+' can’t help right now','The request remains open');c.tasks.forEach(t=>{if(t.suggested===who&&t.state==='offered'){t.declined.push(who);t.suggested=this.nextCand(c,t);t.state=t.suggested?'offered':'unassigned';t.ms=Date.now();}});});this.toast(n+' can’t help right now','do_not_disturb_on',CORAL);}
     if(act==='forward'){const to=this.fwdTarget(id,who);if(!to)return this.toast('No other trusted responders','info');this.mut(id,c=>{this.addEv(c,'forwarded',nm,'Incident forwarded to '+P[to].first,'Store-and-forward relay from '+n+'’s device');});this.later(()=>this.deliver(id,to,who),800);this.toast('Forwarding to '+P[to].first+' · awaiting receipt','forward');}
     if(act==='resolve'){this.mut(id,c=>{c.resolved=true;this.addEv(c,'resolved',nm,'Resolution confirmed','Confirmed by '+n);});this.toast('Incident resolved','verified',GREEN);}
