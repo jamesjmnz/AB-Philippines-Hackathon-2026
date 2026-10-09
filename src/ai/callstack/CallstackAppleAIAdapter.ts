@@ -44,7 +44,9 @@ import {
   combinedModelSchema,
   conflictModelSchema,
   extractionModelSchema,
+  fence,
   fenceReport,
+  inlineDetail,
   quoteModelSchema,
   relationModelSchema,
   taskModelSchema,
@@ -155,7 +157,8 @@ export class CallstackAppleAIAdapter implements LocalAIService {
   async assessStatement(input: StatementAssessmentInput): Promise<AIResult<StatementAssessmentProposal>> {
     const statement = input.statement.trim();
     const known = describeKnownDetails(input.known);
-    const prompt = `Known details:\n${known}\n${fenceReport(clip(statement)).replace(/report>/g, 'statement>')}`;
+    const fenced = fence(clip(statement), 'statement');
+    const prompt = `Known details:\n${known}\n${fenced}`;
 
     if (this.assessment === 'single') {
       return this.generate(COMBINED_SYSTEM, prompt, combinedModelSchema, (output) => {
@@ -171,7 +174,7 @@ export class CallstackAppleAIAdapter implements LocalAIService {
       }).then(withLatency);
     }
 
-    const first = await this.generate(QUOTE_SYSTEM.replace('<report> and </report>', '<statement> and </statement>'), prompt.slice(prompt.indexOf('<statement>')), quoteModelSchema, (output) =>
+    const first = await this.generate(QUOTE_SYSTEM.replace('<report> and </report>', '<statement> and </statement>'), fenced, quoteModelSchema, (output) =>
       fieldsFromQuotes(statement, output),
     );
     if (!first.ok) return first;
@@ -389,7 +392,7 @@ function fieldsFromQuotes(report: string, output: Record<(typeof QUOTE_KEYS)[Pro
 }
 
 function describeKnownDetails(known: StatementAssessmentInput['known']): string {
-  const line = (label: string, value: string | undefined) => `${label}: ${value ? `"${clip(value, 120)}"` : '(not known)'}`;
+  const line = (label: string, value: string | undefined) => `${label}: ${value ? `"${clip(inlineDetail(value), 120)}"` : '(not known)'}`;
   return [line('place', known.locationText), line('what happened', known.incidentType), line('feeling', known.symptom)].join('\n');
 }
 

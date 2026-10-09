@@ -24,9 +24,20 @@ export function promptFingerprint(): string {
   return `${PROMPT_VERSION}-${hash.toString(16).padStart(8, '0')}`;
 }
 
-/** Marks the report as data. The closing tag is neutralised in the model's copy so a report cannot end it early. */
-export function fenceReport(text: string): string {
-  return `<report>\n${text.replace(/<\s*\/?\s*report\s*>/gi, '(report)')}\n</report>`;
+/**
+ * Marks text as data inside <tag>...</tag>. Any opening or closing form of that tag inside the text is
+ * neutralised in the model's copy, so the text cannot end the fence early or open a second one.
+ */
+export function fence(text: string, tag: 'report' | 'statement'): string {
+  const inside = text.replace(new RegExp(`<\\s*/?\\s*${tag}\\b[^>]*>`, 'gi'), `(${tag})`);
+  return `<${tag}>\n${inside}\n</${tag}>`;
+}
+
+export const fenceReport = (text: string): string => fence(text, 'report');
+
+/** A known detail is shown to the model on one line; angle brackets and line breaks in it would let it imitate the layout. */
+export function inlineDetail(text: string): string {
+  return text.replace(/[<>\r\n]+/g, ' ').trim();
 }
 
 const DATA_RULE =

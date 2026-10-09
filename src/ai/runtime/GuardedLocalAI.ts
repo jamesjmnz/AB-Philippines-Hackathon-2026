@@ -123,6 +123,8 @@ type Job<T> = {
   run(): Promise<T>;
   waiters: Waiter<T>[];
   writeCache: boolean;
+  /** Cache generation the job started under; a result from before a clear is never stored. */
+  generation: number;
   status: 'queued' | 'running' | 'released';
   startedAt: number;
   ceilingTimer?: unknown;
@@ -306,9 +308,13 @@ export class GuardedLocalAI implements LocalAIService {
 
   // ---- Cache and diagnostics --------------------------------------------------------------------
 
+  /** Forgets every stored answer, and makes sure a generation already in flight does not store one afterwards. */
   clearCache(): void {
     this.cache.clear();
+    this.cacheGeneration += 1;
   }
+
+  private cacheGeneration = 0;
 
   /** Oldest first. Copies, so a caller cannot alter the buffer. */
   diagnostics(): readonly AICallRecord[] {
@@ -399,6 +405,7 @@ export class GuardedLocalAI implements LocalAIService {
             run: call,
             waiters: [waiter],
             writeCache: useCache,
+            generation: this.cacheGeneration,
             status: 'queued',
             startedAt: 0,
           };
@@ -534,7 +541,7 @@ export class GuardedLocalAI implements LocalAIService {
         const info = this.safeDescribe(job, outcome.result);
         if (info) {
           holdLane = this.holdLaneAfterInnerTimeout && info.state === 'timeout';
-          if (info.cacheable && job.writeCache && job.key !== null) this.remember(job.key, outcome.result);
+          if (info.cacheable && job.writeCache && job.key !== null && job.generation === this.cacheGeneration) this.remember(job.key, outcome.result);
           for (const waiter of job.waiters) {
             if (waiter.done) continue;
             waiter.done = true;

@@ -132,7 +132,8 @@ function groundFreeText(value: string, quote: string): Grounding {
   const wanted = contentTokens(value);
   const said = contentTokens(quote);
   const found = wanted.filter((token) => said.some((word) => sameWord(token, word))).length;
-  if (wanted.length > 0 && found * 2 >= wanted.length) return { ok: true, value };
+  // Every content word of the value has to be the person's: one invented word ("stroke dizzy" for "dizzy") is enough to refuse it.
+  if (wanted.length > 0 && found === wanted.length) return { ok: true, value };
   // The value is the model's paraphrase, not the person's words: keep the person's words instead.
   const own = quote.replace(/\s+/g, ' ').trim();
   if (own.length === 0) return { ok: false, reason: 'value_not_in_quote' };
@@ -149,7 +150,7 @@ function groundFreeText(value: string, quote: string): Grounding {
  *   the quote must not negate it, and the accepted value is the rules' canonical label ("Second floor", "Building B").
  *   A floor the rules cannot read is rejected; a building with a proper name is accepted when the quote says that name;
  * - `assistanceRequested`: the quote must ask for help, in English or Tagalog, and not decline it;
- * - `incidentType`, `locationText`, `symptom`: accepted when at least half of the value's content words are in
+ * - `incidentType`, `locationText`, `symptom`: accepted only when every content word of the value is in
  *   the quote; otherwise the value is replaced by the quote itself, the person's own words.
  */
 export function groundValue(field: ProposalField, value: string, quote: string): Grounding {
