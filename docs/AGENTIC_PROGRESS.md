@@ -6,6 +6,26 @@ Nothing has run on a physical iPhone yet. The app runs in the iOS 26.3 simulator
 
 Code for P2 to P7 is committed and unit-tested (2026-10-10: typecheck clean, lint clean, 42 Jest suites and 450 tests passed). Only gate G0 is passed. In the tracker each row gives the gate status first and the code status second; they are different things, and a phase whose code is `IMPLEMENTED`, `UNIT-TESTED` can still have a gate that is `BLOCKED` on a device observation. Feature-level status is in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). See the evidence log.
 
+## Morning checklist for the owner (written 2026-10-10, overnight run)
+
+Work from the overnight run is on `feat/pulse-2-overnight` (pushed, no pull request). Review it with `git log --oneline feat/pulse-2..feat/pulse-2-overnight`, then merge it into `feat/pulse-2` if you accept it.
+
+What needs you, in order. Each step is a device gate; report what the phone shows and it gets logged.
+
+1. **G1, install on the iPhone 17 Pro Max.** Unlock the phone and keep it awake (Developer Mode on). Then:
+   ```bash
+   curl -L -o /tmp/sagip-512bf15c.ipa "https://expo.dev/artifacts/eas/E9KoAM-AXc-VEfuXfoQWnxxKzfEC2X-zUirQujTpldQ.ipa"
+   xcrun devicectl device install app --device 41A2BCD1-3937-55E1-982E-8C399058D56E /tmp/sagip-512bf15c.ipa
+   npm start
+   ```
+   Trust the developer certificate on first launch (Settings > General > VPN & Device Management). Use build `512bf15c`, not `fbc85457`: the older one lacks the pairing fix.
+   Observe: the app opens with no SIMULATED bar, onboarding completes, a manual SOS shows "Saved on this device · Not delivered", and it is still listed after you close and reopen the app.
+2. **G4, local AI on the same phone.** Apple Intelligence on and the model downloaded. Load the app once from Metro, then switch off Wi-Fi and mobile data. Send an SOS, choose "Describe what happened", type a report you have not used before. Observe the proposal and its evidence. Also try a Filipino sentence. Settings > Demo Lab > Local AI shows the per-capability states.
+3. **G5 to G7, second phone.** Update the iPhone 14 Pro Max or iPhone 13 to iOS 26, pair it with the Mac, register it (`eas device:create`) and build again so the profile includes it. Then on both phones: Network > tap the nearby iPhone > Pair this device, compare the six digits, confirm on both. Send an SOS from one; on the other mark it seen, offer and take a role, report done; confirm and resolve on the first. The two-simulator run in the evidence log is the expected behaviour.
+4. **Offline runs without Metro** need the `preview` profile, never built: `eas build -p ios --profile preview`.
+
+Mac state left behind: about 2.6 GB free disk; the second simulator (SAGIP 17 Pro) is shut down to relieve memory; Metro may still be running on port 8081.
+
 ## Phase tracker
 
 Push status is one of `PUSHED`, `NOT_ATTEMPTED`, `BLOCKED`. `PUSHED` is written only after Git confirms. For P1 to P7 it rests on the push recorded in the evidence log (2026-10-10) and on the remote-tracking ref `origin/feat/pulse-2`, which is at `2cc6425`, the same commit as the local branch (not re-fetched while writing this).
