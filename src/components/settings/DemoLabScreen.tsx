@@ -1,123 +1,196 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppMode, DemoDevice } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Banner, Button, GroupedList, Icon, ListRow, Screen, SectionHeader, SegmentedControl, Toggle, colors } from '@/ui';
+import { Avatar, Enter, Icon, IconButton, Pill, SegmentedControl, Toggle, colors, padBottom, type IconName } from '@/ui';
 
 import { useAppMode } from '../appMode';
+import { useSafetySession } from '../demo/safetySession';
 import { routes } from '../nav';
+import { BRAND, brand } from '../present';
 
 const MODES = [
   { key: 'live', label: 'Live' },
   { key: 'demo', label: 'Demo' },
 ] as const;
 
-const DEVICES: readonly { key: DemoDevice; name: string; role: string }[] = [
-  { key: 'alex', name: 'Alex', role: 'Requester' },
-  { key: 'mika', name: 'Mika', role: 'Responder · can see everything' },
-  { key: 'noah', name: 'Noah', role: 'Responder · can see summary' },
+/** The design's simulated phones (design P table, line 943). */
+const DEVICES: readonly { key: DemoDevice; name: string; first: string; device: string; ai: string }[] = [
+  { key: 'alex', name: 'Alex Rivera', first: 'Alex', device: 'iPhone 17 Pro Max', ai: 'Main local AI device' },
+  { key: 'mika', name: 'Mika Santos', first: 'Mika', device: 'iPhone 14 Pro Max', ai: 'Trusted responder / relay' },
+  { key: 'noah', name: 'Noah Cruz', first: 'Noah', device: 'iPhone 13', ai: 'Trusted responder / relay' },
 ];
 
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <Text accessibilityRole="header" style={{ fontSize: 13, fontWeight: '600', color: colors.gray1, paddingHorizontal: 6, paddingBottom: 8 }}>
+      {children}
+    </Text>
+  );
+}
+
+function Group({ children }: { children: ReactNode }) {
+  return <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, overflow: 'hidden' }}>{children}</View>;
+}
+
+function ToggleRow({ label, value, onChange, first, testID }: { label: string; value: boolean; onChange: (v: boolean) => void; first: boolean; testID: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 8, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
+      <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: colors.ink }}>{label}</Text>
+      <Toggle testID={testID} label={label} value={value} onChange={onChange} />
+    </View>
+  );
+}
+
+function TriggerRow({ icon, label, onPress, first, testID }: { icon: IconName; label: string; onPress: () => void; first?: boolean; testID: string }) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 8, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
+      <Icon name={icon} size={20} />
+      <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: colors.ink }}>{label}</Text>
+      <Icon name="play_arrow" size={20} color={colors.gray5} />
+    </Pressable>
+  );
+}
+
+/** Demo Lab (design 597–624). The Live | Demo switch is the product's own addition. */
 export function DemoLabScreen() {
   const snapshot = usePulse();
   const actions = usePulseActions();
+  const insets = useSafeAreaInsets();
   const requested = useAppMode((s) => s.mode);
   const setMode = useAppMode((s) => s.setMode);
   const demo = snapshot.demo;
   const back = () => (router.canGoBack() ? router.back() : router.replace(routes.settings));
 
   return (
-    <Screen testID="demo-lab-screen" onBack={back} title="PULSE Demo Lab" subtitle="Presentation controls. In Demo, all data, AI output, encryption and networking are simulated and kept apart from live data.">
-      <View className="gap-2">
-        <SegmentedControl<AppMode> options={MODES} value={requested} onChange={setMode} accessibilityLabel="Live or Demo" />
-        <Text testID="mode-note" accessibilityLiveRegion="polite" className="px-1 text-[12.5px] leading-[17px] text-gray-1">
-          {snapshot.mode === 'demo' ? 'Demo is on. The SIMULATED bar stays on every screen until you switch back to Live.' : 'Live is on. Only measured state from this iPhone is shown.'}
-        </Text>
-      </View>
-
-      <GroupedList>
-        <ListRow first testID="open-local-ai" icon="memory" title="Local AI diagnostics" subtitle="Capability matrix and an extraction run on this device" onPress={() => router.push(routes.localAI)} />
-      </GroupedList>
-
-      {demo === null ? (
-        <Banner testID="demo-off" tone="gray" text="Scenario controls appear after you switch to Demo. Switching does not touch your live requests or pairings." />
-      ) : (
-        <>
+    <Enter testID="demo-lab-screen" kind="slideIn" duration={350} ease="spring" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: padBottom(insets.bottom, 44) }}>
+        <View style={{ paddingTop: 8, paddingHorizontal: 20, alignItems: 'flex-start' }}>
+          <IconButton icon="arrow_back" label="Back" size={42} onPress={back} />
+        </View>
+        <View style={{ paddingTop: 16, paddingHorizontal: 20, gap: 18 }}>
           <View>
-            <SectionHeader title="View as" />
-            <GroupedList>
-              {DEVICES.map((d, i) => {
-                const selected = demo.viewingAs === d.key;
-                return (
-                  <Pressable
-                    key={d.key}
-                    testID={`view-as-${d.key}`}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`View as ${d.name}, ${d.role}`}
-                    onPress={() => actions.demo.viewAs(d.key)}
-                    className={`min-h-[60px] flex-row items-center gap-3 px-4 py-3 ${i === 0 ? '' : 'border-t border-hairline'}`}>
-                    <Avatar name={d.name} size={40} self={selected} />
-                    <View className="flex-1">
-                      <Text className="text-[15px] font-semibold text-ink">{d.name}</Text>
-                      <Text className="mt-0.5 text-[12.5px] text-gray-1">{d.role}</Text>
-                    </View>
-                    {selected ? <Icon name="check_circle" size={22} color={colors.ink} filled /> : null}
-                  </Pressable>
-                );
-              })}
-            </GroupedList>
+            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+              {BRAND} Demo Lab
+            </Text>
+            <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray1, marginTop: 4 }}>Prototype and presentation controls. All data, AI output, encryption and networking here are simulated.</Text>
           </View>
 
-          <View>
-            <SectionHeader title="Simulation toggles" />
-            <GroupedList>
-              {(['mika', 'noah'] as const).map((d, i) => (
-                <View key={d} className={`min-h-[52px] flex-row items-center gap-3 px-4 py-2 ${i === 0 ? '' : 'border-t border-hairline'}`}>
-                  <Text className="flex-1 text-[15px] font-medium text-ink">Link Alex ↔ {d === 'mika' ? 'Mika' : 'Noah'}</Text>
-                  <Toggle testID={`link-${d}`} label={`Simulated link to ${d === 'mika' ? 'Mika' : 'Noah'}`} value={demo.links[d]} onChange={(v) => actions.demo.setLink(d, v)} />
-                </View>
-              ))}
-              <View className="min-h-[52px] flex-row items-center gap-3 border-t border-hairline px-4 py-2">
-                <Text className="flex-1 text-[15px] font-medium text-ink">Simulated AI ready</Text>
-                <Toggle testID="ai-ready" label="Simulated AI ready" value={demo.aiReady} onChange={(v) => actions.demo.setAIReady(v)} />
+          <View style={{ gap: 8 }}>
+            <SegmentedControl<AppMode> options={MODES} value={requested} onChange={setMode} accessibilityLabel="Live or Demo" />
+            <Text testID="mode-note" accessibilityLiveRegion="polite" style={{ fontSize: 12.5, lineHeight: 17, color: colors.gray1, paddingHorizontal: 4 }}>
+              {snapshot.mode === 'demo' ? 'Demo is on. The SIMULATED bar stays on every screen until you switch back to Live.' : 'Live is on. Only measured state from this iPhone is shown.'}
+            </Text>
+          </View>
+
+          {demo === null ? (
+            <>
+              <View testID="demo-off" style={{ flexDirection: 'row', gap: 10, backgroundColor: colors.hairline, borderRadius: 16, padding: 14 }}>
+                <Icon name="info" size={18} color={colors.gray2} />
+                <Text style={{ flex: 1, fontSize: 13, lineHeight: 18.85, color: colors.gray2 }}>Scenario controls appear after you switch to Demo. Switching does not touch your live requests or pairings.</Text>
               </View>
-            </GroupedList>
-          </View>
+              <Group>
+                <TriggerRow first testID="open-local-ai" icon="memory" label="Local AI diagnostics" onPress={() => router.push(routes.localAI)} />
+              </Group>
+            </>
+          ) : (
+            <>
+              <View>
+                <SectionTitle>Device preview</SectionTitle>
+                <Group>
+                  {DEVICES.map((d, i) => {
+                    const selected = demo.viewingAs === d.key;
+                    return (
+                      <Pressable
+                        key={d.key}
+                        testID={`view-as-${d.key}`}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`Preview as ${d.first}, ${d.device}`}
+                        onPress={() => actions.demo.viewAs(d.key)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.hairline }}>
+                        <Avatar name={d.name} size={40} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>
+                            {d.first} · {d.device}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.gray1 }}>{d.ai}</Text>
+                        </View>
+                        <View style={{ opacity: selected ? 1 : 0 }}>
+                          <Icon name="check_circle" size={22} filled />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </Group>
+              </View>
 
-          <View>
-            <SectionHeader title="Scenario presets" />
-            <View className="gap-2">
-              {demo.scenarios.map((s, i) => {
-                const running = demo.runningScenario === s.key;
-                return (
-                  <Pressable
-                    key={s.key}
-                    testID={`scenario-${s.key}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Run scenario ${i + 1}: ${s.title}. ${s.description}`}
-                    accessibilityState={{ selected: running }}
-                    onPress={() => actions.demo.runScenario(s.key)}
-                    className={`flex-row items-center gap-3 rounded-[20px] border bg-card px-4 py-[14px] ${running ? 'border-ink' : 'border-card'}`}>
-                    <View className={`h-8 w-8 items-center justify-center rounded-full ${running ? 'bg-ink' : 'bg-hairline'}`}>
-                      <Text className={`text-[14px] font-bold ${running ? 'text-white' : 'text-ink'}`}>{i + 1}</Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[15px] font-semibold text-ink">{s.title}</Text>
-                      <Text className="mt-0.5 text-[12.5px] leading-[17px] text-gray-1">{s.description}</Text>
-                    </View>
-                    <Icon name={running ? 'progress_activity' : 'play_arrow'} size={20} color={colors.gray5} />
-                  </Pressable>
-                );
-              })}
-              {demo.scenarios.length === 0 ? <Text className="px-1 text-[13px] text-gray-1">No scenarios are available in this build.</Text> : null}
-            </View>
-          </View>
+              <View>
+                <SectionTitle>Simulation toggles</SectionTitle>
+                <Group>
+                  <ToggleRow first testID="ai-ready" label="Main local AI ready" value={demo.aiReady} onChange={(v) => actions.demo.setAIReady(v)} />
+                  <ToggleRow first={false} testID="link-mika" label="Mika in range" value={demo.links.mika} onChange={(v) => actions.demo.setLink('mika', v)} />
+                  <ToggleRow first={false} testID="link-noah" label="Noah in range" value={demo.links.noah} onChange={(v) => actions.demo.setLink('noah', v)} />
+                  <ToggleRow first={false} testID="demo-technical" label="Show technical details" value={snapshot.settings.showTechnicalDetails} onChange={(v) => void actions.updateSettings({ showTechnicalDetails: v })} />
+                  <TriggerRow testID="trigger-anomaly" icon="vibration" label="Simulate motion anomaly" onPress={() => useSafetySession.getState().openAnomaly()} />
+                  <TriggerRow testID="trigger-session" icon="directions_walk" label="Safety Session" onPress={() => router.push(routes.session)} />
+                  <TriggerRow testID="open-local-ai" icon="memory" label="Local AI diagnostics" onPress={() => router.push(routes.localAI)} />
+                </Group>
+              </View>
 
-          <Button testID="demo-reset" label="Reset Scenario" size="md" onPress={() => actions.demo.reset()} />
-        </>
-      )}
-    </Screen>
+              <View>
+                <SectionTitle>Scenario presets</SectionTitle>
+                <View style={{ gap: 8 }}>
+                  {demo.scenarios.map((s, i) => {
+                    const running = demo.runningScenario === s.key;
+                    return (
+                      <Pressable
+                        key={s.key}
+                        testID={`scenario-${s.key}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Run scenario ${i + 1}: ${brand(s.title)}. ${brand(s.description)}`}
+                        accessibilityState={{ selected: running }}
+                        onPress={() => actions.demo.runScenario(s.key)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: running ? colors.ink : colors.line, backgroundColor: '#FFFFFF' }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: running ? colors.ink : colors.hairline, alignItems: 'center', justifyContent: 'center' }}>
+                          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 14, fontWeight: '700', color: running ? '#FFFFFF' : colors.ink }}>
+                            {i + 1}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>{brand(s.title)}</Text>
+                          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 2 }}>{brand(s.description)}</Text>
+                        </View>
+                        <Icon name="play_circle" size={22} filled />
+                      </Pressable>
+                    );
+                  })}
+                  {demo.scenarios.length === 0 ? <Text style={{ fontSize: 13, color: colors.gray1, paddingHorizontal: 4 }}>No scenarios are available in this build.</Text> : null}
+                </View>
+              </View>
+
+              <Pill
+                testID="demo-reset"
+                label="Reset Scenario"
+                h={54}
+                size={16}
+                onPress={() => {
+                  actions.demo.reset();
+                  useSafetySession.getState().reset();
+                }}
+              />
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </Enter>
   );
 }
