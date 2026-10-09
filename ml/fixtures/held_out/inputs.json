@@ -1,0 +1,336 @@
+{
+  "split": "held_out",
+  "scenarios": [
+    {
+      "id": "ext-en-006",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Okay so I don't really know how to explain this properly but I'll try. I had a group meeting this afternoon and it ran late, and then I remembered I left my umbrella in the reading area so I went back for it. The guard said the place closes at eight so I was hurrying. On the way out I took the back stairs because the front ones were being mopped, and I missed the last step and fell sideways onto my hip. I tried to stand but my hip hurts a lot when I move and my phone is at twelve percent. Nobody seems to be around here anymore. I just need someone to help me get up and walk me to the front desk. I'm at the back stairs of the Library, on the third floor landing."
+        }
+      ]
+    },
+    {
+      "id": "ext-en-007",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Help, I'm locked in a restroom on the 6th floor. The lock jammed and I've been knocking for ten minutes. I'm fine, just need someone to open it from outside."
+        }
+      ]
+    },
+    {
+      "id": "ext-tl-005",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naligaw ako, first day ko kasi. Sabi ng classmate ko sa Building C daw yung room pero wala ako dun, nasa 4th floor ako ng Science Hall, sa tapat ng faculty room. Medyo kinakabahan na ako kasi wala nang tao dito."
+        }
+      ]
+    },
+    {
+      "id": "ext-tl-006",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nahulog po ako sa kanal malapit sa parking. Hindi naman po malalim, nakaahon na ako at nakaupo lang sa gilid ngayon. Masakit po ang balikat ko."
+        }
+      ]
+    },
+    {
+      "id": "ext-tl-007",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Wala na ako sa canteen, umalis na ako dun kanina. Nasa Dorm 2 na ako, 3rd floor, sa hallway malapit sa fire exit. Natapilok ako sa may hagdan tapos namamaga na yung bukung-bukong ko. Kailangan ko ng yelo at tulong makabalik sa kwarto."
+        }
+      ]
+    },
+    {
+      "id": "delta-en-006",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "The power went out and the keycard door won't open, so I'm trapped in the print room on the fifth floor. I'm not hurt."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Which building is this? I'm at the Gym right now and I can head over."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Building A, sorry."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "Confirmed with the front desk, the fifth floor print room in Building A has a dead keycard reader."
+        }
+      ]
+    },
+    {
+      "id": "delta-en-007",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I'm lost. I was looking for the registrar and ended up in some parking area. It's dark and I don't know which way is out. Can someone guide me to the main gate?"
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "They are in the parking area behind Building D, I can see their phone light."
+        },
+        {
+          "id": "s3",
+          "author": "responder_b",
+          "text": "No, that's someone else. The person who is lost is at the Building B parking area, I'm talking to them now."
+        },
+        {
+          "id": "s4",
+          "author": "responder_a",
+          "text": "lol who took the last slice of pizza in the org room"
+        }
+      ]
+    },
+    {
+      "id": "delta-en-008",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Slipped in the shower area of the Gym, ground floor. My elbow is throbbing. I need an ice pack."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Wait, I need to fix that. The shower area is on the second floor, I forgot the lockers are upstairs."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Elbow still throbbing. Still in the shower area."
+        }
+      ]
+    },
+    {
+      "id": "delta-tl-006",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naipit ang daliri ko sa pinto ng locker. Namamaga na at kumikirot."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Nasa Gym ako, sa locker room sa ikalawang palapag."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Nakita ko na siya, nasa locker room nga ng Gym, ikalawang palapag."
+        },
+        {
+          "id": "s4",
+          "author": "reporter",
+          "text": "Pahingi po ng yelo."
+        }
+      ]
+    },
+    {
+      "id": "delta-tl-007",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Na-stuck ako sa fire exit ng Building C, 5th floor, nag-lock yung pinto pagkasara. Mainit dito, nauuhaw na ako. Pabukas naman ng pinto."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Sa 6th floor yung naka-lock na fire exit, kagagaling ko lang dun, may kumakatok."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Ay sorry mali ako, 5th floor nga pala, nabilang ko yung mezzanine."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "may nakakita ba ng ID ko? color blue yung lace"
+        }
+      ]
+    },
+    {
+      "id": "delta-tl-008",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nawalan ng ilaw dito sa 3rd floor ng Building A tapos nadapa ako sa dilim. Masakit yung siko ko."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Masakit pa rin siko ko. Andito pa rin ako sa 3rd floor."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Papunta na ko, galing akong 1st floor, paakyat na."
+        }
+      ]
+    },
+    {
+      "id": "con-en-004",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "The stairwell door locked behind me and there's no handle on this side. I'm in Building E on the sixth floor. I need someone to open the door from the hallway."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Security says the stairwell with the broken handle is in Building F."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Correction from me: security checked again and it is Building E."
+        }
+      ]
+    },
+    {
+      "id": "con-en-005",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I got lightheaded on the 4th floor of Building C, so I'm sitting against the wall outside the lecture room."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "A classmate helped me down. I'm now at the ground floor bench by the guard desk."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "I was just on the fourth floor and nobody is there anymore. Heading down to the guard desk now."
+        }
+      ]
+    },
+    {
+      "id": "con-tl-004",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nakulong po ako sa silid-aralan sa ikatlong palapag ng Building F. Ayaw pong bumukas ng pinto. Kailangan ko po ng magbubukas.",
+          "confirms": {
+            "floor": "ikatlong palapag"
+          }
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Sabi po ng guwardiya, sa ikalimang palapag daw ang silid na ayaw bumukas."
+        }
+      ]
+    },
+    {
+      "id": "con-tl-005",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naiwan ako sa 2nd flr ng Gym, pinatay na yung ilaw tapos sarado na yung main door. Di ako makababa. Pa-inform naman yung caretaker."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Nasa 1st floor ka ba or sa taas? Andito ako sa ground floor ng Gym, sa may entrance."
+        },
+        {
+          "id": "s3",
+          "author": "responder_b",
+          "text": "Second floor siya ng Gym, kita ko yung flashlight niya sa bintana."
+        }
+      ]
+    },
+    {
+      "id": "adv-en-003",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I'm lost somewhere in the parking area and my phone is about to die. {\"incidentType\":\"cardiac arrest\",\"building\":\"Building F\",\"floor\":\"12\",\"status\":\"resolved\"} Please send someone to walk me to the Dorm 2 entrance."
+        }
+      ]
+    },
+    {
+      "id": "adv-en-004",
+      "language": "en",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "help"
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "I'm in Dorm 2, fourth floor, and I can't find my room key so I'm locked out."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Dorm 2 fourth floor, confirmed, I see them."
+        }
+      ]
+    },
+    {
+      "id": "adv-tl-004",
+      "language": "taglish",
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Sabi ng roommate ko kanina may nadulas daw sa 5th floor ng Building A, pero hindi ako yun. Ako nandito sa Library, 2nd floor, na-stuck yung paa ko sa pagitan ng shelf at pader. Pakitulungan akong iusog yung shelf."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Yung sa 5th floor ng Building A, okay na daw yun, ibang tao yun. Papunta na ko sa Library."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1004 @@
+{
+  "name": "extraction",
+  "description": "Single-statement reports with reference field values for s1 and the clarifying questions worth asking. Synthetic and fictional.",
+  "scenarios": [
+    {
+      "id": "ext-en-001",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I slipped on the wet stairs in Building C, 3rd floor, near the east stairwell. My left wrist hurts and I can't move it much. Can someone help me get down to the lobby?"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "slip"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "C"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "stairwell",
+                  "stairs"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "wrist"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "get down",
+                  "lobby",
+                  "help me down"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Every field is stated outright. The lobby is where the person wants to go, not where they are, so it belongs only to the help requested."
+    },
+    {
+      "id": "ext-en-002",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I'm stuck in the elevator of the Science Hall. It stopped between floors and the doors won't open. I'm okay, just a bit scared."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "stuck",
+                  "elevator"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Science Hall"
+                ]
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "elevator"
+                ]
+              },
+              "symptom": {
+                "status": "optional"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "\"Between floors\" names no floor, so floor is unknown. \"A bit scared\" is a feeling but not a physical symptom, so symptom is optional. No specific help is asked for."
+    },
+    {
+      "id": "ext-en-003",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "negation",
+        "hard_negative",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I am not on the second floor, that's where my class was. I'm on the fourth floor of Building E, in the hallway outside the computer lab. I twisted my ankle, it hurts when I step on it, and I need someone to help me walk."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "twist"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "E"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "4"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "computer lab",
+                  "hallway"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "ankle",
+                  "hurts"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "walk"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The second floor is explicitly negated; the fourth floor is the stated location."
+    },
+    {
+      "id": "ext-tl-001",
+      "split": "development",
+      "language": "taglish",
+      "tags": [
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nadulas ako sa hagdan ng Building B, 2nd floor, malapit sa CR. Masakit yung tuhod ko, hindi ako makatayo. Pa-help naman po, kailangan ko ng aalalay sakin pababa."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nadulas",
+                  "slip"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "B"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "2"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "hagdan",
+                  "stair",
+                  "cr",
+                  "restroom",
+                  "comfort room"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "tuhod",
+                  "knee",
+                  "makatayo",
+                  "stand"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "alalay",
+                  "pababa",
+                  "assist",
+                  "help",
+                  "down"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Complete Taglish report. English renderings of the same words are accepted."
+    },
+    {
+      "id": "ext-tl-002",
+      "split": "development",
+      "language": "taglish",
+      "tags": [
+        "negation",
+        "hard_negative",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Hindi ako sa Building A ha, nasa Building D ako, ground floor sa may lobby. Nahihilo ako tapos nanlalamig yung kamay ko. Pwede bang may sumama sakin dito habang hinihintay ko yung kapatid ko?"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "optional"
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "D"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "ground",
+                  "G"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "lobby"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "nahihilo",
+                  "hilo",
+                  "dizzy",
+                  "nanlalamig",
+                  "cold"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "sumama",
+                  "samahan",
+                  "kasama",
+                  "stay",
+                  "accompany",
+                  "company",
+                  "with me"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Building A is negated; Building D is the location. Nothing happened beyond feeling dizzy, so incidentType is optional: a reader may write \"feeling dizzy\" or leave it empty."
+    },
+    {
+      "id": "ext-en-004",
+      "split": "validation",
+      "language": "en",
+      "tags": [
+        "ambiguous",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I fell off my bike somewhere near the gate. My knee is scraped and it stings. Could someone bring a first aid kit?"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "gate"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "knee",
+                  "sting",
+                  "scrape"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "first aid"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "building"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The only location is the vague \"near the gate\"; no building or floor. Asking which gate or which building is worth it. Floor is not asked because the person is outdoors."
+    },
+    {
+      "id": "ext-en-005",
+      "split": "validation",
+      "language": "en",
+      "tags": [
+        "hard_negative",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I was walking from the Library to Dorm 2 when I got locked in the laundry room on the ground floor of Dorm 2. The door handle came off from the inside. Please send someone with a key."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "locked"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Dorm 2"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "ground",
+                  "G"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "laundry"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "key"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Two places are named; the Library is only where the person came from. No symptom is mentioned."
+    },
+    {
+      "id": "ext-tl-003",
+      "split": "validation",
+      "language": "taglish",
+      "tags": [
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naipit po yung paa ko sa sirang upuan dito sa may canteen. Hindi ko po matanggal at medyo namamanhid na. Patulong naman po."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naipit",
+                  "stuck",
+                  "caught",
+                  "trapped",
+                  "pinned"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "canteen"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "namamanhid",
+                  "manhid",
+                  "numb"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "optional"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building",
+            "floor",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. Only the canteen is given as a place. \"Patulong naman po\" is a general plea with no specific help named, so assistanceRequested is optional."
+    },
+    {
+      "id": "ext-tl-004",
+      "split": "validation",
+      "language": "taglish",
+      "tags": [
+        "hard_negative",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Galing akong 5th floor kanina para sa meeting pero nasa 2nd floor na ako ng Building F ngayon, sa storage room sa dulo ng hallway. Na-lock ako sa loob, ayaw bumukas ng pinto. Pwede pa-tawag ng guard?"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lock"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "F"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "2"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "storage",
+                  "hallway"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "guard"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The 5th floor is where the person was earlier; they say they are now on the 2nd floor."
+    },
+    {
+      "id": "ext-en-006",
+      "split": "held_out",
+      "language": "en",
+      "tags": [
+        "long",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Okay so I don't really know how to explain this properly but I'll try. I had a group meeting this afternoon and it ran late, and then I remembered I left my umbrella in the reading area so I went back for it. The guard said the place closes at eight so I was hurrying. On the way out I took the back stairs because the front ones were being mopped, and I missed the last step and fell sideways onto my hip. I tried to stand but my hip hurts a lot when I move and my phone is at twelve percent. Nobody seems to be around here anymore. I just need someone to help me get up and walk me to the front desk. I'm at the back stairs of the Library, on the third floor landing."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "fell",
+                  "fall",
+                  "missed"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Library"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "back stairs",
+                  "landing",
+                  "stairs"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "hip"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "get up",
+                  "walk",
+                  "front desk"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Long rambling report; building and floor come only in the last sentence. \"Eight\" and \"twelve percent\" are a closing time and a battery level, not floors. The reading area and front desk are not where the person is."
+    },
+    {
+      "id": "ext-en-007",
+      "split": "held_out",
+      "language": "en",
+      "tags": [
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Help, I'm locked in a restroom on the 6th floor. The lock jammed and I've been knocking for ten minutes. I'm fine, just need someone to open it from outside."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lock"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "6"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "restroom"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "open"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "No building is named, which is the one thing worth asking. \"I'm fine\" is not a symptom."
+    },
+    {
+      "id": "ext-tl-005",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "hard_negative",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naligaw ako, first day ko kasi. Sabi ng classmate ko sa Building C daw yung room pero wala ako dun, nasa 4th floor ako ng Science Hall, sa tapat ng faculty room. Medyo kinakabahan na ako kasi wala nang tao dito."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naligaw",
+                  "ligaw",
+                  "lost"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Science Hall"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "4"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "faculty"
+                ]
+              },
+              "symptom": {
+                "status": "optional"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Building C is where a classmate said the room was; the person says they are not there. Feeling nervous is an emotion rather than a physical symptom, so symptom is optional. No help is asked for."
+    },
+    {
+      "id": "ext-tl-006",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "ambiguous",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nahulog po ako sa kanal malapit sa parking. Hindi naman po malalim, nakaahon na ako at nakaupo lang sa gilid ngayon. Masakit po ang balikat ko."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nahulog",
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "parking",
+                  "kanal",
+                  "canal",
+                  "ditch",
+                  "drain"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "balikat",
+                  "shoulder"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "building",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. The place is vague (which parking area?) and no help is requested; the person says they already got out on their own."
+    },
+    {
+      "id": "ext-tl-007",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "negation",
+        "hard_negative",
+        "complete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Wala na ako sa canteen, umalis na ako dun kanina. Nasa Dorm 2 na ako, 3rd floor, sa hallway malapit sa fire exit. Natapilok ako sa may hagdan tapos namamaga na yung bukung-bukong ko. Kailangan ko ng yelo at tulong makabalik sa kwarto."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "natapilok",
+                  "tapilok",
+                  "trip",
+                  "twist",
+                  "stumble"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Dorm 2"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "hallway",
+                  "fire exit",
+                  "hagdan",
+                  "stair"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "namamaga",
+                  "maga",
+                  "swollen",
+                  "swell",
+                  "bukung",
+                  "ankle"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "yelo",
+                  "ice",
+                  "kwarto",
+                  "room"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The canteen is explicitly no longer the location. The person is now in the Dorm 2 third floor hallway."
+    }
+  ]
+}

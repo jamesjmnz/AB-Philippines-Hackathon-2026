@@ -10,7 +10,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test": "jest",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "ml:fixtures": "tsx ml/evaluation/run-evaluation.ts fixtures",
+    "ml:verify": "tsx ml/evaluation/run-evaluation.ts verify",
+    "ml:baseline": "tsx ml/evaluation/run-evaluation.ts baseline",
+    "ml:score": "tsx ml/evaluation/run-evaluation.ts score",
+    "ml:report": "tsx ml/evaluation/run-evaluation.ts report"
   },
   "dependencies": {
     "@react-native-ai/apple": "0.12.0",
