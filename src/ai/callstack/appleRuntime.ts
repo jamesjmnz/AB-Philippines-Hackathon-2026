@@ -25,7 +25,7 @@ export const appleRuntime: AppleRuntime = {
         prompt,
         output: Output.object({ schema }),
         temperature: 0,
-        maxOutputTokens: 500,
+        maxOutputTokens: 1500,
         maxRetries: 0,
         abortSignal: signal,
       });
