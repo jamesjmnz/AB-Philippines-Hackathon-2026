@@ -4,19 +4,21 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { DisclosureLevel } from '@/domain';
 import type { IncidentView, PeerView, PulseSnapshot } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Dialog, Enter, Icon, PacketDot, Pill, SegmentedControl, Sheet, colors, tabBarHeight, type IconName, Rule } from '@/ui';
+import { Avatar, ChoiceChip, Dialog, Enter, Icon, PacketDot, Pill, SegmentedControl, Sheet, colors, tabBarHeight, type IconName, Rule } from '@/ui';
 
 import { useActor } from '../incident/useMe';
 import { useRun } from '../incident/useRun';
 import { routes } from '../nav';
-import { agoLabel, BRAND, DISCOVERY_LABEL, firstName, isOpen, presentNetwork, presentReach, presentStatus, shortDeviceId, type Me } from '../present';
+import { agoLabel, BRAND, DISCOVERY_LABEL, firstName, isOpen, LEVEL_LABELS, presentNetwork, presentReach, presentStatus, shortDeviceId, type Me } from '../present';
 
 const SEGMENTS = [
   { key: 'nearby', label: 'Nearby' },
   { key: 'trusted', label: 'Trusted' },
 ] as const;
+const PEER_LEVELS: readonly DisclosureLevel[] = ['relay', 'trusted', 'authorized'];
 
 type Look = { fg: string; bg: string };
 const INK: Look = { fg: colors.ink, bg: colors.hairline };
@@ -363,6 +365,32 @@ export function NetworkScreen() {
                 </View>
               ))}
             </View>
+            {selected.trusted ? (
+              <View testID="peer-level" style={{ marginTop: 16 }}>
+                <Text testID="peer-level-current" style={{ fontSize: 14.5, fontWeight: '600', color: colors.ink }}>
+                  Default level: {selected.level ? LEVEL_LABELS[selected.level] : 'Not known'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  {PEER_LEVELS.map((level) => (
+                    <ChoiceChip
+                      key={level}
+                      testID={`peer-level-${level}`}
+                      label={LEVEL_LABELS[level]}
+                      selected={selected.level === level}
+                      onPress={() => {
+                        // The chip moves only when the snapshot reports the new level.
+                        if (busy !== null || selected.level === level) return;
+                        void run('level', () => actions.setPeerLevel(selected.deviceId, level));
+                      }}
+                    />
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray1, marginTop: 10 }}>Applies to new requests only. A request already sent keeps the level it was sent with.</Text>
+                <Text style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray1, marginTop: 6 }}>
+                  {LEVEL_LABELS.relay}: {firstName(selected.name)} is not alerted and only passes sealed requests along to other devices.
+                </Text>
+              </View>
+            ) : null}
             {rename !== null ? (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
                 <TextInput

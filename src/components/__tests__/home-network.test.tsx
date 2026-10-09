@@ -218,6 +218,56 @@ describe('Network', () => {
     fireEvent.press(screen.getByTestId('dialog-confirm'));
     expect(app.actions.removePeer).toHaveBeenCalledWith(MIKA.deviceId);
   });
+
+  it('shows a trusted peer’s default level and changes it for new requests only', async () => {
+    const app = createFakePulseApp({ peers: [peer(MIKA, { level: 'trusted' })] });
+    renderWithApp(<NetworkScreen />, app);
+    fireEvent.press(screen.getByTestId(`peer-${MIKA.deviceId}`));
+
+    expect(screen.getByTestId('peer-level-current')).toHaveTextContent('Default level: Can see summary');
+    expect(screen.getByTestId('peer-level-relay')).toHaveTextContent('Passes along');
+    expect(screen.getByTestId('peer-level-trusted')).toHaveProp('accessibilityState', { selected: true });
+    expect(screen.getByTestId('peer-level-authorized')).toHaveProp('accessibilityState', { selected: false });
+    expect(screen.getByTestId('peer-level')).toHaveTextContent(/Applies to new requests only/);
+    expect(screen.getByTestId('peer-level')).toHaveTextContent(/Mika is not alerted and only passes sealed requests along/);
+
+    // The level already held is not sent again.
+    fireEvent.press(screen.getByTestId('peer-level-trusted'));
+    expect(app.actions.setPeerLevel).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('peer-level-authorized'));
+    expect(app.actions.setPeerLevel).toHaveBeenCalledWith(MIKA.deviceId, 'authorized');
+    await flush();
+    // Nothing changes on screen until the snapshot does.
+    expect(screen.getByTestId('peer-level-current')).toHaveTextContent('Default level: Can see summary');
+    act(() => app.setSnapshot({ peers: [peer(MIKA, { level: 'relay' })] }));
+    expect(screen.getByTestId('peer-level-current')).toHaveTextContent('Default level: Passes along');
+    expect(screen.getByTestId('peer-level-relay')).toHaveProp('accessibilityState', { selected: true });
+  });
+
+  it('shows the refusal when a level change is not accepted', async () => {
+    const app = createFakePulseApp({ peers: [peer(MIKA, { level: 'trusted' })] });
+    app.actions.setPeerLevel.mockResolvedValueOnce({ ok: false, code: 'peer_not_trusted', message: 'This device is not paired.' });
+    renderWithApp(<NetworkScreen />, app);
+    fireEvent.press(screen.getByTestId(`peer-${MIKA.deviceId}`));
+    fireEvent.press(screen.getByTestId('peer-level-relay'));
+    await flush();
+    expect(screen.getByTestId('toast')).toHaveTextContent('This device is not paired.');
+    expect(screen.getByTestId('peer-level-current')).toHaveTextContent('Default level: Can see summary');
+  });
+
+  it('offers no level for a device that is not paired', () => {
+    renderWithApp(<NetworkScreen />, createFakePulseApp({ peers: [peer(NOAH, { trusted: false, reach: 'discovered', level: 'trusted' })] }));
+    fireEvent.press(screen.getByTestId(`peer-${NOAH.deviceId}`));
+    expect(screen.queryByTestId('peer-level')).toBeNull();
+    expect(screen.queryByTestId('peer-level-relay')).toBeNull();
+  });
+
+  it('marks no level as chosen when a trusted peer reports none', () => {
+    renderWithApp(<NetworkScreen />, createFakePulseApp({ peers: [peer(MIKA)] }));
+    fireEvent.press(screen.getByTestId(`peer-${MIKA.deviceId}`));
+    expect(screen.getByTestId('peer-level-current')).toHaveTextContent('Default level: Not known');
+    for (const level of ['relay', 'trusted', 'authorized']) expect(screen.getByTestId(`peer-level-${level}`)).toHaveProp('accessibilityState', { selected: false });
+  });
 });
 
 describe('Pairing', () => {

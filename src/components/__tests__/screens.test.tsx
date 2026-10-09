@@ -1,6 +1,6 @@
 import { mockRouter } from '../testing/mocks';
 
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import { ActivityScreen } from '../activity/ActivityScreen';
 import { useAppMode } from '../appMode';
@@ -142,6 +142,25 @@ describe('settings', () => {
     expect(screen.queryByTestId('delete-all')).toBeNull();
   });
 
+  it('warns in Live when profile, pairings and settings are held in memory only', () => {
+    const app = createFakePulseApp({ storage: { settingsPersistent: false } });
+    renderWithApp(<SettingsScreen />, app);
+    expect(screen.getByTestId('settings-memory-only')).toHaveTextContent(
+      'Your profile, paired devices and settings are held in memory only on this device. They will be lost when the app closes.',
+    );
+    act(() => app.setSnapshot({ storage: { settingsPersistent: true } }));
+    expect(screen.queryByTestId('settings-memory-only')).toBeNull();
+  });
+
+  it('shows no memory-only notice when storage is not reported, and never in Demo', () => {
+    const live = renderWithApp(<SettingsScreen />, createFakePulseApp());
+    expect(screen.queryByTestId('settings-memory-only')).toBeNull();
+    live.unmount();
+    renderWithApp(<SettingsScreen />, createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated'), storage: { settingsPersistent: false } }));
+    expect(screen.queryByTestId('settings-memory-only')).toBeNull();
+    expect(screen.queryByText(/held in memory only/)).toBeNull();
+  });
+
   it('adds the simulated rows only in Demo', () => {
     const app = createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated') });
     renderWithApp(<SettingsScreen />, app);
@@ -224,7 +243,6 @@ describe('local AI diagnostics', () => {
 
     expect(screen.getByTestId('diag-provider')).toHaveTextContent('Callstack Apple · @react-native-ai/apple 0.12.0');
     expect(screen.getByTestId('capability-speech')).toHaveTextContent(/Ready offline/);
-    expect(screen.queryByTestId('diag-text')).toBeNull();
 
     fireEvent.press(screen.getByTestId('diag-run'));
     await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 873 ms · callstack-apple'));
@@ -242,5 +260,75 @@ describe('local AI diagnostics', () => {
     expect(screen.getByTestId('diag-unavailable')).toHaveTextContent(/Manual SOS does not depend on it/);
     fireEvent.press(screen.getByTestId('diag-run'));
     await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent(/Failed: unavailable · 0 ms · callstack-apple/));
+  });
+
+  it('Live: extracts from typed text through diagnoseExtraction and creates, records and sends nothing', async () => {
+    const app = createFakePulseApp();
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({
+      ok: true,
+      value: { fields: { building: { value: 'Building B', evidence: 'in Building B' } }, dropped: ['symptom'], unknown: ['floor', 'locationText'] },
+      meta: { source: 'callstack-apple', latencyMs: 412 },
+    });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+
+    expect(screen.getByTestId('diag-text-note')).toHaveTextContent('Runs the model on the text above. Nothing is saved or sent, and no request is created.');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    expect(app.actions.diagnoseExtraction).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByTestId('diag-text'), '  I am stuck in Building B  ');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · 412 ms · callstack-apple'));
+    expect(app.actions.diagnoseExtraction).toHaveBeenCalledWith('I am stuck in Building B');
+
+    expect(screen.getByTestId('diag-field-building')).toHaveTextContent(/Building: Building B/);
+    expect(screen.getByTestId('diag-field-building')).toHaveTextContent(/“in Building B”/);
+    expect(screen.getByTestId('diag-unknown')).toHaveTextContent('Unknown: Floor, Location, as described');
+    expect(screen.getByTestId('diag-dropped')).toHaveTextContent('Dropped (no evidence in report): What was described');
+    expect(screen.getByTestId('diag-result-note')).toHaveTextContent('A proposal, not a fact. Nothing was saved or sent.');
+    expect(screen.queryByText('SIMULATED')).toBeNull();
+    for (const name of ['sendSOS', 'addReport', 'analyzeReport', 'attachProposal'] as const) expect(app.actions[name]).not.toHaveBeenCalled();
+  });
+
+  it('Live: names a refusal and an unavailable model with the app’s own wording', async () => {
+    const app = createFakePulseApp();
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({ ok: false, state: 'guardrail_refusal', message: 'refused', meta: { source: 'callstack-apple', latencyMs: 95 } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'Some words');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-state')).toHaveTextContent('Refused by the model. No proposal was produced.'));
+    expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: guardrail_refusal · 95 ms · callstack-apple');
+    expect(screen.queryByTestId('diag-unknown')).toBeNull();
+
+    // The fake's default answer is "unavailable".
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-state')).toHaveTextContent('Unavailable. No proposal was produced.'));
+    expect(screen.getByTestId('diag-result-note')).toHaveTextContent('Nothing was saved or sent.');
+  });
+
+  it('Demo: labels the result SIMULATED, shows no latency as a measurement and creates no simulated request', async () => {
+    const app = createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated') });
+    app.actions.diagnoseExtraction.mockResolvedValueOnce({
+      ok: true,
+      value: { fields: { floor: { value: '3rd floor', evidence: '3rd floor' } }, dropped: [], unknown: [] },
+      meta: { source: 'simulated', latencyMs: 640 },
+    });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    fireEvent.changeText(screen.getByTestId('diag-text'), 'On the 3rd floor');
+    fireEvent.press(screen.getByTestId('diag-run-text'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Proposal · simulated, not measured'));
+    expect(within(screen.getByTestId('diag-result')).getByText('SIMULATED')).toBeTruthy();
+    expect(screen.queryByText(/640|\bms\b/)).toBeNull();
+    expect(screen.getByTestId('diag-unknown')).toHaveTextContent('Unknown: none');
+    expect(app.actions.diagnoseExtraction).toHaveBeenCalledWith('On the 3rd floor');
+    for (const name of ['sendSOS', 'addReport', 'analyzeReport'] as const) expect(app.actions[name]).not.toHaveBeenCalled();
+  });
+
+  it('Demo: a simulated result from a stored report carries no latency either', async () => {
+    const view = viewOf(sosFloorConflict().state);
+    const app = createFakePulseApp({ mode: 'demo', demo: demoState, capabilities: capabilities('ready', 'simulated'), incidents: [view] });
+    app.actions.analyzeReport.mockResolvedValueOnce({ ok: false, state: 'unavailable', message: 'simulated model off', meta: { source: 'simulated', latencyMs: 3 } });
+    renderWithApp(<LocalAIDiagnosticsScreen />, app);
+    fireEvent.press(screen.getByTestId('diag-run'));
+    await waitFor(() => expect(screen.getByTestId('diag-result-meta')).toHaveTextContent('Failed: unavailable · simulated, not measured'));
+    expect(screen.queryByText(/\bms\b/)).toBeNull();
   });
 });

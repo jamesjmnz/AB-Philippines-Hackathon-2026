@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { DemoDevice } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Dialog, Enter, Icon, SegmentedControl, Toggle, colors, tabBarHeight, useToast, type IconName } from '@/ui';
+import { Avatar, Banner, Dialog, Enter, Icon, SegmentedControl, Toggle, colors, tabBarHeight, useToast, type IconName } from '@/ui';
 
 import { IntelligenceSheet } from '../ai/IntelligenceSheet';
 import { useSafetySession } from '../demo/safetySession';
@@ -81,6 +81,8 @@ export function SettingsScreen() {
   const [dialog, setDialog] = useState<'delete' | 'reset' | null>(null);
   const { me, settings, capabilities: caps, demo } = snapshot;
   const isDemo = snapshot.mode === 'demo';
+  // Live only: the Demo Lab is in memory by design and already says it is simulated.
+  const memoryOnly = !isDemo && snapshot.storage?.settingsPersistent === false;
   const trusted = snapshot.peers.filter((p) => p.trusted).length;
   const keys = me.hardwareBackedKeys === null ? 'Not checked yet' : me.hardwareBackedKeys ? 'Secure Enclave' : 'Keychain';
   const model = !caps ? 'Checking…' : caps.source === 'simulated' ? 'Simulation' : caps.text.state === 'ready' ? 'Ready on-device' : presentAIState(caps.text.state).label;
@@ -94,6 +96,10 @@ export function SettingsScreen() {
           <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink, paddingTop: 6 }}>
             Settings
           </Text>
+
+          {memoryOnly ? (
+            <Banner testID="settings-memory-only" icon="warning" roomy text="Your profile, paired devices and settings are held in memory only on this device. They will be lost when the app closes." />
+          ) : null}
 
           <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             <Avatar name={me.name.length > 0 ? me.name : '?'} size={58} self />

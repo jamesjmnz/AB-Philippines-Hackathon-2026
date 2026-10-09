@@ -4,16 +4,16 @@ import { Text, View } from 'react-native';
 
 import { PROPOSAL_FIELDS, type AIResult, type IncidentProposal } from '@/ai';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Banner, Button, Card, ChoiceChip, GroupedList, Screen, SectionHeader, TextField } from '@/ui';
+import { Banner, Button, Card, ChoiceChip, GroupedList, MicroPill, Screen, SectionHeader, TextField } from '@/ui';
 
 import { routes } from '../nav';
 import { FIELD_LABELS, presentAIState } from '../present';
 import { CapabilityRows } from './CapabilityRows';
 
 /**
- * Diagnostics for the on-device provider, through the service contract only. Live mode re-runs
- * extraction on a report already stored on this device (no side effects). Free text is offered in
- * Demo only, because the contract analyses stored reports and creating one needs an incident.
+ * Diagnostics for the on-device provider, through the service contract only. Extraction runs either
+ * on a report already stored on this device or on typed text; both show a proposal and neither
+ * creates, records or sends anything. A simulated result is labelled and its latency is not shown.
  */
 export function LocalAIDiagnosticsScreen() {
   const snapshot = usePulse();
@@ -24,7 +24,6 @@ export function LocalAIDiagnosticsScreen() {
   const [text, setText] = useState('');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<AIResult<IncidentProposal> | null>(null);
-  const [note, setNote] = useState<string | null>(null);
 
   const stored = snapshot.incidents.flatMap((view) =>
     view.originalReport === null ? [] : view.state.reports.filter((r) => r.kind === 'report').map((r) => ({ key: `${view.id}:${r.id}`, incidentId: view.id, reportId: r.id, label: view.shortId })),
@@ -37,7 +36,6 @@ export function LocalAIDiagnosticsScreen() {
     if (!target) return;
     setRunning(true);
     setResult(null);
-    setNote(null);
     // Report text and model output are shown on screen only and never logged.
     setResult(await actions.analyzeReport(target.incidentId, target.reportId));
     setRunning(false);
@@ -45,26 +43,15 @@ export function LocalAIDiagnosticsScreen() {
 
   const runFreeText = async () => {
     const body = text.trim();
-    if (!demo || body.length === 0) return;
+    if (body.length === 0) return;
     setRunning(true);
     setResult(null);
-    setNote(null);
-    const sos = await actions.sendSOS();
-    if (!sos.ok) {
-      setNote('The simulated request could not be created.');
-      setRunning(false);
-      return;
-    }
-    const report = await actions.addReport(sos.value.incidentId, body, 'typed');
-    if (!report.ok) {
-      setNote('The simulated report could not be stored.');
-      setRunning(false);
-      return;
-    }
-    setResult(await actions.analyzeReport(sos.value.incidentId, report.value.reportId));
-    setNote('A simulated request was created to hold this text. Reset the scenario in Demo Lab to remove it.');
+    setResult(await actions.diagnoseExtraction(body));
     setRunning(false);
   };
+
+  const simulated = result?.meta.source === 'simulated';
+  const names = (fields: readonly (typeof PROPOSAL_FIELDS)[number][]) => fields.map((f) => FIELD_LABELS[f]).join(', ') || 'none';
 
   return (
     <Screen testID="local-ai-screen" onBack={back} title="Local AI diagnostics" subtitle={demo ? 'Demo mode: results on this screen are simulated.' : 'Real on-device calls. Nothing on this screen is simulated.'}>
@@ -110,43 +97,57 @@ export function LocalAIDiagnosticsScreen() {
         <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">Runs the model again on words already saved here. The result is shown below and nothing is recorded.</Text>
       </View>
 
-      {demo ? (
-        <View className="gap-2">
-          <SectionHeader title="Type a new report (Demo only)" />
-          <TextField testID="diag-text" label="Test report" placeholder="What happened? Where are you?" value={text} onChangeText={setText} multiline />
-          <Button testID="diag-run-text" label="Extract from this text" variant="secondary" disabled={running || text.trim().length === 0} onPress={() => void runFreeText()} />
-        </View>
-      ) : null}
-
-      {note ? <Text className="px-1 text-[12.5px] leading-[17px] text-gray-1">{note}</Text> : null}
+      <View className="gap-2">
+        <SectionHeader title="Extract from typed text" />
+        <TextField testID="diag-text" label="Test report" placeholder="What happened? Where are you?" value={text} onChangeText={setText} multiline maxLength={4000} />
+        <Button testID="diag-run-text" label="Extract from this text" variant="secondary" disabled={running || text.trim().length === 0} onPress={() => void runFreeText()} />
+        <Text testID="diag-text-note" className="px-1 text-[12.5px] leading-[17px] text-gray-1">
+          Runs the model on the text above. Nothing is saved or sent, and no request is created.
+        </Text>
+      </View>
 
       {result ? (
-        <Card className="gap-2">
-          <Text testID="diag-result-meta" accessibilityLiveRegion="polite" className="text-[13px] font-semibold text-gray-1">
-            {result.ok ? 'Proposal' : `Failed: ${result.state}`} · {result.meta.latencyMs} ms · {result.meta.source}
-          </Text>
-          {result.ok ? (
-            <>
-              {PROPOSAL_FIELDS.map((name) => {
-                const f = result.value.fields[name];
-                return f ? (
-                  <View key={name} className="gap-0.5">
-                    <Text className="text-[15px] font-semibold text-ink">
-                      {FIELD_LABELS[name]}: {f.value}
-                    </Text>
-                    <Text className="text-[13px] italic text-gray-1">“{f.evidence}”</Text>
-                  </View>
-                ) : null;
-              })}
-              <Text className="text-[13px] text-gray-1">Unknown: {result.value.unknown.join(', ') || 'none'}</Text>
-              <Text className="text-[13px] text-gray-1">Dropped (no evidence in report): {result.value.dropped.join(', ') || 'none'}</Text>
-            </>
-          ) : (
-            <Text selectable className="text-[15px] text-ink">
-              {result.message}
+        <View testID="diag-result">
+          <Card className="gap-2">
+            {simulated ? <MicroPill label="SIMULATED" /> : null}
+            <Text testID="diag-result-meta" accessibilityLiveRegion="polite" className="text-[13px] font-semibold text-gray-1">
+              {result.ok ? 'Proposal' : `Failed: ${result.state}`} · {simulated ? 'simulated, not measured' : `${result.meta.latencyMs} ms · ${result.meta.source}`}
             </Text>
-          )}
-        </Card>
+            {result.ok ? (
+              <>
+                {PROPOSAL_FIELDS.map((name) => {
+                  const f = result.value.fields[name];
+                  return f ? (
+                    <View key={name} testID={`diag-field-${name}`} className="gap-0.5">
+                      <Text className="text-[15px] font-semibold text-ink">
+                        {FIELD_LABELS[name]}: {f.value}
+                      </Text>
+                      <Text className="text-[13px] italic text-gray-1">“{f.evidence}”</Text>
+                    </View>
+                  ) : null;
+                })}
+                <Text testID="diag-unknown" className="text-[13px] text-gray-1">
+                  Unknown: {names(result.value.unknown)}
+                </Text>
+                <Text testID="diag-dropped" className="text-[13px] text-gray-1">
+                  Dropped (no evidence in report): {names(result.value.dropped)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text testID="diag-result-state" className="text-[15px] font-semibold text-ink">
+                  {presentAIState(result.state).label}. No proposal was produced.
+                </Text>
+                <Text selectable className="text-[13px] text-gray-1">
+                  {result.message}
+                </Text>
+              </>
+            )}
+            <Text testID="diag-result-note" className="text-[12.5px] leading-[17px] text-gray-1">
+              {result.ok ? 'A proposal, not a fact. Nothing was saved or sent.' : 'Nothing was saved or sent.'}
+            </Text>
+          </Card>
+        </View>
       ) : null}
     </Screen>
   );

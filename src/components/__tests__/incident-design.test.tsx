@@ -283,6 +283,31 @@ describe('sheets', () => {
     fireEvent.press(screen.getByTestId('open-relay'));
     expect(screen.queryByTestId('retry-delivery')).toBeNull();
   });
+
+  it('says an update is too large to send, without calling it waiting, queued or retryable', () => {
+    const view = viewOf(sosAcknowledged().state, undefined, { pendingOutbox: 1, sendFailure: 'packet_too_large' });
+    const app = open(view, 'timeline');
+    const card = screen.getByTestId('status-card');
+    expect(screen.getByTestId('send-too-large')).toHaveTextContent('The latest update is too large to send. It has not gone out and is still on this device. Trying again will not send it.');
+    // The ledger status is untouched; only the waiting line gives way to the notice.
+    expect(screen.getByTestId('status-title')).toHaveTextContent('Seen by Mika');
+    expect(within(card).queryByText(/waiting on this device to be delivered/)).toBeNull();
+    expect(within(card).queryByText(/queued|sent\b|delivered\./i)).toBeNull();
+
+    fireEvent.press(screen.getByTestId('open-relay'));
+    expect(screen.queryByTestId('retry-delivery')).toBeNull();
+    expect(screen.getByTestId('relay-too-large')).toHaveTextContent(/too large to send/);
+    expect(app.actions.retryDelivery).not.toHaveBeenCalled();
+  });
+
+  it('shows no size notice when nothing is blocked', () => {
+    open(viewOf(sosAcknowledged().state, undefined, { pendingOutbox: 1, sendFailure: null }), 'timeline');
+    expect(screen.queryByTestId('send-too-large')).toBeNull();
+    expect(screen.getByTestId('status-card')).toHaveTextContent(/1 update is waiting on this device to be delivered/);
+    fireEvent.press(screen.getByTestId('open-relay'));
+    expect(screen.getByTestId('retry-delivery')).toBeTruthy();
+    expect(screen.queryByTestId('relay-too-large')).toBeNull();
+  });
 });
 
 describe('contact', () => {
