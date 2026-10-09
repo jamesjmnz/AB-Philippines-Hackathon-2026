@@ -37,7 +37,7 @@ export type Step = { label: string; done: boolean };
 /** Five-step delivery bar. A step is filled only when the state it names has actually been reached. */
 export function StepBar({ steps, color = colors.green }: { steps: readonly Step[]; color?: string }) {
   return (
-    <View className="flex-row gap-1.5" accessibilityRole="progressbar" accessibilityLabel={steps.map((s) => `${s.label} ${s.done ? 'done' : 'pending'}`).join(', ')}>
+    <View accessible className="flex-row gap-1.5" accessibilityRole="progressbar" accessibilityLabel={steps.map((s) => `${s.label} ${s.done ? 'done' : 'pending'}`).join(', ')}>
       {steps.map((s) => (
         <View key={s.label} className="flex-1 gap-1">
           <View className="h-1 rounded-full" style={{ backgroundColor: s.done ? color : colors.line }} />

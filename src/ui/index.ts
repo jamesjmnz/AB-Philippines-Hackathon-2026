@@ -5,6 +5,8 @@ export * from './Card';
 export * from './Chip';
 export * from './Controls';
 export * from './Icon';
+export * from './Input';
+export * from './Motion';
 export * from './Overlays';
 export * from './Progress';
 export * from './Screen';

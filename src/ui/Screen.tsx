@@ -30,6 +30,8 @@ export function Screen({ title, subtitle, onBack, headerRight, children, footer,
       ) : null}
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: (tabbed ? 110 : 32) + (footer ? 0 : insets.bottom), gap: 18 }}>
         {title ? (
