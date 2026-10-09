@@ -430,3 +430,99 @@ export function extractStatedFloor(text: string): FloorMatch | null {
   if (!floor) return null;
   return elidedFloors(text).some((e) => e.level !== floor.level) ? null : floor;
 }
+
+/**
+ * First-person location, for observations. A responder who writes "I'm on the first floor, coming
+ * up to you" is saying where they are, not where the person who asked for assistance is. These
+ * tests look only at the clause the mention is in (clauses end at . ! ? ; , or a line break).
+ */
+const FP_ENCLITIC = '(?:(?:na|pa|po|lang|nga|rin|din)\\s+)*';
+const FP_BE = "(?:i'?m|i\\s+am|i\\s+was|i'?ll\\s+be|i\\s+will\\s+be|we'?re|we\\s+are|we\\s+were|we'?ll\\s+be|we\\s+will\\s+be)";
+const FP_ADVERB = '(?:\\s+(?:now|still|here|currently|already|just|right|back|also|not))*';
+const FP_PLACE = '(?:on|at|in|near|by|inside|outside|around|close\\s+to|next\\s+to|beside|behind|below|above|under)';
+const FP_GOING = "(?:coming|heading|going|walking|running|climbing|moving|on\\s+my\\s+way|on\\s+our\\s+way|omw)";
+const FP_ROUTE = '(?:from|to|towards|toward|via|through|past|into)';
+const TO_MENTION = '(?:the\\s+)?$';
+
+/** "I'm (here) on / at / near ...": the rest of the clause up to the mention. */
+const FP_LOCATED = new RegExp(`\\b${FP_BE}${FP_ADVERB}\\s+${FP_PLACE}\\b(.*)$`);
+/** Another subject between the first-person phrase and the mention takes the mention over. */
+const OTHER_SUBJECT = /\b(?:is|are|was|were|who|they|he|she|them|sila|siya|nila|niya)\b/;
+/** "I'm coming up to you from the ...", "I am heading to the ..." */
+const FP_MOVING = new RegExp(`\\b${FP_BE}${FP_ADVERB}\\s+${FP_GOING}\\b.*\\b${FP_ROUTE}\\s+${TO_MENTION}`);
+/** "Coming up from the ...", "On my way to the ...": no subject, but only the writer can be meant. */
+const FP_MOVING_BARE = new RegExp(
+  `^\\s*(?:(?:ok|okay|yes|copy|sige|opo|oo)\\W+)?(?:(?:still|now|just)\\s+)?${FP_GOING}\\b.*\\b${FP_ROUTE}\\s+${TO_MENTION}`,
+);
+/** "I went to the ...", "we'll go up to the ...", "I checked the ..." */
+const FP_WENT = new RegExp(
+  `\\b(?:i|we)(?:'ll|'ve|\\s+will|\\s+have)?(?:\\s+(?:just|already|now))*\\s+(?:went|go|came|come|moved|climbed|ran|walked|got|reached|arrived|checked|searched|left)(?:\\s+(?:up|down|over|back|here))*(?:\\s+(?:to|from|at|on|in|into))?\\s+${TO_MENTION}`,
+);
+/** "I can see the smoke from the ..." */
+const FP_SEEING_FROM = new RegExp(`\\b(?:i|we)\\s+(?:can\\s+|could\\s+)?(?:see|saw|hear|heard|watch|watched)\\b.*\\bfrom\\s+${TO_MENTION}`);
+
+/** "andito ako sa ...", "galing ako sa ...", "papunta na ako sa ...", "paakyat na kami ... from ..." */
+const FP_TAGALOG_BEFORE = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:andito|nandito|narito|nandirito|dito|galing|papunta(?:ng)?|paakyat|pababa|pupunta|aakyat|bababa|umaakyat|bumababa|parating|paparating)\\s+${FP_ENCLITIC}(?:ako|kami)(?![\\p{L}\\p{N}])`,
+  'u',
+);
+/** "ako ay nasa ...", "kami nasa ..." */
+const FP_TAGALOG_AKO_NASA = new RegExp(`(?<![\\p{L}\\p{N}])(?:ako|kami)\\s+(?:ay\\s+)?${FP_ENCLITIC}(?:nasa|sa)\\s+${TO_MENTION}`, 'u');
+/** "nasa <mention> (na) ako" */
+const FP_TAGALOG_NASA_BEFORE = /(?<![\p{L}\p{N}])nasa\s+(?:the\s+)?$/u;
+const FP_TAGALOG_AKO_AFTER = new RegExp(`^\\s+${FP_ENCLITIC}(?:ako|kami)(?![\\p{L}\\p{N}])`, 'u');
+
+const CLAUSE_END = /[.!?;,\n]/;
+
+/**
+ * True when the mention at `span` is governed by a first-person subject in its own clause, so it
+ * says where the writer is, was or is going: "I'm on the first floor", "I'm coming up from the
+ * first floor", "I can see it from the 3rd floor", "nasa 1st floor na ako", "andito ako sa
+ * Building A", "galing ako sa 2nd floor", "papunta na ako sa 3rd floor".
+ *
+ * False when the clause is about somebody else even if the writer appears in it: "I think Alex is
+ * on the first floor", "I found them on the third floor", "Nakita ko sila sa 3rd floor", "They
+ * told me second floor", and for a bare mention with no subject ("Second floor, Science Hall").
+ */
+export function isFirstPersonLocation(text: string, span: Pick<TextSpan, 'start' | 'end'>): boolean {
+  const normalized = text.replace(/[‘’]/g, "'").toLowerCase();
+  let clauseStart = span.start;
+  while (clauseStart > 0 && !CLAUSE_END.test(normalized.charAt(clauseStart - 1))) clauseStart -= 1;
+  let clauseEnd = span.end;
+  while (clauseEnd < normalized.length && !CLAUSE_END.test(normalized.charAt(clauseEnd))) clauseEnd += 1;
+  const before = normalized.slice(clauseStart, span.start);
+  const after = normalized.slice(span.end, clauseEnd);
+
+  const located = FP_LOCATED.exec(before);
+  if (located && !OTHER_SUBJECT.test(located[1] ?? '')) return true;
+  if (FP_MOVING.test(before) || FP_MOVING_BARE.test(before) || FP_WENT.test(before) || FP_SEEING_FROM.test(before)) {
+    return true;
+  }
+  const tagalog = FP_TAGALOG_BEFORE.exec(before);
+  if (tagalog && !OTHER_SUBJECT.test(before.slice(tagalog.index + tagalog[0].length))) return true;
+  if (FP_TAGALOG_AKO_NASA.test(before)) return true;
+  return FP_TAGALOG_NASA_BEFORE.test(before) && FP_TAGALOG_AKO_AFTER.test(after);
+}
+
+/**
+ * The floor an observation puts the person who asked for assistance on, or null. An observation is
+ * written by a responder, so a mention governed by the writer's own first person is left out, and
+ * a first-person move ("I went from the first floor to the second floor") states no floor at all:
+ * it is the responder who moved. What remains must name one floor.
+ */
+export function extractObservedFloor(text: string): FloorMatch | null {
+  if (extractFloorTransition(text)) return null;
+  const about = (m: FloorMatch): boolean => !isFirstPersonLocation(text, m.span);
+  const mentions = extractFloors(text).filter(about);
+  const first = mentions[0];
+  if (!first || !mentions.every((m) => m.level === first.level)) return null;
+  return elidedFloors(text).filter(about).some((e) => e.level !== first.level) ? null : first;
+}
+
+/** The building an observation puts the person who asked for assistance in, or null. See `extractObservedFloor`. */
+export function extractObservedBuilding(text: string): LocationMatch | null {
+  const mentions = extractBuildings(text).filter((m) => !isFirstPersonLocation(text, m.span));
+  const first = mentions[0];
+  if (!first) return null;
+  return mentions.every((m) => m.value === first.value) ? first : null;
+}

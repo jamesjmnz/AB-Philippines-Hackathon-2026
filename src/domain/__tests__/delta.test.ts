@@ -499,6 +499,62 @@ describe('an explicit move does not conflict with an earlier statement of its or
   });
 });
 
+describe('a responder’s own location is not the requester’s', () => {
+  it('a responder saying where they are raises no conflict and states no floor', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor of the Science Hall' }).state;
+    for (const text of ["I'm on the first floor, coming up to you", 'Nasa first floor ako, paakyat na ako']) {
+      const seen = addObservation(s, world.as(MIKA), { text });
+      expect(flagged(seen.events)).toEqual([]);
+      expect(seen.state.contradictions).toEqual([]);
+      expect(seen.state.claims.floor.revisions).toHaveLength(1);
+      expect(seen.state.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported', candidates: [] });
+      expect(seen.state.reports[1]).toMatchObject({ text, kind: 'observation' });
+      expect(lastDelta(seen.state)).toEqual({
+        reportId: seen.state.reports[1]!.id,
+        overall: 'not_assessed',
+        fields: [],
+        needsVerification: false,
+        duplicateOfReportId: null,
+      });
+      expectDeterministic(seen.state);
+    }
+  });
+
+  it('the same message can still say where the requester is', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor of the Science Hall' }).state;
+    const agrees = addObservation(s, world.as(MIKA), { text: "I'm on the first floor, they are on the second floor" });
+    expect(flagged(agrees.events)).toEqual([]);
+    expect(lastDelta(agrees.state)).toMatchObject({ overall: 'confirmation', fields: [{ value: 'Second floor' }] });
+
+    const differs = addObservation(s, world.as(MIKA), { text: 'I found them on the third floor' });
+    expect(flagged(differs.events)).toHaveLength(1);
+    expect(lastDelta(differs.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+  });
+
+  it('a responder’s own building is not claimed either, and a reporter’s first person still is', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: "I'm at Building B on the first floor" }).state;
+    expect(s.claims.building.value).toBe('Building B');
+    expect(s.claims.floor.value).toBe('First floor');
+    const seen = addObservation(s, world.as(MIKA), { text: "I'm at Building A, where are you?" });
+    expect(flagged(seen.events)).toEqual([]);
+    expect(seen.state.claims.building).toMatchObject({ value: 'Building B', tag: 'user_reported' });
+    expect(seen.state.claims.building.revisions).toHaveLength(1);
+    expect(lastDelta(seen.state)).toMatchObject({ overall: 'not_assessed', fields: [] });
+  });
+
+  it('an explicit claim filled in by the responder is still recorded', () => {
+    const { world, state } = start();
+    const seen = addObservation(state, world.as(MIKA), {
+      text: "I'm on the first floor, coming up to you",
+      claims: [{ field: 'floor', value: 'Second floor' }],
+    });
+    expect(seen.state.claims.floor.revisions.map((r) => [r.value, r.extraction])).toEqual([['Second floor', 'explicit']]);
+  });
+});
+
 describe('classifyStatementDelta', () => {
   it('returns null for an unknown report and never the model-only class', () => {
     const { world, state } = start();

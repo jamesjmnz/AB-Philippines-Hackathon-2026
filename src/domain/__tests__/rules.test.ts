@@ -3,8 +3,11 @@ import {
   extractFloor,
   extractFloorTransition,
   extractFloors,
+  extractObservedBuilding,
+  extractObservedFloor,
   extractStatedFloor,
   floorLabel,
+  isFirstPersonLocation,
 } from '../rules';
 
 describe('floor extraction, English and Tagalog', () => {
@@ -272,5 +275,88 @@ describe('building extraction', () => {
 
   it('does not choose between two buildings', () => {
     expect(extractBuilding('between Building A and Building B')).toBeNull();
+  });
+});
+
+describe('first-person location in an observation describes the responder', () => {
+  it.each([
+    "I'm on the first floor, coming up to you.",
+    'I’m on the first floor, coming up to you.',
+    'I am on the first floor',
+    'I was on the 2nd floor a minute ago',
+    "We're at the 3rd floor lobby",
+    'We are near the second floor stairs',
+    "I'm here at the 2nd floor",
+    "I'm near the stairs on the 2nd floor",
+    "I'm coming up from the first floor",
+    "I'm coming up to you from the first floor",
+    'I am heading down to the second floor',
+    "I'm going to the 2nd floor now",
+    'Coming up from the first floor',
+    'On my way to the second floor',
+    'I went up to the 3rd floor',
+    'I checked the second floor',
+    'I can see the smoke from the 3rd floor',
+    'Nasa first floor ako',
+    'nasa 1st floor na ako',
+    'Nasa unang palapag pa kami',
+    'Andito ako sa 2nd floor',
+    'nandito na ako sa ikalawang palapag',
+    'Galing ako sa 1st floor',
+    'Papunta na ako sa 3rd floor',
+    'Paakyat na ako from 1st floor',
+    'pababa na kami sa 2nd floor',
+  ])('%j states no floor for the requester', (text) => {
+    expect(extractFloors(text).length).toBeGreaterThan(0);
+    expect(extractObservedFloor(text)).toBeNull();
+    // In a report the same words are the requester's own, and nothing changes.
+    expect(extractStatedFloor(text)).not.toBeNull();
+  });
+
+  it.each([
+    ["I'm on the first floor, they are on the second floor", 'Second floor'],
+    ["I'm on the first floor and Alex is on the second floor", 'Second floor'],
+    ['Second floor, Science Hall. I see them.', 'Second floor'],
+    ['I found them on the third floor', 'Third floor'],
+    ['I see them on the 3rd floor', 'Third floor'],
+    ['Nakita ko sila sa 3rd floor', 'Third floor'],
+    ['They told me second floor', 'Second floor'],
+    ['Alex is on the first floor.', 'First floor'],
+    ['I think they are on the first floor', 'First floor'],
+    ['I think Alex is on the first floor.', 'First floor'],
+    ['I think it is the first floor.', 'First floor'],
+    ['Second floor, I can see Alex.', 'Second floor'],
+    ['Correction: the second floor.', 'Second floor'],
+    ['first floor', 'First floor'],
+    ["I'm going to help them on the second floor", 'Second floor'],
+    ["I'm with them on the 2nd floor", 'Second floor'],
+    ['Nandito ako, nasa 2nd floor sila', 'Second floor'],
+    ['Galing ako sa 1st floor, nasa 2nd floor sila', 'Second floor'],
+    ['Nasa ikalawang palapag sila', 'Second floor'],
+    // The responder's own move, or two floors for the requester: no single floor.
+    ['I went from the first floor to the second floor to look for the stairs.', null],
+    ['Alex moved from the first floor to the second floor', null],
+    ['I fell on the stairs', null],
+  ] as const)('%j -> %s', (text, expected) => {
+    expect(extractObservedFloor(text)?.value ?? null).toBe(expected);
+  });
+
+  it('applies to buildings the same way', () => {
+    expect(extractObservedBuilding("I'm at Building A, where are you?")).toBeNull();
+    expect(extractObservedBuilding('Andito ako sa Building A')).toBeNull();
+    expect(extractObservedBuilding('nasa gusali 3 na ako')).toBeNull();
+    expect(extractObservedBuilding("I'm at Building A, they are in Building B")?.value).toBe('Building B');
+    expect(extractObservedBuilding('Alex is in Building B')?.value).toBe('Building B');
+    expect(extractObservedBuilding('Looks like Building C to me.')?.value).toBe('Building C');
+    expect(extractObservedBuilding('I found them in bldg 4')?.value).toBe('Building 4');
+    // A report is the requester speaking.
+    expect(extractBuilding("I'm at Building A, where are you?")?.value).toBe('Building A');
+  });
+
+  it('judges each mention by its own clause', () => {
+    const text = "I'm on the first floor, they are on the second floor";
+    const [mine, theirs] = extractFloors(text);
+    expect(isFirstPersonLocation(text, mine!.span)).toBe(true);
+    expect(isFirstPersonLocation(text, theirs!.span)).toBe(false);
   });
 });

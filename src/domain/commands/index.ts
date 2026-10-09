@@ -6,7 +6,12 @@ import type { ClaimInput, EventSpec, PayloadOf, TaskKind } from '../events';
 import { newOutboxMessage, type PacketReceipt } from '../outbox';
 import type { TextSpan } from '../primitives';
 import { detectFieldConflicts } from '../rules/conflicts';
-import { extractBuilding, extractFloorTransition, extractStatedFloor } from '../rules/location';
+import {
+  extractBuilding,
+  extractObservedBuilding,
+  extractObservedFloor,
+  extractStatedFloor,
+} from '../rules/location';
 import type { IncidentState } from '../state';
 import { buildEvent, buildEvents, type CommandContext, type CommandResult } from './build';
 
@@ -38,15 +43,15 @@ function statementClaims(input: StatementInput, kind: 'report' | 'observation'):
   }));
   if (input.deriveLocation !== false) {
     const explicit = new Set(claims.map((c) => c.field));
-    // "I moved from the first floor to the second floor": the destination is the floor stated,
-    // and its span is the evidence. The movement rule is first person, so in an observation it
-    // describes the observer's own movement, not the requester's floor: no floor is taken from it.
-    const floor =
-      kind === 'observation' && extractFloorTransition(input.text) ? null : extractStatedFloor(input.text);
+    // In a report, first person is the person asking for assistance: "I moved from the first floor
+    // to the second floor" states the destination. In an observation, first person is the
+    // responder, so their own location or movement states nothing about the requester.
+    const observed = kind === 'observation';
+    const floor = observed ? extractObservedFloor(input.text) : extractStatedFloor(input.text);
     if (floor && !explicit.has('floor')) {
       claims.push({ field: 'floor', value: floor.value, extraction: 'rule', evidence: floor.span });
     }
-    const building = extractBuilding(input.text);
+    const building = observed ? extractObservedBuilding(input.text) : extractBuilding(input.text);
     if (building && !explicit.has('building')) {
       claims.push({ field: 'building', value: building.value, extraction: 'rule', evidence: building.span });
     }
