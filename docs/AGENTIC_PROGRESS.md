@@ -29,7 +29,7 @@ Push status is one of `PUSHED`, `NOT_ATTEMPTED`, `BLOCKED`. `PUSHED` is written 
 | Default branch | `main` (one commit: "Initial commit") |
 | Working branch | `feat/pulse-2` |
 | Publishing rule | Feature branch, then pull request to `main`. No direct pushes to `main`. |
-| Pull request | Not opened yet |
+| Pull request | #1 merged into `main` on 2026-10-10 (`f17dccf`) |
 
 ## Known upcoming human-only steps
 
@@ -53,6 +53,7 @@ Append one entry per verified item: date, phase, command or device action, and a
 | 2026-10-10 | P1 | `eas build -p ios --profile simulator` (build `66901962`, from `b759539`) installed with `xcrun simctl install` on an iPhone 17 Pro Max simulator, iOS 26.3; Metro dev client | Installed and launched; bundle loaded without errors. Simulator only, Demo mode only. No physical device run. |
 | 2026-10-10 | P3 | Simulator screenshots compared with the 2.6 export rendered in a browser | Found and fixed: function-form `style` on `Pressable` is dropped by the NativeWind JSX transform, so pills and both SOS buttons rendered unstyled on device; presence dots, Home badge and Welcome orbit discs were smaller than the export (CSS content-box borders); status bar text unreadable over the SIMULATED bar. Tab bar made opaque because the build has no blur module. |
 | 2026-10-10 | P3 | `npm run typecheck`; `npm run lint`; `npm test` | No type errors; lint clean; 42 suites, 450 tests passed. Jest does not run the NativeWind transform, so it did not catch the `Pressable` style defect. |
+| 2026-10-10 | Git | `git push origin feat/pulse-2` (`5451416..9b4f7b6`); `gh pr merge 1 --merge` | PUSHED, confirmed by Git. Pull request #1 merged into `main` as merge commit `f17dccf`. The repository has no CI checks, so the merge is not evidence of any gate. |
 | 2026-10-09 | P4 (code only) | `npx jest src/ai` | 24 passed, 0 failed (adapter with a fake runtime; no real model involved). |
 | 2026-10-09 | P5 (code only) | `swift test` in `modules/pulse-peer` | 6 passed (frame codec). Network code typechecks against the iOS SDK; not run on a device. |
 | 2026-10-09 | P6 (code only) | `swift test` in `modules/pulse-crypto` | 15 passed (capsule seal/open, tamper, wrong key, expiry, relay-only, pairing code) using software keys on macOS. Keychain and Secure Enclave paths typecheck only. |
