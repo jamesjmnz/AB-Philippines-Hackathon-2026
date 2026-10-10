@@ -440,6 +440,75 @@ describe('GuardedLocalAI: result cache', () => {
     expect(started).toHaveLength(2);
   });
 
+  it('does not store a result that was in flight when clearCache was called, so a later identical call runs again', async () => {
+    const { ai, started } = setup();
+    const first = watch(ai.extractIncidentReport({ text: 'a' }));
+    await flush();
+    expect(started).toHaveLength(1);
+    ai.clearCache();
+    started[0]?.resolve(success(210));
+    await flush();
+    // The caller that was waiting is still answered, from the model.
+    expect(first.value).toEqual({ ok: true, value: PROPOSAL, meta: { source: 'callstack-apple', latencyMs: 210, queuedMs: 0 } });
+
+    const again = watch(ai.extractIncidentReport({ text: 'a' }));
+    await flush();
+    expect(again.settled).toBe(false);
+    expect(started).toHaveLength(2);
+    started[1]?.resolve(success());
+    await flush();
+    expect(again.value?.meta.cached).toBeUndefined();
+    expect(ai.stats().cacheHits).toBe(0);
+
+    // The call made after the clear is stored as usual.
+    expect((await ai.extractIncidentReport({ text: 'a' })).meta.cached).toBe(true);
+    expect(started).toHaveLength(2);
+  });
+
+  it('does not store a result whose call was still queued when clearCache was called', async () => {
+    const { ai, started, texts } = setup();
+    void ai.extractIncidentReport({ text: 'running' });
+    const queued = watch(ai.extractIncidentReport({ text: 'a' }));
+    await flush();
+    expect(texts()).toEqual(['running']);
+    ai.clearCache();
+    started[0]?.resolve(success());
+    await flush();
+    started[1]?.resolve(success());
+    await flush();
+    expect(stateOf(queued.value)).toBe('ready');
+
+    // Neither the call that was running nor the one that was waiting left anything behind.
+    for (const text of ['running', 'a']) {
+      const before = started.length;
+      const repeat = watch(ai.extractIncidentReport({ text }));
+      await flush();
+      expect(started).toHaveLength(before + 1);
+      started[before]?.resolve(success());
+      await flush();
+      expect(repeat.value?.meta.cached).toBeUndefined();
+    }
+    expect(ai.stats().cacheHits).toBe(0);
+  });
+
+  it('keeps a result from before the clear out of the cache for every caller that had joined it', async () => {
+    const { ai, started } = setup();
+    const one = watch(ai.extractIncidentReport({ text: 'a' }));
+    const two = watch(ai.extractIncidentReport({ text: 'a' }));
+    await flush();
+    ai.clearCache();
+    // A caller joining after the clear shares the generation that is already running, and still nothing is stored.
+    const three = watch(ai.extractIncidentReport({ text: 'a' }));
+    await flush();
+    expect(started).toHaveLength(1);
+    started[0]?.resolve(success());
+    await flush();
+    expect([one, two, three].map((w) => stateOf(w.value))).toEqual(['ready', 'ready', 'ready']);
+    void ai.extractIncidentReport({ text: 'a' });
+    await flush();
+    expect(started).toHaveLength(2);
+  });
+
   it('never caches a failure', async () => {
     const { ai, started } = setup();
     for (const state of ['invalid_output', 'guardrail_refusal'] as const) {
