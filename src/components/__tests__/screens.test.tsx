@@ -183,6 +183,15 @@ describe('settings', () => {
 });
 
 describe('demo lab', () => {
+  it('replays onboarding from the lab without touching anything else, then goes to the welcome step', async () => {
+    const app = createFakePulseApp();
+    renderWithApp(<DemoLabScreen />, app);
+    fireEvent.press(screen.getByTestId('replay-onboarding'));
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/welcome'));
+    expect(app.actions.replayOnboarding).toHaveBeenCalledTimes(1);
+    expect(app.actions.deleteAllIncidents).not.toHaveBeenCalled();
+  });
+
   it('switches the single live/demo mode store and hides scenario controls in live mode', () => {
     renderWithApp(<DemoLabScreen />, createFakePulseApp());
     expect(screen.getByText('SAGIP Demo Lab')).toBeTruthy();

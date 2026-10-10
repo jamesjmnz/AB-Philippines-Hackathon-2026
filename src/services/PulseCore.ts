@@ -1095,6 +1095,13 @@ export class PulseCore implements PulseApp {
         await this.refresh();
       },
 
+      replayOnboarding: async () => {
+        await this.local();
+        this.profile = { ...this.profile, onboarded: false };
+        await writeJson(this.deps.kv, KEY_PROFILE, this.profile);
+        await this.refresh();
+      },
+
       sendSOS: (input) => this.sendSOS(input),
 
       addReport: async (incidentId, text, inputMode) => {
