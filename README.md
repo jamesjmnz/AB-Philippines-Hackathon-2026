@@ -1,33 +1,42 @@
 # SAGIP
 
-**When networks fail, intelligence stays. Help stays connected.**
+**Offline AI that brings nearby help.**
 
-SAGIP is an offline, camera-free assistance-coordination app for iPhone, built for AppBuildersPH 2026
-(theme: Local AI). A person raises a manual SOS, optionally describes what happened, and on-device AI
-structures the report. The details are sealed into an encrypted Rescue Capsule and exchanged with
-trusted nearby iPhones without internet. Responders acknowledge, voluntarily take non-medical tasks,
-and everything is recorded on a CareChain timeline.
+SAGIP keeps people connected to those around them when internet or cellular service becomes
+unreliable or disappears, whether in a disaster, a crowded event or a remote area. Built for
+AppBuildersPH 2026 (theme: Local AI).
 
-> SAGIP is a hackathon prototype. It is not an emergency service, a medical device, or a guaranteed
-> rescue channel. It never contacts emergency services. It only reaches trusted iPhones that are
-> nearby, running the app, and reachable.
+One tap raises an SOS. Describe what happened by text or voice, and local AI does the rest: Apple's
+on-device language model transcribes and structures the report, asks a clarifying question, and
+suggests non-medical tasks for responders, all on the phone with no cloud. The report is sealed into an
+encrypted Rescue Capsule and reaches trusted nearby iPhones over a local peer-to-peer link, where
+responders coordinate on a shared CareChain timeline.
 
-Earlier documents and code identifiers use the working name **PULSE**. They refer to the same project.
+No internet, no server, no account. Just the people around you, and the intelligence already in your
+pocket.
+
+> SAGIP is not an emergency service, a medical device, or a guaranteed rescue channel. It never
+> contacts emergency services. It only reaches trusted iPhones that are nearby, running the app, and
+> reachable.
+
+Code identifiers and some documents use the working name **PULSE**. They refer to the same project.
 
 ## Status
 
-Work in progress. Nothing has run on an iPhone yet.
+Last updated 2026-10-10. The app is implemented and unit-tested. On-device AI has run on an iPhone 17
+Pro Max, and the full SOS-to-resolved flow has run between two iOS simulators. Transfer between
+physical iPhones has not been observed yet.
 
 | Area | State |
 | --- | --- |
-| App scaffold (Expo 57, React Native 0.86, Expo Router, NativeWind) | Typecheck, lint and `expo-doctor` pass |
-| CareChain domain engine and SQLite ledger | Unit-tested (180 tests) |
-| On-device AI adapter (`@react-native-ai/apple`) | Unit-tested against a fake model (24 tests); no real model call yet |
-| Peer transport (Swift, Network framework + Bonjour) | Frame codec tested on macOS; never run on a device |
-| Capsule encryption (Swift, CryptoKit + Keychain) | Core tested on macOS with software keys (15 tests); Keychain path never run |
-| Sync engine, pairing, relay, live and demo app services | In progress |
-| Screens | In progress |
-| Native build and on-device verification | Blocked: the build Mac is missing the Xcode iOS platform component |
+| Automated checks | Typecheck and lint clean; 57 Jest suites, 1049 tests pass; 21 Swift tests pass |
+| CareChain domain engine and SQLite ledger | Implemented and unit-tested |
+| On-device AI (`@react-native-ai/apple`) | Run on an iPhone 17 Pro Max in Airplane Mode: a typed report was structured on the device in about 1.4 s. Model quality has not been scored yet |
+| Peer transport (Swift, Network framework + Bonjour) | Discovery, pairing and delivery observed between two iOS simulators; not yet between phones |
+| Capsule encryption (Swift, CryptoKit + Keychain) | Core tested on macOS with software keys; pairing code and signed receipts observed in the simulators |
+| Sync engine, pairing, relay | Implemented and unit-tested against an in-memory radio; one relay hop |
+| Screens (onboarding, five tabs, incident detail, report, pairing, Demo Lab) | Implemented and unit-tested; checked in the simulator |
+| Builds | EAS development and simulator builds succeed; the offline `preview` build has not been made |
 
 The authoritative, per-feature status is in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
 and the gate log is in [docs/AGENTIC_PROGRESS.md](docs/AGENTIC_PROGRESS.md).
@@ -75,8 +84,8 @@ Details and version reasoning: [docs/TECH_STACK.md](docs/TECH_STACK.md).
 
 ## Getting started
 
-Requirements: macOS with Xcode 26 and its iOS platform component installed, Node 22, CocoaPods, an
-Apple Development signing identity, and a physical iPhone. There is no simulator workflow.
+Requirements: Node 22, an Expo account for EAS builds, and an iPhone on iOS 26. The on-device text
+model needs an Apple Intelligence-capable iPhone. Never Expo Go.
 
 ```bash
 npm install
@@ -88,9 +97,10 @@ npm test
 (cd modules/pulse-peer && swift test)
 (cd modules/pulse-crypto && swift test)
 
-# Build and install on a connected iPhone
-npm run prebuild
-npm run ios
+# Build with EAS, install the result, then serve the JavaScript
+eas build -p ios --profile development   # physical iPhone
+eas build -p ios --profile simulator     # iOS simulator: no AI model, no peer-to-peer radio
+npm start
 ```
 
 Device setup, signing and Apple Intelligence notes: [docs/EAS_IOS_SETUP.md](docs/EAS_IOS_SETUP.md).
@@ -104,9 +114,13 @@ src/storage/      SQLite ledger, outbox, inbox
 src/ai/           LocalAIService and the Callstack Apple adapter
 src/transport/    peer transport interface and native adapter
 src/crypto/       capsule crypto interface and native adapter
+src/sync/         packet codec, sync engine, pairing
 src/services/     the contract screens talk to
+src/demo/         simulated adapters and scenarios for Demo Lab
 src/ui/           design tokens and primitives
+src/components/   feature components
 modules/          Swift Expo modules
+ml/               evaluation scenarios, scoring and results
 design/           Claude Design export the UI is ported from
 docs/             architecture, decisions, test plan, demo runbook
 ```
