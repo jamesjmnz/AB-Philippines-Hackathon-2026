@@ -85,3 +85,17 @@ export function sosFloorConflict(): Built {
   const reported = addReport(state, world.as(ALEX), { text: 'I fell near the stairs on the 3rd floor of Building B.' }).state;
   return { world, state: addObservation(reported, world.as(MIKA), { text: 'I am here now. She is on the 4th floor.' }).state };
 }
+
+/** The reporter says third floor and later writes that they moved to the fourth: a correction of their own statement. */
+export function sosSelfCorrection(): Built {
+  const { world, state } = sosAcknowledged();
+  const reported = addReport(state, world.as(ALEX), { text: 'I fell near the stairs on the 3rd floor of Building B.' }).state;
+  return { world, state: addReport(reported, world.as(ALEX), { text: 'I moved from the third floor to the fourth floor.' }).state };
+}
+
+/** The reporter says third floor and a responder says the same: a second source. */
+export function sosSecondSource(): Built {
+  const { world, state } = sosAcknowledged();
+  const reported = addReport(state, world.as(ALEX), { text: 'I fell near the stairs on the 3rd floor of Building B.' }).state;
+  return { world, state: addObservation(reported, world.as(MIKA), { text: 'I am here now. She is on the 3rd floor.' }).state };
+}

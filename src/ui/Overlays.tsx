@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 
 import { Icon, type IconName } from './Icon';
 import { Enter, SheetUp } from './Motion';
 import { colors, design, padBottom } from './theme';
+import { Text } from './Text';
 
 /**
  * Sheets and dialogs are drawn in the React tree, not in a native `Modal`, so they sit inside the
@@ -123,7 +124,7 @@ export function Sheet({ visible, onClose, children, dismissable = true, grabberG
             contentContainerStyle={[{ paddingTop: 10, paddingHorizontal: 22, paddingBottom: padBottom(insets.bottom) }, centered ? { alignItems: 'center' } : null]}>
             <View style={{ width: 38, height: 5, borderRadius: 3, backgroundColor: colors.track, alignSelf: 'center', marginBottom: grabberGap }} />
             {title ? (
-              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink, marginBottom: 12 }}>
+              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, marginBottom: 12 }}>
                 {title}
               </Text>
             ) : null}
@@ -159,7 +160,7 @@ export function Dialog({ visible, title, message, cancelLabel, confirmLabel, des
           <View accessibilityViewIsModal accessibilityRole="alert">
             <View style={{ paddingTop: 20, paddingHorizontal: 18, paddingBottom: 16 }}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>{title}</Text>
-              <Text style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray2, textAlign: 'center', marginTop: 6 }}>{message}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 19, color: colors.gray2, textAlign: 'center', marginTop: 6 }}>{message}</Text>
             </View>
             <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.lineInput }}>
               <Pressable

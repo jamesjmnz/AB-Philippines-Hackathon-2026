@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { tones, type Tone } from './theme';
+import { Text } from './Text';
 
 type Props = { label: string; tone?: Tone; solid?: boolean };
 
@@ -21,7 +22,7 @@ export function MicroPill({ label, tone = 'gray' }: { label: string; tone?: Tone
   const t = tones[tone];
   return (
     <View className="self-start rounded-full px-2 py-[3px]" style={{ backgroundColor: t.bg }}>
-      <Text className="text-[10.5px] font-bold uppercase tracking-[0.5px]" style={{ color: t.fg }}>
+      <Text className="text-[11px] font-bold uppercase tracking-[0.5px]" style={{ color: t.fg }}>
         {label}
       </Text>
     </View>

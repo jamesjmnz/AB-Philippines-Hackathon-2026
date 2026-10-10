@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { Actor } from '@/domain';
 import type { IncidentView } from '@/services/api';
@@ -9,6 +9,7 @@ import { Icon, colors, design, tones, type IconName } from '@/ui';
 import { displayName, EVENT_LOOK, firstName, presentSteps, shortDeviceId, STEP_LABELS, STEP_REQUIREMENTS, timeLabel } from '../present';
 import { CardBox, MoreRow, SectionTitle } from './parts';
 import { RelaySheet } from './RelaySheet';
+import { Text } from '@/ui/Text';
 
 type Row = { id: string; icon: IconName; fg: string; bg: string; label: string; time: string; meta: string; pending: boolean };
 
@@ -28,10 +29,10 @@ function UpdateRow({ row, last }: { row: Row; last: boolean }) {
       </View>
       <View style={{ flex: 1, minWidth: 0, paddingTop: 4, paddingBottom: 14 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-          <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.ink }}>{row.label}</Text>
+          <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink }}>{row.label}</Text>
           <Text style={{ fontSize: 12, color: colors.gray1 }}>{row.time}</Text>
         </View>
-        {row.meta ? <Text style={{ fontSize: 12.5, lineHeight: 17.5, color: colors.gray1, marginTop: 2 }}>{row.meta}</Text> : null}
+        {row.meta ? <Text style={{ fontSize: 13, lineHeight: 18, color: colors.gray1, marginTop: 2 }}>{row.meta}</Text> : null}
       </View>
     </View>
   );
@@ -105,7 +106,7 @@ export function TimelineTab({ view, actor }: { view: IncidentView; actor: Actor 
           {logOpen ? (
             <View testID="tech-log-lines" style={{ gap: 3 }}>
               {log.map((line) => (
-                <Text key={line} style={{ fontFamily: 'Menlo', fontSize: 10.5, lineHeight: 15.2, color: colors.gray3 }}>
+                <Text key={line} style={{ fontFamily: 'Menlo', fontSize: 11, lineHeight: 16, color: colors.gray3 }}>
                   {line}
                 </Text>
               ))}

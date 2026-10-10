@@ -16,6 +16,11 @@ import type { PeerRecord, SyncFailureCode, Timers } from './types';
  *
  * A peer is stored as trusted only when this device's human confirmed AND a valid confirmation
  * signed by the peer's key arrived. The display name in `pair_hello` is a label, never identity.
+ *
+ * A confirmation can be lost, leaving one phone finished and the other waiting. The waiting side
+ * repeats its `pair_confirm` (retry tick, link back up); the finished side checks the repeat against
+ * the key material it stored and answers with its own confirmation, marked `answer` so that the
+ * exchange ends there. Answering changes nothing on the device that answers.
  */
 
 export type PairingStage = 'compare' | 'awaiting_peer' | 'failed';
@@ -53,6 +58,8 @@ export interface PairingDeps {
   nextPacketId(): string;
   /** Called once both sides have confirmed. */
   trust(record: PeerRecord): Promise<void>;
+  /** The stored record of a device this one already trusts. */
+  trusted(peerId: string): PeerRecord | undefined;
   nowMs(): number;
   changed(): void;
   helloTimeoutMs: number;
@@ -171,16 +178,7 @@ export class PairingManager {
     const self = this.deps.self();
     if (!s || !s.material || s.stage !== 'compare' || !self) return { ok: false, code: 'pairing_no_session' };
     try {
-      const mine = await this.deps.crypto.exportPublicPairingMaterial();
-      const signature = await this.deps.crypto.signEvent(confirmationText(pairingTranscript(mine, s.material, s.code), self.deviceId));
-      await this.deps.send(s.peerId, {
-        v: 1,
-        packetId: this.deps.nextPacketId(),
-        kind: 'pair_confirm',
-        hops: 0,
-        to: s.peerId,
-        pairing: { signature },
-      });
+      await this.sendConfirm(self.deviceId, s.peerId, s.material, s.code, false);
     } catch {
       return { ok: false, code: 'pairing_send_failed' };
     }
@@ -193,6 +191,57 @@ export class PairingManager {
       this.deps.changed();
     }
     return { ok: true };
+  }
+
+  /** Signs and sends this device's confirmation of the pairing with `material` under `code`. */
+  private async sendConfirm(selfId: string, peerId: string, material: PairingMaterial, code: string, answer: boolean): Promise<void> {
+    const mine = await this.deps.crypto.exportPublicPairingMaterial();
+    const signature = await this.deps.crypto.signEvent(confirmationText(pairingTranscript(mine, material, code), selfId));
+    await this.deps.send(peerId, {
+      v: 1,
+      packetId: this.deps.nextPacketId(),
+      kind: 'pair_confirm',
+      hops: 0,
+      to: peerId,
+      pairing: { signature, ...(answer ? { answer: true as const } : {}) },
+    });
+  }
+
+  /**
+   * Repeats this device's confirmation while it is still waiting for the peer's: the peer may have
+   * finished without its own confirmation ever arriving here. With `peerId`, only for that peer.
+   */
+  async resendConfirm(peerId?: string): Promise<void> {
+    const s = this.session;
+    const self = this.deps.self();
+    if (!s || !s.material || !self || s.stage !== 'awaiting_peer' || !s.localConfirmed) return;
+    if (peerId !== undefined && s.peerId !== peerId) return;
+    try {
+      await this.sendConfirm(self.deviceId, s.peerId, s.material, s.code, false);
+    } catch {
+      // Not reachable right now; the next tick or reconnect tries again.
+    }
+  }
+
+  /**
+   * A confirmation arrived from a device this one already finished pairing with. If it is that
+   * device's valid confirmation of the same pairing (same stored keys, same code), this device's own
+   * confirmation is sent again. Nothing is stored or changed here, whatever the packet says.
+   */
+  private async answerCompleted(fromPeer: string, signature: string): Promise<void> {
+    const record = this.deps.trusted(fromPeer);
+    const self = this.deps.self();
+    if (!record || !self || record.material.deviceId !== fromPeer) return;
+    try {
+      const verified = await this.deps.crypto.verifyPeerPairing(record.material);
+      if (!verified.ok || verified.value.deviceId !== fromPeer) return;
+      const mine = await this.deps.crypto.exportPublicPairingMaterial();
+      const text = confirmationText(pairingTranscript(mine, record.material, verified.value.code), fromPeer);
+      if (!(await this.deps.crypto.verifyEventSignature(text, signature, record.material))) return;
+      await this.sendConfirm(self.deviceId, fromPeer, record.material, verified.value.code, true);
+    } catch {
+      // The waiting side repeats its confirmation.
+    }
   }
 
   async cancel(): Promise<void> {
@@ -224,7 +273,7 @@ export class PairingManager {
   /** Handles a pairing packet from the transport peer `fromPeer`. */
   async handle(fromPeer: string, packet: PairingPacket): Promise<void> {
     if (packet.kind === 'pair_hello') return this.onHello(fromPeer, packet.pairing.material, packet.pairing.name);
-    if (packet.kind === 'pair_confirm') return this.onConfirm(fromPeer, packet.pairing.signature);
+    if (packet.kind === 'pair_confirm') return this.onConfirm(fromPeer, packet.pairing.signature, packet.pairing.answer === true);
     const s = this.session;
     if (s && s.peerId === fromPeer) {
       if (s.initiated || s.localConfirmed) this.setFailed('pairing_cancelled');
@@ -287,9 +336,14 @@ export class PairingManager {
     }
   }
 
-  private async onConfirm(fromPeer: string, signature: string): Promise<void> {
+  private async onConfirm(fromPeer: string, signature: string, isAnswer: boolean): Promise<void> {
     const s = this.session;
-    if (!s || s.peerId !== fromPeer || !s.material || (s.stage !== 'compare' && s.stage !== 'awaiting_peer')) return;
+    if (!s || s.peerId !== fromPeer) {
+      // No pairing in progress with this device. It may be repeating a confirmation this side never answered.
+      if (!isAnswer) await this.answerCompleted(fromPeer, signature);
+      return;
+    }
+    if (!s.material || (s.stage !== 'compare' && s.stage !== 'awaiting_peer')) return;
     let valid = false;
     try {
       const mine = await this.deps.crypto.exportPublicPairingMaterial();

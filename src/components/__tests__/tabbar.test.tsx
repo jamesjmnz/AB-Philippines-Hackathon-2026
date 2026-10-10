@@ -34,18 +34,19 @@ describe('tab bar', () => {
     render(<PulseTabBar active="network" onSelect={jest.fn()} onSOS={jest.fn()} />);
 
     const bar = StyleSheet.flatten(screen.getByTestId('tab-bar').props.style);
-    // 60pt of content above the bottom inset (94px in the design frame, whose inset is 34).
-    expect(bar).toMatchObject({ position: 'absolute', bottom: 0, height: 70, paddingTop: 8, paddingHorizontal: 6, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEF0' });
+    // 60pt of content above the bottom inset (94px in the design frame, whose inset is 34). White at 94%
+    // over the backdrop blur, as in the design; the blur layer is the bar's first child.
+    expect(bar).toMatchObject({ position: 'absolute', bottom: 0, height: 70, paddingTop: 8, paddingHorizontal: 6, backgroundColor: 'rgba(255,255,255,0.94)', borderTopWidth: 1, borderTopColor: '#EEEEF0' });
     expect(tabBarHeight(34)).toBe(94);
-    expect(screen.getByTestId('tab-bar').props.children).toHaveLength(3);
+    expect(screen.getByTestId('tab-bar').props.children).toHaveLength(4);
     for (const key of ['index', 'network', 'activity', 'settings']) {
       expect(StyleSheet.flatten(screen.getByTestId(`tab-${key}`).props.style)).toMatchObject({ flex: 1 });
     }
 
     const sos = StyleSheet.flatten(screen.getByTestId('tab-sos').props.style);
     expect(sos).toMatchObject({ width: 62, height: 62, borderRadius: 31, marginTop: -22, backgroundColor: '#ED625E', borderWidth: 4, borderColor: '#FFFFFF', shadowColor: '#ED625E', shadowOpacity: 0.22, shadowRadius: 12 });
-    expect(StyleSheet.flatten(screen.getByText('SOS').props.style)).toMatchObject({ fontSize: 15, fontWeight: '800', letterSpacing: 0.5 });
-    expect(StyleSheet.flatten(screen.getByText('Network').props.style)).toMatchObject({ fontSize: 10.5, fontWeight: '600', color: '#151515' });
+    expect(StyleSheet.flatten(screen.getByText('SOS').props.style)).toMatchObject({ fontSize: 15, fontWeight: '700', letterSpacing: 0.5 });
+    expect(StyleSheet.flatten(screen.getByText('Network').props.style)).toMatchObject({ fontSize: 11, fontWeight: '600', color: '#151515' });
     expect(StyleSheet.flatten(screen.getByText('Home').props.style)).toMatchObject({ color: '#A1A1A6' });
   });
 });

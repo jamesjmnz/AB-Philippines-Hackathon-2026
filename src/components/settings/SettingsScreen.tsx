@@ -1,16 +1,17 @@
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { DemoDevice } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Dialog, Enter, Icon, SegmentedControl, Toggle, colors, tabBarHeight, useToast, type IconName } from '@/ui';
+import { Avatar, Banner, Dialog, Enter, Icon, SegmentedControl, Toggle, colors, tabBarHeight, useToast, type IconName } from '@/ui';
 
 import { IntelligenceSheet } from '../ai/IntelligenceSheet';
 import { useSafetySession } from '../demo/safetySession';
 import { routes } from '../nav';
 import { BRAND, presentAIState, shortDeviceId } from '../present';
+import { Text } from '@/ui/Text';
 
 type RowProps = {
   icon: IconName;
@@ -29,7 +30,7 @@ function Row({ icon, label, first, color = colors.ink, value, nav, onPress, trai
   const body = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 54, paddingVertical: 8, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: colors.hairline }}>
       <Icon name={icon} size={20} color={color} />
-      <Text style={{ flex: 1, fontSize: 15.5, fontWeight: '500', color }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color }}>{label}</Text>
       {value ? <Text style={{ fontSize: 14, color: colors.gray1, textAlign: 'right', maxWidth: 150 }}>{value}</Text> : null}
       {nav ? <Icon name="chevron_right" size={20} color={colors.gray5} /> : null}
       {trailing}
@@ -81,6 +82,8 @@ export function SettingsScreen() {
   const [dialog, setDialog] = useState<'delete' | 'reset' | null>(null);
   const { me, settings, capabilities: caps, demo } = snapshot;
   const isDemo = snapshot.mode === 'demo';
+  // Live only: the Demo Lab is in memory by design and already says it is simulated.
+  const memoryOnly = !isDemo && snapshot.storage?.settingsPersistent === false;
   const trusted = snapshot.peers.filter((p) => p.trusted).length;
   const keys = me.hardwareBackedKeys === null ? 'Not checked yet' : me.hardwareBackedKeys ? 'Secure Enclave' : 'Keychain';
   const model = !caps ? 'Checking…' : caps.source === 'simulated' ? 'Simulation' : caps.text.state === 'ready' ? 'Ready on-device' : presentAIState(caps.text.state).label;
@@ -91,9 +94,13 @@ export function SettingsScreen() {
     <View testID="settings-screen" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
         <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 20 }}>
-          <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink, paddingTop: 6 }}>
+          <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, paddingTop: 6 }}>
             Settings
           </Text>
+
+          {memoryOnly ? (
+            <Banner testID="settings-memory-only" icon="warning" roomy text="Your profile, paired devices and settings are held in memory only on this device. They will be lost when the app closes." />
+          ) : null}
 
           <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             <Avatar name={me.name.length > 0 ? me.name : '?'} size={58} self />

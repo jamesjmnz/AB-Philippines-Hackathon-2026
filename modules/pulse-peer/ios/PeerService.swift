@@ -152,12 +152,12 @@ final class PeerService {
 
   private func connectLocked(peerId: String) {
     guard running, links[peerId] == nil else { return }
+    // A dial to this peer is already under way.
+    guard !pending.values.contains(where: { $0.expectedPeer == peerId }) else { return }
     guard let endpoint = discovered[peerId] else {
       delegate?.peerService(peerId: peerId, didChange: "disconnected", reason: "not_discovered")
       return
     }
-    // Both sides see each other at about the same time. Only the lower id dials, so there is one link per pair.
-    guard localId < peerId else { return }
     guard links.count + pending.count < PeerService.maxConnections else {
       delegate?.peerService(didFail: "too_many_connections", message: "Connection limit reached")
       return
@@ -171,12 +171,19 @@ final class PeerService {
       connection.cancel()
       return
     }
-    let link = PeerLink(connection: connection, localId: localId, expectedPeer: expectedPeer, queue: queue)
+    let link = PeerLink(connection: connection, localId: localId, outbound: outbound, expectedPeer: expectedPeer, queue: queue)
     pending[ObjectIdentifier(link)] = link
     link.onIdentified = { [weak self, weak link] peerId in
       guard let self, let link else { return }
       self.pending[ObjectIdentifier(link)] = nil
-      if let existing = self.links[peerId], existing !== link { existing.cancel(silent: true) }
+      if let existing = self.links[peerId], existing !== link {
+        // Either side may dial, so two links can exist for one pair. Both sides keep the same one.
+        guard LinkArbiter.keepsNew(localId: self.localId, peerId: peerId, newIsOutbound: link.outbound, existingIsOutbound: existing.outbound) else {
+          link.cancel(silent: true)
+          return
+        }
+        existing.cancel(silent: true)
+      }
       self.links[peerId] = link
       self.delegate?.peerService(peerId: peerId, didChange: "connected", reason: nil)
     }
@@ -218,9 +225,11 @@ private final class PeerLink {
   var onPayload: ((String, Data) -> Void)?
   var onClosed: ((String?, String?) -> Void)?
 
+  let outbound: Bool
+  let expectedPeer: String?
+
   private let connection: NWConnection
   private let localId: String
-  private let expectedPeer: String?
   private let queue: DispatchQueue
   private var decoder = FrameDecoder()
   private var peerId: String?
@@ -228,9 +237,10 @@ private final class PeerLink {
   private var silent = false
   private(set) var isReady = false
 
-  init(connection: NWConnection, localId: String, expectedPeer: String?, queue: DispatchQueue) {
+  init(connection: NWConnection, localId: String, outbound: Bool, expectedPeer: String?, queue: DispatchQueue) {
     self.connection = connection
     self.localId = localId
+    self.outbound = outbound
     self.expectedPeer = expectedPeer
     self.queue = queue
   }
@@ -304,6 +314,7 @@ private final class PeerLink {
   }
 
   private func handle(_ frame: Data) {
+    guard !closed else { return }
     if let peerId {
       onPayload?(peerId, frame)
       return

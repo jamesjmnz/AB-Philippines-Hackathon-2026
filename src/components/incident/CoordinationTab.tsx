@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { AIFailureState, TaskKind, TaskProposal } from '@/ai';
 import {
@@ -23,6 +23,7 @@ import { Avatar, ChoiceChip, Dialog, Icon, LinkButton, Pill, Sheet, colors, useT
 import { BRAND, displayName, firstName, presentAIState, TASK_LOOK, TASK_STATUS } from '../present';
 import { CardBox, INK_LINES, SectionTitle, TagPill } from './parts';
 import { useRun } from './useRun';
+import { Text, TextInput } from '@/ui/Text';
 
 const KIND_LABEL: Record<TaskKind, string> = {
   communicate: 'Stay in contact',
@@ -81,14 +82,14 @@ function TaskRow({ view, actor, task, first }: { view: IncidentView; actor: Acto
           </View>
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', lineHeight: 19.5, color: colors.ink }}>{task.title}</Text>
-          <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 2 }}>{who}</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', lineHeight: 20, color: colors.ink }}>{task.title}</Text>
+          <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>{who}</Text>
           {task.origin === 'ai_suggested' ? <Text style={{ fontSize: 12, color: colors.indigo, marginTop: 2 }}>Suggested by AI · added by a person</Text> : null}
         </View>
         <TagPill label={status.label} fg={look.fg} bg={look.bg} />
       </View>
       {task.status === 'completion_reported' && !canConfirmCompletion(view.state, actor, task.id).ok ? (
-        <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 8, paddingLeft: 44 }}>Reported done. Waiting for the requester to confirm.</Text>
+        <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 8, paddingLeft: 44 }}>Reported done. Waiting for the requester to confirm.</Text>
       ) : null}
       {list.length > 0 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingLeft: 44 }}>
@@ -142,7 +143,7 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
     <>
       {myRecipient ? (
         <View testID="responder-actions" style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, gap: 12 }}>
-          <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>
+          <Text style={{ fontSize: 14, lineHeight: 20, color: colors.gray3 }}>
             {myRecipient.declined
               ? 'You said you can’t help with this request.'
               : myRecipient.acknowledged
@@ -162,7 +163,7 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
       <CardBox testID="tasks-card">
         {state.tasks.length === 0 ? (
           <View testID="tasks-empty" style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
-            <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray1 }}>No roles yet. Nobody has been asked to do anything specific.</Text>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: colors.gray1 }}>No roles yet. Nobody has been asked to do anything specific.</Text>
           </View>
         ) : (
           state.tasks.map((t, i) => <TaskRow key={t.id} view={view} actor={actor} task={t} first={i === 0} />)
@@ -188,7 +189,7 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
           </View>
           {suggestions.state === 'idle' ? (
             <>
-              <Text style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>Ask the on-device model for roles people could take. Nothing is added unless you add it.</Text>
+              <Text style={{ fontSize: 14, lineHeight: 20, color: colors.gray3 }}>Ask the on-device model for roles people could take. Nothing is added unless you add it.</Text>
               <Pill testID="ai-tasks-run" label="Suggest roles on this device" tone="soft" h={40} size={14} icon="auto_awesome" iconSize={16} onPress={() => void suggest()} />
             </>
           ) : null}
@@ -198,7 +199,7 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
             </Text>
           ) : null}
           {suggestions.state === 'failed' ? (
-            <Text testID="ai-tasks-failed" accessibilityLiveRegion="polite" style={{ fontSize: 14, lineHeight: 19.6, color: colors.gray3 }}>
+            <Text testID="ai-tasks-failed" accessibilityLiveRegion="polite" style={{ fontSize: 14, lineHeight: 20, color: colors.gray3 }}>
               Local AI unavailable ({presentAIState(suggestions.reason).label.toLowerCase()}). You can still add roles yourself.
             </Text>
           ) : null}
@@ -298,10 +299,10 @@ export function CoordinationTab({ view, actor }: { view: IncidentView; actor: Ac
       />
 
       <Sheet testID="add-role-sheet" visible={adding} onClose={() => setAdding(false)}>
-        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink }}>
+        <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
           {view.role === 'reporter' ? 'Request more help' : 'Offer a role'}
         </Text>
-        <Text style={{ fontSize: 14, lineHeight: 20.3, color: colors.gray1, marginTop: 4 }}>Describe a non-medical role someone could take. People choose for themselves; nobody is assigned.</Text>
+        <Text style={{ fontSize: 14, lineHeight: 21, color: colors.gray1, marginTop: 4 }}>Describe a non-medical role someone could take. People choose for themselves; nobody is assigned.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
           {(Object.keys(KIND_LABEL) as TaskKind[]).map((k) => (
             <ChoiceChip key={k} testID={`task-kind-${k}`} label={KIND_LABEL[k]} selected={kind === k} onPress={() => setKind(k)} />

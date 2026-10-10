@@ -1,0 +1,1670 @@
+{
+  "name": "incident_deltas",
+  "description": "Multi-statement incidents with a reference delta class for every statement after the first and the conflicts left open at the end. Synthetic and fictional.",
+  "scenarios": [
+    {
+      "id": "delta-en-001",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "chronological",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I tripped on a loose tile in Building A and landed on my hands. My palms sting."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "I'm on the second floor, by the vending machines."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Found them. Confirming Building A, second floor."
+        },
+        {
+          "id": "s4",
+          "author": "reporter",
+          "text": "Please hurry."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "trip"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "A"
+                ]
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "unknown"
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "palm",
+                  "sting"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "floor": "new_information",
+              "locationText": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "building": "confirmation",
+              "floor": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "s2 adds a floor and a spot nobody had stated. s3 is a different person repeating the same building and floor. \"Please hurry\" adds nothing."
+    },
+    {
+      "id": "delta-en-002",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "conflict",
+        "unrelated"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I got locked in the storage room on the first floor of Building D. I need someone to unlock the door."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Guard told me the storage room they mean is on the third floor."
+        },
+        {
+          "id": "s3",
+          "author": "responder_b",
+          "text": "anyone seen my charger? left it in the org room"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "locked"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "D"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "1"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "storage"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "unlock",
+                  "door"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "A responder relays a different floor from the reporter: a disagreement a human must settle. The charger message has nothing to do with the incident."
+    },
+    {
+      "id": "delta-en-003",
+      "split": "development",
+      "language": "en",
+      "tags": [
+        "movement",
+        "chronological",
+        "hard_negative"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Feeling dizzy and I had to sit down. I'm on the first floor of the Library near the entrance. Can someone bring me water?"
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "I moved from the first floor to the second floor, it's quieter here. I'm at the tables beside the window."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Still here, same spot."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "optional"
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Library"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "1"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "entrance"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "dizzy"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "water"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction",
+              "locationText": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter moved, replacing their own floor and spot: correction, never a conflict. incidentType is optional because only a feeling is described."
+    },
+    {
+      "id": "delta-tl-001",
+      "split": "development",
+      "language": "taglish",
+      "tags": [
+        "chronological",
+        "unrelated",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Na-trap ako sa elevator ng Building B, ayaw gumalaw. Mag-isa lang ako dito."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Nakita ko sa display, 3rd floor ako huminto."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Confirm, sa 3rd floor ng Building B nga siya naka-stuck, naririnig ko siya mula sa labas."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "guys may klase ba bukas?"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "trap",
+                  "stuck",
+                  "elevator"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "B"
+                ]
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "elevator"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "floor": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "floor": "confirmation",
+              "building": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The floor first appears in s2. A responder then states the same floor and building. The question about class tomorrow is chatter."
+    },
+    {
+      "id": "delta-tl-002",
+      "split": "development",
+      "language": "taglish",
+      "tags": [
+        "conflict"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nahulog ako sa upuan sa 2nd floor ng Science Hall, room 204. Masakit likod ko. Pakitawag naman yung nurse sa clinic."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Wala siya sa 2nd floor, sabi ng kaklase niya nasa 4th floor daw siya."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Bilisan niyo po please."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nahulog",
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Science Hall"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "2"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "204"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "likod",
+                  "back"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "nurse",
+                  "clinic"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The responder gives a different floor from the reporter. The reporter's \"please hurry\" does not settle it, so the conflict stays open."
+    },
+    {
+      "id": "delta-tl-003",
+      "split": "development",
+      "language": "taglish",
+      "tags": [
+        "movement",
+        "chronological"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nahihilo ako, umupo muna ako dito sa 1st floor ng Dorm 2 sa may lobby."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Lumipat ako mula 1st floor papunta sa 2nd floor, mas malamig kasi dito sa may study area."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Pahingi na rin po ng tubig kung may dadaan."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "optional"
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Dorm 2"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "1"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "lobby"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "nahihilo",
+                  "hilo",
+                  "dizzy"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction",
+              "locationText": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "new_information",
+            "fields": {
+              "assistanceRequested": "new_information"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Movement by the reporter is a correction of their own floor and spot. The request for water in s3 is the first time any help is asked for."
+    },
+    {
+      "id": "delta-en-004",
+      "split": "validation",
+      "language": "en",
+      "tags": [
+        "chronological",
+        "unrelated",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "My wheelchair is stuck at a ramp. The front wheel is caught in a drain cover. Can someone help me lift it out?"
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Sorry, forgot to say, this is at Building F."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "I can see them at the ramp, it's Building F for sure."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "is the canteen still open? asking for later"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "stuck",
+                  "caught"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "ramp"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "lift"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "building": "confirmation",
+              "locationText": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building",
+            "locationText"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Building is first stated in s2, then repeated with the ramp by a responder. The canteen question is unrelated. Floor is not asked because a ramp is outdoors."
+    },
+    {
+      "id": "delta-en-005",
+      "split": "validation",
+      "language": "en",
+      "tags": [
+        "conflict",
+        "chronological"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I fainted for a second in the hallway and I'm sitting on the floor now. Third floor, Building B. I feel weak and shaky."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Sorry, I got that wrong, it's Building C not Building B."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "A student here says they're actually on the second floor, not the third."
+        },
+        {
+          "id": "s4",
+          "author": "reporter",
+          "text": "I'm still here, please come."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "faint"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "B"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "hallway"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "weak",
+                  "shaky"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "building": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s3"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter fixing their own building is a correction, not a conflict. The responder's second floor against the reporter's third is an open conflict. \"Sitting on the floor\" is not a floor number."
+    },
+    {
+      "id": "delta-tl-004",
+      "split": "validation",
+      "language": "taglish",
+      "tags": [
+        "chronological",
+        "unrelated",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naiwan ako sa loob ng computer lab, na-lock yung pinto mula sa labas. Nasa Building E ako."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "4th floor po pala ito, pakisabi sa guard na buksan."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Nakausap ko yung guard, tama, 4th floor ng Building E yung computer lab."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "uy sino may extra na payong dyan, umuulan na"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lock",
+                  "naiwan",
+                  "left"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "E"
+                ]
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "computer lab",
+                  "lab"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "floor": "new_information",
+              "assistanceRequested": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "floor": "confirmation",
+              "building": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "s2 adds the floor and the first request for help. The responder repeats floor and building. The umbrella message is chatter."
+    },
+    {
+      "id": "delta-tl-005",
+      "split": "validation",
+      "language": "taglish",
+      "tags": [
+        "movement",
+        "conflict",
+        "chronological"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Natapilok ako dito sa ground floor ng Library, sa may entrance. Hindi ko maitapak yung kanang paa ko. Kailangan ko ng aalalay."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Umakyat na ako sa third floor gamit yung elevator, dito ako sa reading area nakaupo."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Nasa Science Hall daw siya sabi nung isang student, hindi sa Library."
+        },
+        {
+          "id": "s4",
+          "author": "reporter",
+          "text": "Andito pa rin ako, hintayin ko kayo."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "natapilok",
+                  "tapilok",
+                  "trip",
+                  "twist",
+                  "stumble"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Library"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "ground",
+                  "G"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "entrance"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "paa",
+                  "foot",
+                  "maitapak",
+                  "step"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "alalay",
+                  "assist",
+                  "support",
+                  "help"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction",
+              "locationText": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "possible_contradiction",
+            "fields": {
+              "building": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "building",
+            "statementIds": [
+              "s1",
+              "s3"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Going up to the third floor is movement, so a correction with no conflict. The responder naming a different building is the only conflict. \"Andito pa rin ako\" adds nothing."
+    },
+    {
+      "id": "delta-en-006",
+      "split": "held_out",
+      "language": "en",
+      "tags": [
+        "chronological",
+        "hard_negative",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "The power went out and the keycard door won't open, so I'm trapped in the print room on the fifth floor. I'm not hurt."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Which building is this? I'm at the Gym right now and I can head over."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Building A, sorry."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "Confirmed with the front desk, the fifth floor print room in Building A has a dead keycard reader."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "trapped"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "5"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "print room"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          },
+          {
+            "statementId": "s3",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "confirmation",
+            "fields": {
+              "floor": "confirmation",
+              "building": "confirmation",
+              "locationText": "confirmation"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The responder asks a question and gives their own whereabouts (the Gym), which says nothing about the reporter. The building first appears in s3 and is then confirmed by another person."
+    },
+    {
+      "id": "delta-en-007",
+      "split": "held_out",
+      "language": "en",
+      "tags": [
+        "conflict",
+        "unrelated",
+        "ambiguous"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "I'm lost. I was looking for the registrar and ended up in some parking area. It's dark and I don't know which way is out. Can someone guide me to the main gate?"
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "They are in the parking area behind Building D, I can see their phone light."
+        },
+        {
+          "id": "s3",
+          "author": "responder_b",
+          "text": "No, that's someone else. The person who is lost is at the Building B parking area, I'm talking to them now."
+        },
+        {
+          "id": "s4",
+          "author": "responder_a",
+          "text": "lol who took the last slice of pizza in the org room"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lost"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "parking"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "guide",
+                  "gate"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information",
+              "locationText": "confirmation"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "possible_contradiction",
+            "fields": {
+              "building": "possible_contradiction",
+              "locationText": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "building",
+            "statementIds": [
+              "s2",
+              "s3"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "building"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The conflict is between two responders: the reporter never named a building. The registrar and the main gate are a destination and a goal, not the location."
+    },
+    {
+      "id": "delta-en-008",
+      "split": "held_out",
+      "language": "en",
+      "tags": [
+        "chronological",
+        "hard_negative"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Slipped in the shower area of the Gym, ground floor. My elbow is throbbing. I need an ice pack."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Wait, I need to fix that. The shower area is on the second floor, I forgot the lockers are upstairs."
+        },
+        {
+          "id": "s3",
+          "author": "reporter",
+          "text": "Elbow still throbbing. Still in the shower area."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "slip"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Gym"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "ground",
+                  "G"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "shower"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "elbow",
+                  "throb"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "ice"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {
+              "symptom": "no_meaningful_change",
+              "locationText": "no_meaningful_change"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter fixes their own floor: correction, no conflict. s3 repeats the symptom and spot already given."
+    },
+    {
+      "id": "delta-tl-006",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "chronological",
+        "incomplete"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Naipit ang daliri ko sa pinto ng locker. Namamaga na at kumikirot."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Nasa Gym ako, sa locker room sa ikalawang palapag."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Nakita ko na siya, nasa locker room nga ng Gym, ikalawang palapag."
+        },
+        {
+          "id": "s4",
+          "author": "reporter",
+          "text": "Pahingi po ng yelo."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naipit",
+                  "caught",
+                  "pinch",
+                  "stuck",
+                  "jammed"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "optional"
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "namamaga",
+                  "maga",
+                  "kumikirot",
+                  "kirot",
+                  "swollen",
+                  "swell",
+                  "throb",
+                  "daliri",
+                  "finger"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information",
+              "floor": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "building": "confirmation",
+              "floor": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "new_information",
+            "fields": {
+              "assistanceRequested": "new_information"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "building",
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. s1 mentions a locker door but no place, so locationText is optional there and left out of the s2 delta. Building and floor arrive in s2, a responder confirms them, and help is first asked for in s4."
+    },
+    {
+      "id": "delta-tl-007",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "conflict",
+        "unrelated"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Na-stuck ako sa fire exit ng Building C, 5th floor, nag-lock yung pinto pagkasara. Mainit dito, nauuhaw na ako. Pabukas naman ng pinto."
+        },
+        {
+          "id": "s2",
+          "author": "responder_a",
+          "text": "Sa 6th floor yung naka-lock na fire exit, kagagaling ko lang dun, may kumakatok."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Ay sorry mali ako, 5th floor nga pala, nabilang ko yung mezzanine."
+        },
+        {
+          "id": "s4",
+          "author": "responder_b",
+          "text": "may nakakita ba ng ID ko? color blue yung lace"
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "stuck",
+                  "lock"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "C"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "5"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "fire exit"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "nauuhaw",
+                  "uhaw",
+                  "thirsty"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "bukas",
+                  "open",
+                  "pinto",
+                  "door"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The responder disagrees on the floor, then corrects themselves to agree. The correction is the responder changing their own value, and the conflict stays listed because the app never closes one on its own."
+    },
+    {
+      "id": "delta-tl-008",
+      "split": "held_out",
+      "language": "taglish",
+      "tags": [
+        "hard_negative"
+      ],
+      "statements": [
+        {
+          "id": "s1",
+          "author": "reporter",
+          "text": "Nawalan ng ilaw dito sa 3rd floor ng Building A tapos nadapa ako sa dilim. Masakit yung siko ko."
+        },
+        {
+          "id": "s2",
+          "author": "reporter",
+          "text": "Masakit pa rin siko ko. Andito pa rin ako sa 3rd floor."
+        },
+        {
+          "id": "s3",
+          "author": "responder_a",
+          "text": "Papunta na ko, galing akong 1st floor, paakyat na."
+        }
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nadapa",
+                  "dapa",
+                  "trip",
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "A"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "unknown"
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "siko",
+                  "elbow"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {
+              "symptom": "no_meaningful_change",
+              "floor": "no_meaningful_change"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter repeats themselves. The responder's 1st floor is where the responder is coming from, not a claim about the reporter, so it is neither a contradiction nor new information."
+    }
+  ]
+}

@@ -1,8 +1,8 @@
-# PULSE 2.0 documentation
+# SAGIP documentation
 
-PULSE 2.0 is an iOS-first, camera-free, offline assistance-coordination prototype built for the AppBuildersPH 2026 hackathon (theme: Local AI). It is not an emergency service, a medical device or a guaranteed rescue channel.
+SAGIP (working name PULSE 2.0, still used in older documents and in code identifiers) is an iOS-first, camera-free, offline assistance-coordination prototype built for the AppBuildersPH 2026 hackathon (theme: Local AI). It is not an emergency service, a medical device or a guaranteed rescue channel.
 
-**Current state (2026-10-09):** Phase 0 is in progress and the Phase 1 scaffold is being installed. Nothing has been built, run, tested or verified on a device yet. Every document here describes either verified facts about the toolchain and dependencies, or a planned design. Planned design is written as "will" and labelled as such.
+**Current state (2026-10-10):** the code for phases P2 to P7 is committed and unit-tested (typecheck and lint clean; 42 Jest suites, 450 tests passed; `swift test` 6 passed in `modules/pulse-peer` and 15 in `modules/pulse-crypto`). An EAS development build for devices finished (`fbc85457`), and an EAS simulator build (`66901962`) runs in the iOS 26.3 simulator, where the app has been looked at in Demo mode only. **Nothing has run on a physical iPhone.** No LIVE-mode behaviour, real model inference, real radio link or real Keychain use has been observed, and no gate other than G0 is passed. Each document says which of its sections describe code that exists and which are still a plan; a plan is written as "will" or marked planned, and an unchecked technical claim is marked `UNVERIFIED`. Start with [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
 ## Status vocabulary
 
@@ -39,7 +39,7 @@ All status tables use only these words.
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Feature matrix: implemented, mocked, missing, blocked, verified on device. |
 | [TEST_PLAN.md](TEST_PLAN.md) | Unit, integration and adversarial cases; per-device checklist. |
 | [LOCAL_AI_BENCHMARKS.md](LOCAL_AI_BENCHMARKS.md) | Measurement methodology and results table (no measurements yet). |
-| [UI_REFERENCE.md](UI_REFERENCE.md) | Design source, tokens, primitives, planned deviations and copy corrections. |
+| [UI_REFERENCE.md](UI_REFERENCE.md) | Design source, tokens, primitives, deviations from the export and port status. |
 | [EAS_IOS_SETUP.md](EAS_IOS_SETUP.md) | Development-build setup, device prerequisites, signing. |
 | [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | Operator script for scenes A to F with honest fallbacks. |
 | [HACKATHON_DISCLOSURES.md](HACKATHON_DISCLOSURES.md) | What runs locally, what needs network, frameworks, AI tools used. |
@@ -50,7 +50,7 @@ All status tables use only these words.
 | [ADR/0002-peer-transport-native-swift.md](ADR/0002-peer-transport-native-swift.md) | Peer transport is a native Swift module on Network framework. |
 | [ADR/0003-capsule-crypto-and-trust.md](ADR/0003-capsule-crypto-and-trust.md) | Capsule encryption, key handling and pairing. |
 | [ADR/0004-offline-event-synchronization.md](ADR/0004-offline-event-synchronization.md) | Append-only ledger and event sync between devices. |
-| [agent-handoffs/README.md](agent-handoffs/README.md) | Handoff template for delegated agents. |
+| [agent-handoffs/README.md](agent-handoffs/README.md) | Handoff template for delegated agents. Filed: [P2-domain](agent-handoffs/P2-domain.md), [P3-ui](agent-handoffs/P3-ui.md), [P7-integration](agent-handoffs/P7-integration.md). |
 
 Related files outside `docs/`: `CONTRIBUTING.md` (contribution policy), `.claude/agents/` (subagent profiles), `design/` (Claude Design export, reference only).
 

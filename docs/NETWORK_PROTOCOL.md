@@ -1,6 +1,6 @@
 # Network protocol
 
-Status (2026-10-10): the application protocol on top of the transport (`src/sync/`) is **implemented and unit-tested in Jest** against an in-memory transport and a simulated `CapsuleCrypto`. **No packet has been exchanged between two real devices.** Everything about the radio, Bonjour, the Swift module and CryptoKit on a phone is unverified. Sections describing `src/sync/` say what the code does; sections about the native transport still describe the plan.
+Status (2026-10-10): the application protocol on top of the transport (`src/sync/`) is **implemented and unit-tested in Jest** against an in-memory transport and a simulated `CapsuleCrypto`. **No packet has been exchanged between two real devices.** Everything about the radio, Bonjour, the Swift module and CryptoKit on a phone is unverified. Sections describing `src/sync/` say what the code does. The native transport (`modules/pulse-peer`) is also written: its frame codec is unit-tested (`swift test`, 6 passed) and the module is compiled into EAS build `fbc85457`, but its listener, browser and connection code has never run, so the sections about it describe code that is `BUILT` and unobserved.
 
 ## Scope
 
@@ -12,14 +12,18 @@ PULSE reaches only participating devices that are connected at that moment, dire
 
 Apple Network framework with Bonjour, in a small Swift Expo module (`modules/pulse-peer`). See [ADR/0002](ADR/0002-peer-transport-native-swift.md).
 
-| Element | Planned value |
+As coded in `modules/pulse-peer/ios/PeerService.swift`; never run on a device.
+
+| Element | Value |
 | --- | --- |
 | Listener | `NWListener` |
 | Browser | `NWBrowser` |
 | Service type | `_sagip-sos._tcp` |
-| Peer-to-peer | `includePeerToPeer` enabled, so devices can connect without shared infrastructure Wi-Fi |
+| Service name | The device's pseudonymous id (`dev-…`) |
+| Peer-to-peer | `includePeerToPeer` enabled, so devices can connect without shared infrastructure Wi-Fi (UNVERIFIED) |
 | Payload | Length-framed opaque bytes |
-| Lifecycle | Foreground only |
+| First frame | A hello `{ v: 1, deviceId }` from each side. It only names the device and proves nothing. |
+| Lifecycle | Foreground only; discovery stops on background and restarts on foreground (see Lifecycle) |
 
 Which radio path a connection actually uses (infrastructure Wi-Fi or peer-to-peer link) will be observed and recorded during device tests, not assumed.
 
@@ -32,7 +36,7 @@ Declared in `app.config.ts`:
 | `NSLocalNetworkUsageDescription` | Explains that PULSE finds trusted nearby iPhones and exchanges encrypted assistance requests without internet. |
 | `NSBonjourServices` | `["_sagip-sos._tcp"]` |
 
-The Local Network prompt appears the first time discovery starts. If the user denies it, discovery fails with a typed error; SOS persistence and queueing are unaffected.
+The Local Network prompt is expected the first time discovery starts (not yet seen on a device). A discovery failure whose message mentions denial, permission or policy is shown as `permission_denied`, any other as `error`; SOS persistence and queueing are unaffected. How iOS actually reports a denied Local Network permission to the module is UNVERIFIED.
 
 ## Interface
 
@@ -51,11 +55,13 @@ PeerTransport:
 
 - Bonjour advertises that a PULSE device is nearby. An advertised name is not an identity.
 - A discovered peer is treated as trusted only after its key has been matched to a paired `TrustedPeer` (see [SECURITY_PRIVACY.md](SECURITY_PRIVACY.md)).
-- Proposed: the advertisement carries no personal name and no incident data.
+- The advertisement carries the pseudonymous device id as its service name, and no personal name or incident data.
 
 ## Framing
 
-Planned for the native transport: each message is a length prefix followed by opaque bytes. Prefix width is not frozen. The sync layer refuses to build or accept a packet larger than 512 KiB (`MAX_PACKET_BYTES`).
+`modules/pulse-peer/ios/Core/FrameCodec.swift` (unit-tested): each message is a 4-byte big-endian length followed by that many opaque bytes. Empty frames and frames over 1 MiB (`maxFrameLength`) are refused. The decoder reassembles frames that arrive split or coalesced.
+
+The sync layer refuses to build or accept a packet larger than 512 KiB (`MAX_PACKET_BYTES`). The native cap was 256 KiB until `a355eb2` and is kept above the packet cap by a Swift test. A pending packet that would exceed the cap, or a section over 1000 events, is not sent and marks the incident view with `sendFailure: packet_too_large`.
 
 ## Packet format (`src/sync/packet.ts`)
 
@@ -163,22 +169,23 @@ A -> B  pair_hello   { material, name }
 B -> A  pair_hello   { material, name }
 both    verifyPeerPairing(peer material) -> the same six-digit code
 human   compares the codes and confirms on their own phone
-X -> Y  pair_confirm { signature }      signEvent(transcript | "confirmed-by" | own device id)
+X -> Y  pair_confirm { signature, answer? }  signEvent(transcript | "confirmed-by" | own device id)
 ```
 
 The transcript is `pulse-pair-v1|<both devices' id:signKey:agreeKey, sorted>|<code>`. A device stores the peer as trusted only when its own human confirmed **and** a confirmation that verifies against the peer's key arrived. Pairing fails if the material's device id is not the id of the link it arrived on, if `verifyPeerPairing` rejects it, if the material changes mid-session, or if a confirmation does not verify. A new peer starts at the `trusted` disclosure level.
 
-Known gap: if the last `pair_confirm` is lost, one side trusts and the other does not. Nothing retransmits it; the people have to pair again.
+A side that confirmed and is still waiting re-sends its `pair_confirm` on every retry tick and when the link comes back. A side that already finished verifies a repeated confirmation against the stored key material and replies with its own, marked `answer: true`; an answer is never answered. Either device may dial: when both dial at once, each keeps the link dialed by the lower device id (`LinkArbiter`). The sync layer waits for the `connected` state, bounded at 6 s, before it sends the hello. A phone that receives a pairing request opens the code comparison by itself.
 
 ## Lifecycle
 
 - Foreground only for the first demonstration. Discovery and connections are not expected to work while the app is suspended.
-- On background: stop discovery, close connections, keep the outbox.
-- On foreground: restart discovery, reconnect, flush the outbox.
+- `createLiveApp` subscribes to `AppState` (`7ecee25`): on background it stops discovery and leaves the setting untouched; on foreground it restarts discovery when the setting is on, which reconnects trusted peers, and kicks a flush. The outbox is in SQLite and survives either way. Jest only (`lifecycle.test.ts`, `live.test.ts`); timing against iOS teardown is unverified on a device.
 
 ## Error states surfaced to the UI
 
-No peer, permission denied, peer not trusted, expired credentials, packet too large, failed decryption, duplicate, out-of-order update, lost connection.
+Surfaced today: no trusted peer, no reachable peer (queued), discovery off / starting / permission denied / error, peer reach per device, pairing failures, and pending-outbox count with "Try delivery again".
+
+Not surfaced: a packet too large to send (the row stays pending silently), a failed decryption or rejected packet (dropped with no receipt, nothing shown), duplicates and out-of-order updates (handled silently by design).
 
 ## Test evidence
 
@@ -191,7 +198,10 @@ No peer, permission denied, peer not trusted, expired credentials, packet too la
 | Three-device relay, relay holds no plaintext, hop limit, relay switched off | UNIT-TESTED (same) | `src/services/__tests__/relay.test.ts` |
 | Tampered, re-labelled, expired, oversized, untrusted-sender packets; forged receipt | UNIT-TESTED (same) | `src/services/__tests__/disclosure.test.ts` |
 | Pairing handshake | UNIT-TESTED (same) | `src/services/__tests__/pairing.test.ts` |
-| Synthetic packet A↔B between two iPhones, external internet disabled | NOT STARTED | — |
-| Receipt observed on a real sender | NOT STARTED | — |
-| Disconnect and reconnect flush on devices | NOT STARTED | — |
-| Three-phone relay | NOT STARTED | — |
+| Native frame codec | UNIT-TESTED | `swift test` in `modules/pulse-peer`: 6 passed (2026-10-09). |
+| Native module compiles for iOS | BUILT | EAS build `fbc85457` contains `PulsePeerModule`. |
+| JS adapter `src/transport/NativePeerTransport.ts` against the Swift module | IMPLEMENTED | No test; never executed. |
+| Synthetic packet A↔B between two iPhones, external internet disabled | BLOCKED | No build installed on any phone; needs two phones on iOS 26, paired with the Mac. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), Blocked. |
+| Receipt observed on a real sender | BLOCKED | Same. |
+| Disconnect and reconnect flush on devices | BLOCKED | Same. |
+| Three-phone relay | BLOCKED | Same, with a third phone. |

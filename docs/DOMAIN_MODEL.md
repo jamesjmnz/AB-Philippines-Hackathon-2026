@@ -11,7 +11,7 @@ Wire contracts are strict Zod schemas (unknown keys are rejected). Derived state
 | Group | Zod contracts (validated) | Derived types (from replay) |
 | --- | --- | --- |
 | People and devices | `Actor`, `User`, `DeviceIdentity`, `TrustedPeer` | |
-| Incident and evidence | `ClaimInput`, `AIFindingInput` | `Incident`, `OriginalReport`, `Claim`, `ClaimSource`, `ClaimRevision`, `AIFinding`, `ClarificationQuestion`, `Contradiction` |
+| Incident and evidence | `ClaimInput`, `AIFindingInput`, `AssessmentItemInput` | `Incident`, `OriginalReport`, `Claim`, `ClaimSource`, `ClaimRevision`, `AIFinding`, `StatementAssessment`, `ClarificationQuestion`, `Contradiction` |
 | Coordination | `TaskKind` | `AssistanceTask`, `TaskStatus`, `RecipientState`, `PacketState` |
 | Disclosure | `DisclosureLevel`, `DisclosurePolicy` | `IncidentProjection` |
 | Ledger and sync | `DomainEvent`, `EventClock`, `EventSignature`, `EventBatch`, `OutboxMessage`, `InboxMessage`, `SyncCursor`, `PacketReceipt` | `IncidentState`, `LedgerMeta` |
@@ -44,6 +44,17 @@ Two human statements with different values for a field are both kept. `CONFLICT_
 
 The rule (`detectFieldConflicts`) derives the conflict id from the two revision ids, so two devices that flag the same pair concurrently produce one contradiction.
 
+What the rule compares, per field:
+
+- The statement leading the field (the latest reporter confirmation, otherwise the reporter's latest statement, otherwise the latest statement) against each other author's latest statement since the last confirmation. Statements made before a confirmation were settled by it.
+- Only an author's latest statement counts. An earlier one was superseded by its own author, so a different value from the same person is a correction, not a contradiction.
+- A statement that differs from a reporter-confirmed value is always compared and flagged, including the reporter's own later statement. A confirmed value never changes silently.
+- An explicit move explains an older agreement. When an author said they moved ("I moved from the first floor to the second floor"), another author's plain statement made before that move is not a conflict if it names a floor the mover had stated before the move or the floor the move says they left. It stays explained through the mover's later moves and self-corrections. A statement made after the mover's last move, a floor the mover never stated or left, and anything differing from a confirmed value are still flagged. Floors only.
+- One contradiction is recorded per disagreeing value: a statement or a value already in a contradiction is not flagged again.
+- The requester's first report is the anchor of the incident. A responder who has not received it writes with a logical clock that can tie with or fall below the report's, so the observation can replay before it. For comparison (`comparisonOrder`) the anchor's revisions are placed ahead of every other statement that replays before them, so "earlier" and "later" in the rules above are read against the anchor first. They are never moved across a reporter confirmation, a second report by the requester is not an anchor, and with no report yet the order is replay order. Replay order itself, and the reducer, are unchanged.
+
+The rule only proposes. It never closes, withdraws or rewrites a recorded contradiction, and the reducer applies a recorded `CONFLICT_FLAGGED` without consulting the rule, so events recorded under an earlier version of the rule replay unchanged.
+
 ## Event ledger
 
 Append-only. `DomainEvent`:
@@ -63,13 +74,13 @@ Replay order is `(lamport, deviceId, id)`. Wall-clock time is never consulted.
 
 ## Event vocabulary
 
-The 20 events of the master specification, with these names:
+23 events: the 20 of the master specification, with these names, and three additions listed below.
 
 | # | Event | Authored by | Effect |
 | --- | --- | --- | --- |
 | 1 | `INCIDENT_CREATED` | Reporter | Creates the incident, its recipients and one basic-alert packet per recipient. |
 | 2 | `REPORT_ADDED` | Reporter (`report`) or any participant (`observation`) | Stores verbatim text and the claims stated in it. |
-| 3 | `AI_PROPOSAL_CREATED` | A participant's device | Stores findings as `ai_proposal` revisions. No authority. |
+| 3 | `AI_PROPOSAL_CREATED` | Reporter's device | Stores findings as `ai_proposal` revisions. No authority. From any other device it is stored and not applied (`not_reporter`). |
 | 4 | `CLARIFICATION_REQUESTED` | Any participant (origin `ai`, `rule` or `human`) | Opens a question for the reporter. |
 | 5 | `CLAIM_CONFIRMED` | Reporter | Confirms a value, optionally answering a question or promoting a revision. |
 | 6 | `CONFLICT_FLAGGED` | Any participant (detected by `rule` or `ai`) | Opens a contradiction between human statements. |
@@ -88,12 +99,20 @@ The 20 events of the master specification, with these names:
 | 19 | `INCIDENT_RESOLVED` | Reporter, or a responder holding an accepted task | Closes the incident. |
 | 20 | `INCIDENT_CANCELLED` | Reporter | Closes the incident. |
 
-Two additions:
+Three additions:
 
 | Event | Why it was needed |
 | --- | --- |
 | `CLARIFICATION_SKIPPED` | The reporter can decline a question. Without an event the question would stay open forever and the UI would keep asking. The field is left as it was, including unknown. |
 | `RESPONDER_DECLINED` | A responder can say they cannot help with the whole request. `TASK_DECLINED` is per task and cannot express this. Roles only offered to that responder reopen. |
+| `STATEMENT_ASSESSED` | The on-device model's verdict on how one statement relates to earlier evidence ([ADR/0005](ADR/0005-incident-delta-intelligence.md)). Authored only by the reporter's device, which runs the analysis, while the incident is open; from any other device it is stored and not applied (`not_reporter`), so a paired device can neither replace what the owner sees nor occupy the owner's assessment id. It is a proposal: the reducer stores it in `state.assessments` and changes no claim, no contradiction and no status. |
+
+`STATEMENT_ASSESSED` carries ids, classes and spans only, with no value and no free text: `assessmentId`, `reportId`, `provider`, `overall` (one of `new_information`, `confirmation`, `correction`, `possible_contradiction`, `unrelated`, `no_meaningful_change`) and up to six `items`, at most one per field, each `{ field, class, againstRevisionId?, evidence? }`. A field class is never `unrelated`. An assessment that assessed nothing is not recorded.
+
+- The id is `assessmentIdFor(reportId, promptVersion)`, so assessing the same statement again with the same prompt records nothing new: the first in replay order is kept and a repeat is listed in `notApplied` with `duplicate_entity`. The id is `assess:<reportId>:<promptVersion>` when that fits in 128 characters and the report id contains no `:`; otherwise it is `assess~<start of reportId>~<16 hex digits>`, where the digits are a deterministic hash of both parts, so two prompt versions of a long report id do not share an id.
+- The statement must be in the ledger (`unknown_report` otherwise, and the event is applied by a later replay once the statement arrives). `againstRevisionId`, when given, must be a human revision of that field (`unknown_revision`).
+- An evidence span is checked against the stored statement text and kept with `evidenceVerified` true or false; it is never a reason to refuse the event.
+- It is never part of a projection sent to a recipient, and in a capsule the event is in the restricted tier, the same as `AI_PROPOSAL_CREATED`.
 
 Not added: pairing, relay-forward and arrival events. A relay forwarding a packet is a `PACKET_SENT_ATTEMPT` with `viaDeviceId`. Changing a recipient's disclosure level is a new `CAPSULE_PREPARED`. Arrival is never inferred; `TASK_PROGRESS_REPORTED` carries a human note.
 
@@ -146,7 +165,7 @@ When two devices accept the same task concurrently, the first in replay order ho
 
 ## Authorization policy
 
-`src/domain/policy.ts`: pure functions returning `{ ok: true } | { ok: false, code }`, used by the commands, the reducer and the UI. `canAddReport`, `canRecordAIProposal`, `canRequestClarification`, `canSkipClarification`, `canConfirmClaim`, `canFlagConflict`, `canResolveConflict`, `canPrepareCapsule`, `canQueueCapsule`, `canRecordTransport`, `canAcknowledge`, `canDeclineRequest`, `canOfferTask`, `canAcceptTask`, `canDeclineTask`, `canReportProgress`, `canReportCompletion`, `canConfirmCompletion`, `canResolveIncident`, `canCancelIncident`.
+`src/domain/policy.ts`: pure functions returning `{ ok: true } | { ok: false, code }`, used by the commands, the reducer and the UI. `canAddReport`, `canRecordAIProposal`, `canRecordAssessment`, `canRequestClarification`, `canSkipClarification`, `canConfirmClaim`, `canFlagConflict`, `canResolveConflict`, `canPrepareCapsule`, `canQueueCapsule`, `canRecordTransport`, `canAcknowledge`, `canDeclineRequest`, `canOfferTask`, `canAcceptTask`, `canDeclineTask`, `canReportProgress`, `canReportCompletion`, `canConfirmCompletion`, `canResolveIncident`, `canCancelIncident`.
 
 A participant is the reporter or a listed recipient.
 
@@ -160,7 +179,7 @@ Levels: `relay`, `trusted`, `authorized`, plus `owner` for the reporter. `canRea
 | `floor`, `locationText` | no | if `shareDetailedLocation` | if `shareDetailedLocation` |
 | `symptom`, original report text | no | no | if `shareSymptoms` |
 
-`projectForLevel(state, level, policy)` returns only what the level may read. Restricted fields are absent from the result, not blanked. The relay projection is routing metadata only (incident id, reporter device id, recipient device ids). Projections below `owner` never contain revision history, evidence spans, AI findings or events.
+`projectForLevel(state, level, policy)` returns only what the level may read. Restricted fields are absent from the result, not blanked. The relay projection is routing metadata only (incident id, reporter device id, recipient device ids). Projections below `owner` never contain revision history, evidence spans, AI findings, model assessments or events.
 
 Before any capsule is prepared both share switches are off. A device not listed in the policy is a relay.
 
@@ -169,14 +188,31 @@ Before any capsule is prepared both share switches are off. A device not listed 
 `src/domain/rules/`:
 
 - `extractFloor` / `extractFloors`: English ("ground floor", "second floor", "2nd floor", "floor 4", "5/F") and Tagalog ("unang palapag", "ikalawang palapag", "ikatlong palapag", "ika-6 na palapag"), returning the canonical label, the level and the exact span. Ground and first are distinct. A text naming two different floors yields no floor. A directly negated mention is skipped.
-- `extractBuilding`: "Building B", "bldg 4", "gusali 3", with the span.
-- `detectFieldConflicts`: explicit-field conflict detection with no model.
+- `extractFloorTransition`: the floor the author says they moved from and the floor they say they are on now, or null. A wrong floor is worse than no floor, so it is a whitelist: exactly two mentions on different levels, in a first-person construction with a completed movement ("I moved from the first floor to the second floor", "I was on the first floor, now I'm on the second floor", "lumipat ako mula first floor papunta sa second floor", "galing ako sa 1st floor, nasa 2nd floor na ako"). Another subject, an object, reported speech, a question, an intention or attempt ("I'm going from ... to ..."), a negation and a reversal afterwards all return null.
+- `extractStatedFloor` / `extractStatedBuilding`: what a report (the requester's own statement) is taken to state: the destination of a transition, otherwise the single floor or building left once mentions that are not where the writer is have been set aside (`isNotWriterLocation`). A mention is set aside when its own clause is a question ("Is this the 3rd floor?"), names a place the writer left with no destination ("I left the 3rd floor already", "galing ako sa 3rd floor"), is somewhere to go or not to go ("do not come to the 3rd floor", "huwag kayong pumunta sa 3rd floor"), or has a subject other than the writer: a hazard, another person or a name ("The fire is on the 3rd floor", "My son is on the 3rd floor", "nasa 3rd floor ang apoy"). First-person mentions and bare mentions with no subject still count, and when a text has both kinds the valid one is used ("My son is on the 3rd floor, I am on the 2nd floor" gives Second floor).
+- `extractObservedFloor` / `extractObservedBuilding`: what an observation (a responder's statement) is taken to state about the requester. A mention governed by the responder's own first person (`isFirstPersonLocation`: "I'm on the first floor, coming up to you", "nasa 1st floor na ako", "andito ako sa Building A") describes the responder and yields no claim, and so does a first-person move. A mention in a clause about somebody else still counts in the same message ("I'm on the first floor, they are on the second floor" gives Second floor; "I found them on the third floor" gives Third floor). A question and a hazard as the subject yield nothing.
+- `extractBuilding`: "Building B", "bldg 4", "gusali 3", with the span. There is no movement rule for buildings. `extractFloor` and `extractBuilding` are the plain extractors; the commands use the `Stated` and `Observed` forms above.
+- `detectFieldConflicts`: explicit-field conflict detection with no model. See Contradictions above.
+- `classifyStatementDelta(state, reportId)`: how one stored statement relates to what was known before it, with no model. Read-only: it writes no event and changes nothing. For each claim revision the statement produced it gives a class and a reason:
+
+  | Class | Reason | When |
+  | --- | --- | --- |
+  | `new_information` | `first_value` | No earlier human value for the field. |
+  | `new_information` | `moved` | The author's first value for the field, an explicit move away from the floor somebody else had stated. |
+  | `confirmation` | `second_source` | Same value as an earlier statement by somebody else. |
+  | `no_meaningful_change` | `restated` | Same value as the author's own earlier statement. |
+  | `correction` | `moved` | Different from the author's own earlier value, and the statement is an explicit move from that value. |
+  | `correction` | `self_correction` | Different from the author's own earlier value otherwise. |
+  | `possible_contradiction` | `differs_from_other` | Different from somebody else's statement, and no move explains it. |
+  | `possible_contradiction` | `differs_from_confirmed` | Different from a reporter-confirmed value, whoever says it. |
+
+  The statement's overall class is the highest of its fields: `possible_contradiction`, `correction`, `new_information`, `confirmation`, `no_meaningful_change`. A statement that produced no revision is `no_meaningful_change` when its words exactly repeat an earlier statement by the same author (case, spacing and punctuation aside), otherwise `not_assessed`. The rules never return `unrelated`; only a model assessment can. `needsVerification` is read from the incident as it stands: it is true while the revision is in an open contradiction or the conflict rule currently finds it in disagreement, and it clears when the reporter resolves. The incident-creation revisions and AI proposals are neither classified nor compared against. Comparison uses `comparisonOrder`: an observation that replays before the requester's first report is still classified against it, and that first report is compared with nothing except a confirmation the reporter had already given, so it is never the statement that "differs" from a responder.
 
 ## Commands
 
 `src/domain/commands/`. Each takes the current state and a `CommandContext` (`actor`, `clock`, `ids`), validates through the reducer, and returns `{ events, outbox, state }`. A refused intent throws `DomainError` with a stable `code`.
 
-`createManualSOS`, `addReport`, `addObservation`, `recordAIProposal`, `requestClarification`, `skipClarification`, `confirmClaim`, `flagConflict`, `flagDetectedConflicts`, `resolveConflict`, `acknowledge`, `declineRequest`, `offerTask`, `acceptTask`, `declineTask`, `reportProgress`, `reportCompletion`, `confirmCompletion`, `prepareCapsule`, `queueCapsule`, `recordSendAttempt`, `recordPeerReceipt`, `resolveIncident`, `cancelIncident`.
+`createManualSOS`, `addReport`, `addObservation`, `recordAIProposal`, `recordAssessment`, `requestClarification`, `skipClarification`, `confirmClaim`, `flagConflict`, `flagDetectedConflicts`, `resolveConflict`, `acknowledge`, `declineRequest`, `offerTask`, `acceptTask`, `declineTask`, `reportProgress`, `reportCompletion`, `confirmCompletion`, `prepareCapsule`, `queueCapsule`, `recordSendAttempt`, `recordPeerReceipt`, `resolveIncident`, `cancelIncident`.
 
 ### `createManualSOS`
 

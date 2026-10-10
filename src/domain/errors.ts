@@ -18,6 +18,7 @@ export const DOMAIN_ERROR_CODES = [
   'task_not_open',
   'invalid_task_transition',
   'unknown_revision',
+  'unknown_report',
   'unknown_question',
   'question_not_open',
   'unknown_conflict',

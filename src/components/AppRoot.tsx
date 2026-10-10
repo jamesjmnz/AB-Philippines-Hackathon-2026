@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { router, usePathname } from 'expo-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { OverlayHost, ToastHost } from '@/ui';
 
 import { useAppMode } from './appMode';
 import { AnomalySheet } from './demo/AnomalySheet';
+import { routes } from './nav';
 import { Splash } from './onboarding/Splash';
 import { SimulatedBar } from './SimulatedBar';
 
@@ -45,6 +47,17 @@ function ShellBody({ children }: { children: ReactNode }) {
   const snapshot = usePulse();
   const insets = useSafeAreaInsets();
   const demo = snapshot.mode === 'demo';
+  // A pairing session can be started by the other phone. Its code has to be compared on both, so the
+  // comparison opens here too; without this the receiving phone shows nothing.
+  const pathname = usePathname();
+  const onPairScreen = useRef(false);
+  useEffect(() => {
+    onPairScreen.current = pathname === routes.pair;
+  }, [pathname]);
+  const pairingPeer = snapshot.ready ? (snapshot.pairing?.peerDeviceId ?? null) : null;
+  useEffect(() => {
+    if (pairingPeer !== null && !onPairScreen.current) router.push(routes.pair);
+  }, [pairingPeer]);
   // Sheets, dialogs and toasts live inside this area, so in Demo they are always under the SIMULATED bar.
   const body = (
     <>

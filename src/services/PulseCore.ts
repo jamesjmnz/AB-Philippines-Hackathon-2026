@@ -1,17 +1,21 @@
 import { z } from 'zod';
 
-import type {
-  AIFailureState,
-  AIResult,
-  AISource,
-  CapabilityMatrix,
-  ClarifiableField,
-  ClarificationProposal,
-  IncidentContext,
-  IncidentProposal,
-  LocalAIService,
-  ProposalField,
-  TaskProposal,
+import {
+  groundValue,
+  guardLocalAI,
+  locateEvidence,
+  type GuardedLocalAI,
+  type AIFailureState,
+  type AIResult,
+  type AISource,
+  type CapabilityMatrix,
+  type ClarifiableField,
+  type ClarificationProposal,
+  type IncidentContext,
+  type IncidentProposal,
+  type LocalAIService,
+  type ProposalField,
+  type TaskProposal,
 } from '@/ai';
 import { SentProjectionSchema, type SentProjection } from '@/crypto/capsule';
 import type { CapsuleCrypto } from '@/crypto/types';
@@ -23,22 +27,21 @@ import {
   cancelIncident,
   confirmClaim,
   confirmCompletion,
-  conflictIdFor,
+  assessmentIdFor,
   createManualSOS,
   declineRequest,
   declineTask,
   extractBuilding,
   extractFloor,
-  flagConflict,
   flagDetectedConflicts,
   isDomainError,
-  isHumanRevision,
   normalizeValue,
   offerTask,
   prepareCapsule,
   projectForLevel,
   queueCapsule,
   recordAIProposal,
+  recordAssessment,
   replay,
   reportCompletion,
   reportProgress,
@@ -46,6 +49,7 @@ import {
   resolveConflict,
   resolveIncident,
   skipClarification,
+  DisclosureLevelSchema,
   DomainError,
   type Actor,
   type ClaimField,
@@ -56,7 +60,6 @@ import {
   type DomainEvent,
   type IdGenerator,
   type IncidentState,
-  type TextSpan,
 } from '@/domain';
 import type { IncidentRepository } from '@/storage';
 import { DEFAULT_SYNC_CONFIG, SyncEngine, type SyncConfig } from '@/sync/SyncEngine';
@@ -68,6 +71,7 @@ import type {
   AppMode,
   AppSettings,
   DiscoveryState,
+  EvaluationOutcome,
   FactView,
   IncidentView,
   PairingSession,
@@ -76,7 +80,11 @@ import type {
   PulseApp,
   PulseSnapshot,
   RecipientPolicyInput,
+  SendFailureCode,
 } from './api';
+import { runSplit, type Variant as EvaluationVariant } from '@/eval';
+
+import { analyzeStatement, basisStillHolds } from './deltaPipeline';
 import { readJson, writeJson } from './kv';
 import { buildIncidentView, policyFromInput, projectionFacts } from './views';
 
@@ -115,6 +123,8 @@ export interface PulseCoreDeps {
   transport: PeerTransport;
   crypto: CapsuleCrypto;
   kv: KeyValueStore;
+  /** False when `kv` does not survive a restart. Defaults to true in LIVE and false in DEMO. */
+  kvPersistent?: boolean;
   clock: Clock;
   ids: IdGenerator;
   deviceInfo: { model: string; osVersion: string };
@@ -122,6 +132,21 @@ export interface PulseCoreDeps {
   /** Reads a recorded WAV file. Injected so Jest never loads expo-file-system. */
   readFile?: (uri: string) => Promise<Uint8Array>;
   config?: Partial<CoreConfig>;
+  /**
+   * Evaluation runs against the real on-device provider. Present only where that provider loaded;
+   * the Demo Lab and tests leave it out, so a simulated run can never be exported as a device result.
+   */
+  evaluation?: {
+    promptVersion: string;
+    packageVersion: string;
+    isPhysicalDevice: boolean;
+    /** A provider configured for one evaluation arm. Not queued, cached or shared with the app's own calls. */
+    createAI(variant: EvaluationVariant): LocalAIService;
+    /** Writes the result where the share sheet can read it and returns its URI. */
+    exportFile(name: string, contents: string): Promise<string>;
+  };
+  /** Identifies the prompts in use; part of an assessment's identity so a new prompt can assess again. */
+  aiPromptVersion?: string;
   /** Preset profile and pairings. Used by the Demo Lab and tests; LIVE pairs over the transport. */
   seed?: { name?: string; onboarded?: boolean; peers?: readonly PeerRecord[]; settings?: Partial<AppSettings> };
 }
@@ -198,16 +223,32 @@ function randomHex(length: number): string {
   return out.slice(0, length);
 }
 
-function spanIn(text: string, evidence: string): TextSpan | null {
-  const needle = evidence.trim();
-  if (needle.length === 0) return null;
-  let start = text.indexOf(needle);
-  if (start < 0) start = text.toLowerCase().indexOf(needle.toLowerCase());
-  if (start < 0) return null;
-  const end = start + needle.length;
-  const exact = text.slice(start, end);
-  return exact.length <= 500 ? { start, end, text: exact } : null;
+/** Same bound as a stored report's text. */
+const MAX_DIAGNOSTIC_TEXT = 4_000;
+
+/** True when this statement already has a model proposal with this value for the field, so it is not recorded twice. */
+function alreadyProposed(state: IncidentState, reportId: string, field: ClaimField, value: string): boolean {
+  const key = normalizeValue(value);
+  return state.claims[field].revisions.some((r) => r.source.kind === 'ai_proposal' && r.evidence?.reportId === reportId && normalizeValue(r.value) === key);
 }
+
+/** Statements analysed per pass, and the most that may wait at once. */
+const MAX_PENDING_ANALYSES = 4;
+/** Questions the model stage may raise in one incident. */
+const MAX_AI_QUESTIONS = 3;
+/** A statement whose analysis keeps failing is left to the deterministic rules after this many tries. */
+const MAX_ANALYSIS_ATTEMPTS = 2;
+
+/**
+ * The only wording a suggested task may carry. The model picks a kind; it never writes what people read,
+ * so it cannot say that help is coming, that anyone was called, or suggest anything medical.
+ */
+const TASK_TITLES: Record<Exclude<TaskProposal['kind'], 'other'>, string> = {
+  communicate: 'Contact building staff or security',
+  go_to_requester: 'Go to the person who asked',
+  confirm_location: 'Confirm the location',
+};
+const DELTA_PRIORITY = ['possible_contradiction', 'correction', 'new_information', 'confirmation', 'no_meaningful_change'] as const;
 
 const CLARIFICATION_PROMPTS: Record<ClaimField, string> = {
   floor: 'Which floor are you on?',
@@ -224,6 +265,7 @@ export class PulseCore implements PulseApp {
 
   private readonly config: CoreConfig;
   private readonly timers: Timers;
+  private readonly storage: { settingsPersistent: boolean };
   private profile: Profile;
   private settings: AppSettings;
   private readonly peers = new Map<string, PeerRecord>();
@@ -233,6 +275,9 @@ export class PulseCore implements PulseApp {
   private discoveryError: string | null = null;
   private ready = false;
   private disposed = false;
+  /** False while the app is in the background. The radio is paused then, whatever the setting says. */
+  private appActive = true;
+  private lifecycleTail: Promise<void> = Promise.resolve();
 
   private snapshot: PulseSnapshot;
   private readonly listeners = new Set<() => void>();
@@ -248,9 +293,18 @@ export class PulseCore implements PulseApp {
   private pendingWork = 0;
   private idleWaiters: (() => void)[] = [];
 
+  /** Every model call goes through this lane: one at a time, bounded, deduplicated. SOS never touches it. */
+  private readonly ai: GuardedLocalAI;
+  /** Statements whose analysis is queued or running, so one statement is never analysed twice at once. */
+  private readonly analysing = new Set<string>();
+  /** Tries per statement this session, so a statement the model cannot handle is not retried on every trigger. */
+  private readonly analysisAttempts = new Map<string, number>();
+
   constructor(private readonly deps: PulseCoreDeps) {
     this.config = { ...DEFAULT_CORE_CONFIG, ...(deps.config ?? {}) };
     this.timers = deps.timers ?? systemTimers;
+    this.ai = guardLocalAI(deps.ai, { now: () => deps.clock.nowMs(), timers: this.timers });
+    this.storage = Object.freeze({ settingsPersistent: deps.kvPersistent ?? deps.mode === 'live' });
     this.profile = {
       deviceId: null,
       aliases: [],
@@ -284,6 +338,7 @@ export class PulseCore implements PulseApp {
         noteVia: (incidentId, via) => this.noteVia(incidentId, via),
         changed: () => this.changed(),
         track: (work) => this.track(work),
+        statementsArrived: (incidentId) => this.scheduleAnalysis(incidentId),
       },
     });
 
@@ -369,8 +424,9 @@ export class PulseCore implements PulseApp {
     const needsIdentity = this.profile.deviceId === null || this.profile.provisional;
     await this.bounded(Promise.all([needsIdentity ? identity : Promise.resolve(), this.refreshCapabilitiesInner()]));
     if (this.disposed) return;
-    if (this.settings.discoveryEnabled && this.profile.onboarded) void this.track(this.applyDiscovery(true));
+    if (this.appActive && this.settings.discoveryEnabled && this.profile.onboarded) void this.track(this.applyDiscovery(true));
     this.retryTimer = this.timers.setInterval(() => {
+      void this.track(this.engine.retryPairing());
       void this.track(this.engine.forwardRelayed().then(() => this.engine.flush()));
     }, this.config.retryIntervalMs);
     this.ready = true;
@@ -389,7 +445,7 @@ export class PulseCore implements PulseApp {
         await writeJson(this.deps.kv, KEY_PROFILE, this.profile);
         this.namesVersion += 1;
         // Discovery that already failed for lack of an identity is retried now that there is one.
-        if (this.settings.discoveryEnabled && this.profile.onboarded && this.discovery === 'error') {
+        if (this.appActive && this.settings.discoveryEnabled && this.profile.onboarded && this.discovery === 'error') {
           void this.track(this.applyDiscovery(true));
         }
         this.changed();
@@ -511,6 +567,7 @@ export class PulseCore implements PulseApp {
       trusted: true,
       reach: this.engine.reachOf(p.deviceId),
       lastSeenMs: this.engine.lastSeenMs(p.deviceId),
+      level: p.level,
     }));
     for (const id of this.engine.discoveredIds()) {
       if (this.peers.has(id) || this.isLocal(id)) continue;
@@ -538,6 +595,7 @@ export class PulseCore implements PulseApp {
       incidents: this.incidentViews,
       pairing,
       settings: this.settings,
+      storage: this.storage,
       demo: null,
     };
     if (!previous) return next;
@@ -566,7 +624,12 @@ export class PulseCore implements PulseApp {
     const repo = this.deps.repo;
     const ids = await repo.allIncidentIds();
     const pendingBy = new Map<string, number>();
-    for (const row of await repo.getPendingOutbox()) pendingBy.set(row.incidentId, (pendingBy.get(row.incidentId) ?? 0) + 1);
+    const blockedBy = new Map<string, SendFailureCode>();
+    for (const row of await repo.getPendingOutbox()) {
+      pendingBy.set(row.incidentId, (pendingBy.get(row.incidentId) ?? 0) + 1);
+      const block = this.engine.sendBlockOf(row.packetId);
+      if (block) blockedBy.set(row.incidentId, block);
+    }
     const views: IncidentView[] = [];
     const live = new Set(ids);
     for (const id of this.viewCache.keys()) if (!live.has(id)) this.viewCache.delete(id);
@@ -574,7 +637,8 @@ export class PulseCore implements PulseApp {
       const events = await repo.eventsForIncident(id);
       const stored = this.projections.get(id) ?? null;
       const pending = pendingBy.get(id) ?? 0;
-      const key = `${events.length}|${pending}|${stored?.version ?? 0}|${this.namesVersion}`;
+      const sendFailure = blockedBy.get(id) ?? null;
+      const key = `${events.length}|${pending}|${stored?.version ?? 0}|${this.namesVersion}|${sendFailure ?? ''}`;
       let cached = this.viewCache.get(id);
       if (!cached || cached.key !== key) {
         const via = stored?.via ?? null;
@@ -588,6 +652,7 @@ export class PulseCore implements PulseApp {
             stored: stored?.projection ?? null,
             viaName: via === null ? null : (this.peers.get(via)?.name ?? null),
             pendingOutbox: pending,
+            sendFailure,
           }),
         };
         this.viewCache.set(id, cached);
@@ -753,7 +818,50 @@ export class PulseCore implements PulseApp {
     const state = await this.deps.repo.replay(incidentId);
     const report = state.reports.find((r) => r.id === reportId);
     if (!report) return this.aiFailure('invalid_output', 'report_not_found');
-    return this.guardAI(() => this.deps.ai.extractIncidentReport({ text: report.text }));
+    return this.guardAI(() => this.ai.extractIncidentReport({ text: report.text }));
+  }
+
+  /** Extraction on text that belongs to no incident. Touches neither the ledger, the outbox nor the radio. */
+  private async diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>> {
+    const bounded = typeof text === 'string' ? text.trim().slice(0, MAX_DIAGNOSTIC_TEXT) : '';
+    if (bounded.length === 0) return this.aiFailure('invalid_output', 'empty_input');
+    return this.guardAI(() => this.ai.extractIncidentReport({ text: bounded }));
+  }
+
+  private evaluating = false;
+
+  /** One split of synthetic scenarios through the on-device pipeline, in memory. Touches no ledger, outbox or radio. */
+  private async runEvaluation(input: Parameters<PulseActions['runEvaluation']>[0], onProgress?: (done: number, total: number) => void): Promise<EvaluationOutcome> {
+    const evaluation = this.deps.evaluation;
+    if (!evaluation) return { ok: false, reason: 'unavailable' };
+    if (this.evaluating) return { ok: false, reason: 'busy' };
+    this.evaluating = true;
+    try {
+      const result = await runSplit({
+        split: input.split,
+        variant: input.variant,
+        ai: evaluation.createAI(input.variant),
+        promptVersion: evaluation.promptVersion,
+        commit: process.env.EXPO_PUBLIC_GIT_SHA ?? 'unrecorded',
+        device: { ...this.deps.deviceInfo, isPhysicalDevice: evaluation.isPhysicalDevice },
+        packageVersion: evaluation.packageVersion,
+        conditions: input.conditions.trim().slice(0, 300),
+        now: () => new Date(this.deps.clock.nowMs()),
+        ...(onProgress ? { onProgress } : {}),
+      });
+      const calls = result.records.flatMap((r) => r.calls);
+      const fileName = `sagip-eval-${input.split}-${input.variant}-${result.header.startedAt.replace(/[:.]/g, '-')}.json`;
+      try {
+        const fileUri = await evaluation.exportFile(fileName, `${JSON.stringify(result, null, 2)}\n`);
+        return { ok: true, fileUri, fileName, scenarios: result.records.length, calls: calls.length, failedCalls: calls.filter((c) => c.state !== 'ready').length };
+      } catch {
+        return { ok: false, reason: 'export_failed' };
+      }
+    } catch {
+      return { ok: false, reason: 'unavailable' };
+    } finally {
+      this.evaluating = false;
+    }
   }
 
   private attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult> {
@@ -763,63 +871,111 @@ export class PulseCore implements PulseApp {
       const findings = (Object.keys(proposal.fields) as ProposalField[]).flatMap((field) => {
         const proposed = proposal.fields[field];
         if (!proposed) return [];
-        const evidence = spanIn(report.text, proposed.evidence);
-        return [{ field, value: proposed.value.slice(0, 500), ...(evidence ? { evidence } : {}) }];
+        // Whatever produced the proposal, a value is recorded only with words from the statement that
+        // support it; a paraphrase becomes the person's own words, and an unsupported value is left out.
+        const evidence = locateEvidence(report.text, proposed.evidence);
+        const grounded = evidence ? groundValue(field, proposed.value, evidence.text) : null;
+        if (!evidence || !grounded?.ok) return [];
+        // The background analysis may already have proposed this exact value from this statement.
+        if (alreadyProposed(state, reportId, field, grounded.value)) return [];
+        return [{ field, value: grounded.value, evidence }];
       });
       if (findings.length === 0) return { events: [], outbox: [], state };
       return recordAIProposal(state, ctx, { provider: this.capabilities?.provider ?? 'unknown', reportId, findings });
     });
   }
 
-  /** AI may point at a contradiction the rules missed. It only ever flags; a human resolves. */
-  private async flagAIConflicts(incidentId: string): Promise<void> {
-    if (this.capabilities?.text.state !== 'ready') return;
-    const before = await this.deps.repo.replay(incidentId);
-    const statements = before.reports.map((r) => ({ id: r.id, author: r.author.userName, text: r.text }));
-    if (!before.incident || before.closure || statements.length < 2) return;
-    const result = await this.guardAI(() => this.deps.ai.findConflicts(statements));
-    if (!result.ok || result.value.length === 0) return;
-    const flagged = await this.exclusive(async () => {
-      let state = await this.deps.repo.replay(incidentId);
-      const actor = this.actorFor(state);
-      if (!actor || state.closure) return false;
-      const ctx: CommandContext = { actor, clock: this.deps.clock, ids: this.deps.ids };
-      const eventIds: string[] = [];
-      for (const proposal of result.value) {
-        const revisions = state.claims[proposal.field].revisions.filter(isHumanRevision);
-        const a = revisions.find((r) => r.evidence?.reportId === proposal.statementIds[0]);
-        const b = revisions.find((r) => r.evidence?.reportId === proposal.statementIds[1]);
-        if (!a || !b || normalizeValue(a.value) === normalizeValue(b.value)) continue;
-        const covered = state.contradictions.some(
-          (c) => c.field === proposal.field && (c.status === 'open' || (c.revisionIds.includes(a.id) && c.revisionIds.includes(b.id))),
-        );
-        if (covered) continue;
-        try {
-          const built = flagConflict(state, ctx, {
-            field: proposal.field,
-            revisionIds: [a.id, b.id],
-            detectedBy: 'ai',
-            conflictId: conflictIdFor(proposal.field, [a.id, b.id]),
-          });
-          await this.deps.repo.commit(built);
-          state = built.state;
-          eventIds.push(...built.events.map((e) => e.id));
-        } catch {
-          // Not flaggable; the statements stay as they are.
+  /**
+   * Queues the Incident Delta analysis of statements not yet assessed. Fire-and-forget: nothing
+   * waits on it, it runs behind the model lane at background priority, and it is bounded.
+   */
+  private scheduleAnalysis(incidentId: string): void {
+    if (this.capabilities?.text.state !== 'ready' || !this.ai.assessStatement) return;
+    void this.track(
+      (async () => {
+        const state = await this.deps.repo.replay(incidentId);
+        // One device analyses an incident: its owner, so the same statement is not analysed on every phone.
+        if (!state.incident || state.closure || !this.isLocal(state.incident.reporter.deviceId)) return;
+        const pending = state.reports
+          .filter((r) => !state.assessments.some((a) => a.id === assessmentIdFor(r.id, this.promptVersion())))
+          .slice(-MAX_PENDING_ANALYSES);
+        for (const report of pending) {
+          const key = `${incidentId}:${report.id}`;
+          if (this.analysing.has(key) || this.analysing.size >= MAX_PENDING_ANALYSES) continue;
+          const attempts = this.analysisAttempts.get(key) ?? 0;
+          if (attempts >= MAX_ANALYSIS_ATTEMPTS) continue;
+          this.analysisAttempts.set(key, attempts + 1);
+          this.analysing.add(key);
+          try {
+            await this.analyse(incidentId, report.id);
+          } finally {
+            this.analysing.delete(key);
+          }
         }
+      })().catch(() => undefined),
+    );
+  }
+
+  private promptVersion(): string {
+    return this.deps.aiPromptVersion ?? 'unversioned';
+  }
+
+  /**
+   * Analyses one statement and records the outcome as proposals. The model runs outside the ledger
+   * lock; before anything is written the incident is replayed again, and any part of the analysis
+   * whose basis a human has since changed is dropped rather than recorded.
+   */
+  private async analyse(incidentId: string, reportId: string): Promise<void> {
+    const assess = this.ai.assessStatement;
+    if (!assess) return;
+    const before = await this.deps.repo.replay(incidentId);
+    const analysis = await analyzeStatement({ assessStatement: (input) => assess(input, { priority: 'background' }) }, before, reportId);
+    if (!analysis || analysis.model.state !== 'ready') return;
+    await this.command(incidentId, (state, ctx) => {
+      const id = assessmentIdFor(reportId, this.promptVersion());
+      if (state.closure || state.assessments.some((a) => a.id === id)) return { events: [], outbox: [], state };
+      const fresh = (field: ClaimField) => basisStillHolds(state, analysis, field);
+      const items = analysis.items.filter((i) => fresh(i.field));
+      const findings = analysis.findings
+        .filter((f) => f.record && fresh(f.field) && !alreadyProposed(state, reportId, f.field, f.value))
+        .map(({ field, value, evidence }) => ({ field, value, evidence }));
+      const overall = items.length === analysis.items.length ? analysis.overall : (DELTA_PRIORITY.find((c) => items.some((i) => i.class === c)) ?? 'not_assessed');
+      if (overall === 'not_assessed') return { events: [], outbox: [], state };
+
+      const provider = this.capabilities?.provider ?? 'unknown';
+      const events: CommandResult['events'] = [];
+      let current = state;
+      const apply = (result: CommandResult) => {
+        events.push(...result.events);
+        current = result.state;
+      };
+      if (findings.length > 0) apply(recordAIProposal(current, ctx, { provider, reportId, findings }));
+      apply(
+        recordAssessment(current, ctx, {
+          reportId,
+          promptVersion: this.promptVersion(),
+          provider,
+          overall,
+          items: items.map((i) => ({ field: i.field, class: i.class, ...(i.againstRevisionId ? { againstRevisionId: i.againstRevisionId } : {}), ...(i.evidence ? { evidence: i.evidence } : {}) })),
+        }),
+      );
+      // A disagreement only the model can see is never settled by it: the person is asked.
+      for (const item of items) {
+        if (item.source !== 'model' || !item.needsVerification) continue;
+        // Never ask again what is already being asked or what the person chose to skip, and never pile up questions.
+        if (current.questions.some((q) => q.field === item.field && (q.status === 'open' || q.status === 'skipped'))) continue;
+        if (current.questions.filter((q) => q.origin === 'ai').length >= MAX_AI_QUESTIONS) continue;
+        apply(requestClarification(current, ctx, { field: item.field, prompt: CLARIFICATION_PROMPTS[item.field], origin: 'ai' }));
       }
-      if (eventIds.length > 0) await this.engine.queueSync(this.deps.repo, state, eventIds);
-      return eventIds.length > 0;
+      return { events, outbox: [], state: current };
     });
-    if (flagged) {
-      await this.engine.flush({ incidentId });
-      await this.refresh();
-    }
   }
 
   private async refreshCapabilitiesInner(): Promise<void> {
     try {
-      this.capabilities = await this.deps.ai.inspectCapabilities();
+      this.capabilities = await this.ai.inspectCapabilities();
+      // A cached answer must not outlive the model it came from being switched off or changed.
+      this.ai.clearCache();
     } catch {
       const down = { state: 'native_error' as const, detail: 'capability_probe_failed' };
       this.capabilities = {
@@ -845,7 +1001,7 @@ export class PulseCore implements PulseApp {
     } catch {
       return this.aiFailure('native_error', 'audio_file_unreadable');
     }
-    const result = await this.guardAI(() => this.deps.ai.transcribeLocal({ wavBytes }, locale));
+    const result = await this.guardAI(() => this.ai.transcribeLocal({ wavBytes }, locale));
     return result.ok ? { ok: true, value: { text: result.value.text }, meta: result.meta } : result;
   }
 
@@ -890,6 +1046,33 @@ export class PulseCore implements PulseApp {
     this.publish();
   }
 
+  /**
+   * App moved to the background (`false`) or back to the foreground (`true`). iOS tears the listener,
+   * browser and links down in the background and restarts none of them, so the radio is stopped on the
+   * way out and, if the person has discovery on, started again on the way back, followed by a delivery
+   * pass. Repeated calls with the same value do nothing. Nothing on the SOS path waits for this.
+   */
+  setAppActive(active: boolean): Promise<void> {
+    if (this.disposed || active === this.appActive) return this.lifecycleTail;
+    this.appActive = active;
+    const run = this.lifecycleTail.then(async () => {
+      await (this.startup ?? this.local());
+      // A later change already replaced this one.
+      if (this.disposed || this.appActive !== active) return;
+      if (!active) {
+        if (this.discovery !== 'off') await this.applyDiscovery(false);
+        return;
+      }
+      // Also retried after an error: the person may be returning from granting the permission.
+      const running = this.discovery === 'on' || this.discovery === 'starting';
+      if (!running && this.settings.discoveryEnabled && this.profile.onboarded) await this.applyDiscovery(true);
+      await this.engine.forwardRelayed().catch(() => undefined);
+      this.kickDelivery();
+    });
+    this.lifecycleTail = run.catch(() => undefined);
+    return this.track(this.lifecycleTail);
+  }
+
   private async saveSettings(patch: Partial<AppSettings>): Promise<void> {
     const merged = settingsSchema.safeParse({ ...this.settings, ...patch });
     if (!merged.success) return;
@@ -908,7 +1091,7 @@ export class PulseCore implements PulseApp {
         this.profile = { ...this.profile, name: name.trim().slice(0, 80), onboarded: true };
         this.namesVersion += 1;
         await writeJson(this.deps.kv, KEY_PROFILE, this.profile);
-        if (this.settings.discoveryEnabled && this.discovery === 'off') void this.track(this.applyDiscovery(true));
+        if (this.appActive && this.settings.discoveryEnabled && this.discovery === 'off') void this.track(this.applyDiscovery(true));
         await this.refresh();
       },
 
@@ -919,10 +1102,20 @@ export class PulseCore implements PulseApp {
         if (!result.ok) return result;
         const added = result.value.events.find((e): e is Extract<DomainEvent, { type: 'REPORT_ADDED' }> => e.type === 'REPORT_ADDED');
         if (!added) return fail(new CoreError('internal_error'));
-        void this.track(this.flagAIConflicts(incidentId).catch(() => undefined));
+        this.scheduleAnalysis(incidentId);
         return ok({ reportId: added.payload.reportId });
       },
       analyzeReport: (incidentId, reportId) => this.analyzeReport(incidentId, reportId),
+      diagnoseExtraction: (text) => this.diagnoseExtraction(text),
+      runEvaluation: (input, onProgress) => this.runEvaluation(input, onProgress),
+      aiDiagnostics: () => ({ stats: this.ai.stats(), recent: this.ai.diagnostics().slice(-20) }),
+      probeLocalAI: async () => {
+        try {
+          return (await this.ai.probeOutputShapes?.()) ?? [];
+        } catch {
+          return [];
+        }
+      },
       attachProposal: (incidentId, reportId, proposal) => this.attachProposal(incidentId, reportId, proposal),
       confirmFact: (incidentId, field, value) =>
         this.simple(incidentId, (state, ctx) => {
@@ -936,7 +1129,11 @@ export class PulseCore implements PulseApp {
       suggestClarification: async (incidentId): Promise<AIResult<ClarificationProposal>> => {
         const context = await this.contextFor(incidentId);
         if (!context) return this.aiFailure('invalid_output', 'incident_not_found');
-        return this.guardAI(() => this.deps.ai.suggestClarification(context));
+        const result = await this.guardAI(() => this.ai.suggestClarification(context));
+        // The model chooses what to ask about; the words shown are fixed, so it cannot ask a medical
+        // question, promise anything or ask for something unrelated.
+        if (result.ok && result.value) return { ...result, value: { field: result.value.field, question: CLARIFICATION_PROMPTS[result.value.field] } };
+        return result;
       },
       answerClarification: async (incidentId, field, answer) => {
         const result = await this.simple(incidentId, (state, ctx) => {
@@ -950,7 +1147,7 @@ export class PulseCore implements PulseApp {
           });
           return this.withConflicts(confirmed, ctx);
         });
-        if (result.ok) void this.track(this.flagAIConflicts(incidentId).catch(() => undefined));
+        if (result.ok) this.scheduleAnalysis(incidentId);
         return result;
       },
       skipClarification: (incidentId, field) =>
@@ -967,7 +1164,7 @@ export class PulseCore implements PulseApp {
 
       addObservation: async (incidentId, text) => {
         const result = await this.simple(incidentId, (state, ctx) => addObservation(state, ctx, { text }));
-        if (result.ok) void this.track(this.flagAIConflicts(incidentId).catch(() => undefined));
+        if (result.ok) this.scheduleAnalysis(incidentId);
         return result;
       },
       resolveConflict: (incidentId, conflictId, value) =>
@@ -993,7 +1190,10 @@ export class PulseCore implements PulseApp {
       suggestTasks: async (incidentId): Promise<AIResult<TaskProposal[]>> => {
         const context = await this.contextFor(incidentId);
         if (!context) return this.aiFailure('invalid_output', 'incident_not_found');
-        return this.guardAI(() => this.deps.ai.proposeNonMedicalTasks(context));
+        const result = await this.guardAI(() => this.ai.proposeNonMedicalTasks(context));
+        if (!result.ok) return result;
+        const kinds = [...new Set(result.value.map((t) => t.kind))].filter((k): k is keyof typeof TASK_TITLES => k !== 'other');
+        return { ...result, value: kinds.map((kind) => ({ kind, title: TASK_TITLES[kind] })) };
       },
       offerTask: (incidentId, input) =>
         this.simple(incidentId, (state, ctx) =>
@@ -1031,7 +1231,8 @@ export class PulseCore implements PulseApp {
       setDiscovery: async (enabled) => {
         await this.local();
         await this.saveSettings({ discoveryEnabled: enabled });
-        await this.applyDiscovery(enabled);
+        // In the background only the choice is stored; the radio follows it on the next foreground.
+        if (this.appActive || !enabled) await this.applyDiscovery(enabled);
       },
       startPairing: async (peerDeviceId) => {
         await this.local();
@@ -1067,6 +1268,7 @@ export class PulseCore implements PulseApp {
         await writeJson(this.deps.kv, KEY_PEERS, [...this.peers.values()]);
         await this.refresh();
       },
+      setPeerLevel: (peerDeviceId, level) => this.setPeerLevel(peerDeviceId, level),
 
       transcribe: (wavFileUri, locale) => this.transcribe(wavFileUri, locale),
 
@@ -1074,12 +1276,13 @@ export class PulseCore implements PulseApp {
         await this.local();
         const discoveryChanged = patch.discoveryEnabled !== undefined && patch.discoveryEnabled !== this.settings.discoveryEnabled;
         await this.saveSettings(patch);
-        if (discoveryChanged) await this.applyDiscovery(this.settings.discoveryEnabled);
+        if (discoveryChanged && (this.appActive || !this.settings.discoveryEnabled)) await this.applyDiscovery(this.settings.discoveryEnabled);
       },
       refreshCapabilities: () => this.refreshCapabilitiesInner(),
       deleteAllIncidents: async () => {
         await this.local();
         await this.exclusive(() => this.deps.repo.reset());
+        this.ai.clearCache();
         this.projections.clear();
         this.viewCache.clear();
         await this.persistProjections();
@@ -1091,12 +1294,15 @@ export class PulseCore implements PulseApp {
   }
 
   /** Changes the default disclosure level this device grants a paired peer on new incidents. */
-  async setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<void> {
+  async setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<ActionResult> {
     await this.local();
     const peer = this.peers.get(peerDeviceId);
-    if (!peer) return;
-    this.peers.set(peerDeviceId, { ...peer, level });
+    if (!peer) return fail(new CoreError('peer_not_trusted'));
+    const parsed = DisclosureLevelSchema.safeParse(level);
+    if (!parsed.success) return fail(new CoreError('invalid_input'));
+    this.peers.set(peerDeviceId, { ...peer, level: parsed.data });
     await writeJson(this.deps.kv, KEY_PEERS, [...this.peers.values()]);
     await this.refresh();
+    return ok();
   }
 }

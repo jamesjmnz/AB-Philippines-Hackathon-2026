@@ -53,6 +53,10 @@ export function eventTier(event: DomainEvent, state: IncidentState, policy: Shar
       return event.actor.deviceId === reporterId ? restrictedTier(policy) : 'summary';
     case 'AI_PROPOSAL_CREATED':
       return restrictedTier(policy);
+    case 'STATEMENT_ASSESSED':
+      // A model verdict about the requester's statement, with a span of it: restricted like a
+      // proposal. The default branch would hand it to summary-level recipients.
+      return restrictedTier(policy);
     case 'CLAIM_CONFIRMED':
     case 'CLARIFICATION_REQUESTED':
     case 'CONFLICT_FLAGGED':

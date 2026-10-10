@@ -1,0 +1,15 @@
+{
+  "note": "Held-out scenarios whose text was seen while changing the pipeline. They are excluded from every held-out score. The reference answers and the freeze are unchanged.",
+  "scenarios": [
+    {
+      "id": "delta-en-008",
+      "date": "2026-10-10",
+      "reason": "While tightening where the rules read a floor from, a scratch script was run over every dataset string without filtering by split. This sentence surfaced and prompted an adjustment (a place as the subject of 'is on' is not excluded)."
+    },
+    {
+      "id": "delta-tl-007",
+      "date": "2026-10-10",
+      "reason": "Same script, same session. This sentence prompted an adjustment ('fire exit', 'water station' and similar are places, not hazards)."
+    }
+  ]
+}

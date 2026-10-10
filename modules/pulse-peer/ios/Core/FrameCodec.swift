@@ -3,8 +3,9 @@ import Foundation
 /// Length-prefixed framing for the peer stream: 4-byte big-endian length, then that many payload bytes.
 /// TCP delivers a byte stream, so frames may arrive split or coalesced; `FrameDecoder` reassembles them.
 public enum FrameCodec {
-  /// Largest payload accepted. Capsules are small; anything bigger is treated as a protocol violation.
-  public static let maxFrameLength = 256 * 1024
+  /// Largest payload accepted; anything bigger is treated as a protocol violation.
+  /// Must stay at or above the sync layer's packet cap (`MAX_PACKET_BYTES`, 512 KiB, in `src/sync/packet.ts`).
+  public static let maxFrameLength = 1024 * 1024
 
   public enum FrameError: Error, Equatable {
     case empty
@@ -58,5 +59,18 @@ public struct PeerHello: Codable, Equatable {
   public static func isValidDeviceId(_ id: String) -> Bool {
     let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
     return id.count >= 8 && id.count <= 64 && id.unicodeScalars.allSatisfy(allowed.contains)
+  }
+}
+
+/// Both devices may dial each other at the same moment, which leaves two links for one pair.
+/// Each side must keep the same one, or each closes the link the other kept and nothing is left.
+public enum LinkArbiter {
+  /// Whether a newly identified link replaces the one already held for the same peer.
+  /// Across directions the link dialed by the lower device id wins; in the same direction the newer one does,
+  /// because the older is then a stale connection the peer has already replaced.
+  public static func keepsNew(localId: String, peerId: String, newIsOutbound: Bool, existingIsOutbound: Bool) -> Bool {
+    if newIsOutbound == existingIsOutbound { return true }
+    let localDials = localId < peerId
+    return newIsOutbound == localDials
   }
 }

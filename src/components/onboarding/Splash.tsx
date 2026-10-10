@@ -1,8 +1,7 @@
-import { Text } from 'react-native';
-
 import { Breathe, Enter, LogoMark, colors } from '@/ui';
 
 import { BRAND } from '../present';
+import { Text } from '@/ui/Text';
 
 /**
  * Splash (design 37–45): white, centred column with 16pt gaps, the 92pt logo tile breathing
@@ -15,12 +14,12 @@ export function Splash({ testID = 'splash-screen', message }: { testID?: string;
       <Breathe>
         <LogoMark box={92} radius={28} glyph={54} stroke={3} halo dot />
       </Breathe>
-      <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '800', letterSpacing: -1, color: colors.ink, marginTop: 6 }}>
+      <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '700', letterSpacing: -0.6, color: colors.ink, marginTop: 6 }}>
         {BRAND}
       </Text>
       <Text style={{ fontSize: 15, color: colors.gray1, textAlign: 'center' }}>Intelligence that stays with you.</Text>
       {message ? (
-        <Text testID="starting-message" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray2, textAlign: 'center' }}>
+        <Text testID="starting-message" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 19, color: colors.gray2, textAlign: 'center' }}>
           {message}
         </Text>
       ) : null}

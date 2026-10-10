@@ -25,6 +25,11 @@ Dated log. Newest entries are appended at the bottom of the table. Larger decisi
 | D-17 | 2026-10-09 | Phase 1 is a fresh scaffold plus a port of the Claude Design export, not an in-place migration. | The audit found the repository contained only a README; there was no existing app to migrate. | In force |
 | D-18 | 2026-10-09 | Jest with `jest-expo` as the test runner. | Matches the Expo SDK; the specification allows Vitest or Jest. | In force |
 | D-19 | 2026-10-09 | The "Medical severity" field in the design export is removed in the port. | Invariant 2: never infer severity. | In force |
+| D-20 | 2026-10-10 | Incident detail keeps four segments (Intelligence / Coordination / Timeline / Capsule) instead of the export's single scroll. | Owner decision. The export's sections map onto the segments unchanged; Capsule holds the Privacy page. | In force; implemented (`src/components/incident/`) |
+| D-21 | 2026-10-10 | Capsule event tiers are `summary`, `detail` and a third, `withheld`. A detail item the policy shares with nobody (report text while "share symptoms" is off; floor claims while detailed location is off) stays with the reporter and is sent to no recipient. Tiering follows `canReadItem`. | The policy can share a detail item with nobody, and such an event must not be put in any recipient's section. Recorded as built from the P7 handoff, deviation 4. | In force; implemented and unit-tested (`src/crypto/capsule.ts`) |
+| D-22 | 2026-10-10 | Relaying is automatic. A packet for a recipient that is not directly connected is handed to every connected trusted peer, and a relay forwards it without a human step, if relaying is enabled in its settings. In the design Mika forwards to Noah by hand. | Recorded as built from the P7 handoff, deviation 7; the handoff states the behaviour and gives no further reason. A relay still holds ciphertext only and forwards at most one hop. | In force; implemented and unit-tested with simulated adapters; not verified on devices |
+| D-23 | 2026-10-10 | The simulated AI, radio and crypto live in `src/demo/`, not in `testing/` folders. `src/crypto/testing` and `src/transport/testing` re-export them for tests. | ESLint forbids app code from importing `**/testing/*`, and Demo Lab needs the simulations at runtime. Recorded from the P7 handoff, deviation 2. Refines D-P2-5. | In force |
+| D-24 | 2026-10-10 | `createLiveApp()` returns a promise; `createDemoApp()` is synchronous. The promise resolves once the SQLite ledger is open and rejects only when storage cannot be opened. | A storage failure then reaches the app root's error screen instead of leaving a snapshot that is never ready. Recorded from the P7 handoff, deviation 1. | In force; LIVE path not yet observed running |
 
 ## Open questions
 
@@ -44,6 +49,22 @@ Dated log. Newest entries are appended at the bottom of the table. Larger decisi
 | Q-12 | `ITSAppUsesNonExemptEncryption` is set to `false` in `app.config.ts` while the app will use CryptoKit for capsule encryption. Confirm this is the correct export-compliance answer before any distribution beyond development builds. | P6 / P9 |
 | Q-13 | Ownership of `src/demo/` and `src/transport/` among agents (currently assigned to `pulse-mobile-ui` and `pulse-swift-bridge` in the profiles as a working assumption). | P2 |
 
+### Answers recorded 2026-10-10
+
+Questions above are kept as asked. A question not listed here is still open.
+
+| # | Answered | Answer | Evidence |
+| --- | --- | --- | --- |
+| Q-01 | Yes | `@react-native-ai/apple` 0.12.0 builds on React Native 0.86.3. Whether it runs is still unverified. The SDK 54 fallback in D-04 was not triggered. | EAS development build `fbc85457` FINISHED; the binary contains `AppleLLM` and links `FoundationModels`. |
+| Q-04 | Yes | The vocabulary is 22 events (D-P2-1). Pairing has no ledger event; it is handled in `src/sync/pairing.ts` and stored outside the ledger. A relay's forward is a `PACKET_SENT_ATTEMPT` with `viaDeviceId`, not a new event. There is no arrival event: progress on an in-person task (`TASK_PROGRESS_REPORTED`, `inPerson`) gives `in_progress`, shown as "on the way" with "Arrival is not confirmed". | `src/domain/events.ts`; [agent-handoffs/P2-domain.md](agent-handoffs/P2-domain.md). |
+| Q-05 | As built | Context overflow has no pattern of its own and falls through to `native_error`. | `src/ai/classifyError.ts`; the adapter suite tests "Exceeded model context window size" as `native_error`. Wording not confirmed on a device. |
+| Q-06 | Partly | Prefix: 4 bytes, big-endian. Maximum native frame: 256 KiB. Still open: the sync layer's packet cap is 512 KiB, so the two limits disagree. | `modules/pulse-peer/ios/Core/FrameCodec.swift`; `src/sync/packet.ts`. |
+| Q-07 | Yes | A duplicate packet is not ingested again and is receipted again, because the first receipt may have been lost. | `src/sync/SyncEngine.ts`; `src/services/__tests__/delivery.test.ts`. |
+| Q-08 | Partly | The code is six decimal digits derived from a SHA-256 over both devices' ids and public keys. Still open: revocation. Removing a peer is local only, the other device is not told, and no screen calls the native `resetIdentity`. | `modules/pulse-crypto/ios/Core/Identity.swift`; `src/sync/pairing.ts`. |
+| Q-11 | Partly | The `preview` profile in `eas.json` (Release configuration, embedded bundle) is the one intended for offline tests. It has never been built. | `eas.json`; [EAS_IOS_SETUP.md](EAS_IOS_SETUP.md). |
+
+Status notes on earlier rows, which are left as written: D-04's build is no longer unverified (see Q-01). D-12 to D-15 are implemented and unit-tested in code; none is verified on a device.
+
 ## How to add an entry
 
 Append a row with the date, the decision in one sentence, the reason and the status. If a decision is reversed, add a new row that references the old number; do not edit history.
@@ -62,3 +83,18 @@ Append a row with the date, the decision in one sentence, the reason and the sta
 Known gaps accepted for the prototype: event ordering trusts the author's Lamport value; an event id reused with different content is not detected; quarantined bodies have no retention rule.
 
 | D-NAME | 2026-10-10: the product is named **SAGIP**. README, app display name, slug, URL scheme, bundle id (`com.jamesjmnz.sagip`), EAS project (`@jamesjimenezzz/sagip`) and Bonjour service (`_sagip-sos._tcp`) use it. Swift module names (`pulse-peer`, `pulse-crypto`), the branch name and the design export keep the working name. | Owner decision. |
+
+## Recorded during the overnight run (2026-10-10)
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| D-25 | Either device may dial; a simultaneous dial is settled by keeping the link dialed by the lower device id. Supersedes the "only the lower id dials" rule in `PeerService`. | With the old rule, pairing started on the higher-id phone never connected (seen in the two-simulator run). |
+| D-26 | Native frame cap is 1 MiB; the sync packet cap stays 512 KiB. Answers the open part of Q-06. | The native cap was below the packet cap. |
+| D-27 | `pair_confirm` carries an optional `answer: true`, and confirmations are re-sent until both sides trust. | A lost confirmation left pairing one-sided. |
+| D-28 | Overnight work is on `feat/pulse-2-overnight`, cut from `feat/pulse-2`; no pull request is opened and nothing is merged without the owner. | Owner's instruction before the run. |
+
+## Recorded for Incident Delta Intelligence (2026-10-10)
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| D-29 | Incident Delta Intelligence is deterministic first: `classifyStatementDelta` derives at replay how a new statement relates to earlier evidence, on every device, and is never persisted. The conflict rule compares only each author's latest statement per field, so a self-correction no longer flags. The on-device model is an optional second stage whose verdict is one new event, `STATEMENT_ASSESSED` (the 23rd type), a restricted-tier proposal that changes no claim or contradiction. Evaluation lives in a root `ml/` workspace. | Owner decision; [ADR 0005](ADR/0005-incident-delta-intelligence.md). Accepted, implementation in progress; nothing built to completion or measured, model behaviour unverified on a device. |

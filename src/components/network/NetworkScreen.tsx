@@ -1,22 +1,25 @@
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { DisclosureLevel } from '@/domain';
 import type { IncidentView, PeerView, PulseSnapshot } from '@/services/api';
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Dialog, Enter, Icon, PacketDot, Pill, SegmentedControl, Sheet, colors, tabBarHeight, type IconName, Rule } from '@/ui';
+import { Avatar, ChoiceChip, Dialog, Enter, Icon, PacketDot, Pill, SegmentedControl, Sheet, colors, tabBarHeight, type IconName, Rule } from '@/ui';
 
 import { useActor } from '../incident/useMe';
 import { useRun } from '../incident/useRun';
 import { routes } from '../nav';
-import { agoLabel, BRAND, DISCOVERY_LABEL, firstName, isOpen, presentNetwork, presentReach, presentStatus, shortDeviceId, type Me } from '../present';
+import { agoLabel, BRAND, DISCOVERY_LABEL, firstName, isOpen, LEVEL_LABELS, presentNetwork, presentReach, presentStatus, shortDeviceId, type Me } from '../present';
+import { Text, TextInput } from '@/ui/Text';
 
 const SEGMENTS = [
   { key: 'nearby', label: 'Nearby' },
   { key: 'trusted', label: 'Trusted' },
 ] as const;
+const PEER_LEVELS: readonly DisclosureLevel[] = ['relay', 'trusted', 'authorized'];
 
 type Look = { fg: string; bg: string };
 const INK: Look = { fg: colors.ink, bg: colors.hairline };
@@ -161,7 +164,7 @@ function RelayCard({ me }: { me: Me }) {
                 <Text style={{ fontSize: 12, color: colors.gray1 }}>{n.device}</Text>
               </View>
               <View style={{ backgroundColor: n.look.bg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9 }}>
-                <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '600', color: n.look.fg }}>
+                <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: n.look.fg }}>
                   {n.status}
                 </Text>
               </View>
@@ -169,7 +172,7 @@ function RelayCard({ me }: { me: Me }) {
           </View>
         ))}
         {trusted.length === 0 && !(inc && inc.role === 'responder') ? (
-          <Text testID="relay-empty" style={{ fontSize: 13, lineHeight: 18.2, color: colors.gray1, marginTop: 14 }}>
+          <Text testID="relay-empty" style={{ fontSize: 13, lineHeight: 19, color: colors.gray1, marginTop: 14 }}>
             No trusted device paired. Requests are saved on this device and reach nobody.
           </Text>
         ) : null}
@@ -190,11 +193,11 @@ function PeerRow({ peer, first, onPress, nowMs }: { peer: PeerView; first: boole
       <Avatar name={peer.name} size={40} presence={reach.online ? 'online' : 'offline'} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>{peer.name}</Text>
-        <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 1 }}>{peer.trusted ? 'Trusted · code confirmed' : 'Not paired'}</Text>
+        <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 1 }}>{peer.trusted ? 'Trusted · code confirmed' : 'Not paired'}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 12.5, fontWeight: '600', color: REACH_FG[peer.reach] }}>{reach.label}</Text>
-        <Text style={{ fontSize: 11.5, color: colors.gray4, marginTop: 1 }}>{peer.reach === 'connected' ? 'Link open' : agoLabel(peer.lastSeenMs, nowMs)}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: REACH_FG[peer.reach] }}>{reach.label}</Text>
+        <Text style={{ fontSize: 12, color: colors.gray4, marginTop: 1 }}>{peer.reach === 'connected' ? 'Link open' : agoLabel(peer.lastSeenMs, nowMs)}</Text>
       </View>
     </Pressable>
   );
@@ -287,7 +290,7 @@ export function NetworkScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
         <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 18 }}>
           <View style={{ paddingTop: 6 }}>
-            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               Your Network
             </Text>
             <Text testID="discovery-state" accessibilityLiveRegion="polite" style={{ fontSize: 15, color: colors.gray1, marginTop: 4 }}>
@@ -299,7 +302,7 @@ export function NetworkScreen() {
             <View testID={banner.testID} accessibilityRole="alert" style={{ backgroundColor: colors.amberTint, borderRadius: 16, padding: 14, gap: 12 }}>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Icon name="info" size={18} color={'#7A4E0B'} />
-                <Text style={{ flex: 1, fontSize: 13, lineHeight: 18.85, color: '#7A4E0B' }}>{banner.text}</Text>
+                <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: '#7A4E0B' }}>{banner.text}</Text>
               </View>
               <Pill testID={banner.actionID} label={banner.action} tone="white" h={40} size={13.5} onPress={banner.run} />
             </View>
@@ -342,7 +345,7 @@ export function NetworkScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               <Avatar name={selected.name} size={62} />
               <View style={{ flex: 1 }}>
-                <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '800', letterSpacing: -0.6, color: colors.ink }}>
+                <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
                   {selected.name}
                 </Text>
                 <View style={{ alignSelf: 'flex-start', backgroundColor: selectedLook.bg, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9, marginTop: 6 }}>
@@ -358,11 +361,37 @@ export function NetworkScreen() {
                 { l: 'Last seen', v: selected.reach === 'connected' ? 'Link open now' : agoLabel(selected.lastSeenMs, nowMs) },
               ].map((r) => (
                 <View key={r.l} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
-                  <Text style={{ fontSize: 14.5, color: colors.gray1 }}>{r.l}</Text>
-                  <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
+                  <Text style={{ fontSize: 14, color: colors.gray1 }}>{r.l}</Text>
+                  <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
                 </View>
               ))}
             </View>
+            {selected.trusted ? (
+              <View testID="peer-level" style={{ marginTop: 16 }}>
+                <Text testID="peer-level-current" style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}>
+                  Default level: {selected.level ? LEVEL_LABELS[selected.level] : 'Not known'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  {PEER_LEVELS.map((level) => (
+                    <ChoiceChip
+                      key={level}
+                      testID={`peer-level-${level}`}
+                      label={LEVEL_LABELS[level]}
+                      selected={selected.level === level}
+                      onPress={() => {
+                        // The chip moves only when the snapshot reports the new level.
+                        if (busy !== null || selected.level === level) return;
+                        void run('level', () => actions.setPeerLevel(selected.deviceId, level));
+                      }}
+                    />
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, lineHeight: 19, color: colors.gray1, marginTop: 10 }}>Applies to new requests only. A request already sent keeps the level it was sent with.</Text>
+                <Text style={{ fontSize: 13, lineHeight: 19, color: colors.gray1, marginTop: 6 }}>
+                  {LEVEL_LABELS.relay}: {firstName(selected.name)} is not alerted and only passes sealed requests along to other devices.
+                </Text>
+              </View>
+            ) : null}
             {rename !== null ? (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
                 <TextInput
@@ -400,10 +429,8 @@ export function NetworkScreen() {
                   disabled={busy !== null || selected.reach === 'unreachable'}
                   onPress={async () => {
                     const r = await run('pair', () => actions.startPairing(selected.deviceId));
-                    if (r.ok) {
-                      closeSheet();
-                      router.push(routes.pair);
-                    }
+                    // The shell opens the code comparison as soon as the session exists.
+                    if (r.ok) closeSheet();
                   }}
                 />
               ) : null}

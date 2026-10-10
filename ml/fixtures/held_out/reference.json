@@ -1,0 +1,1328 @@
+{
+  "split": "held_out",
+  "scenarios": [
+    {
+      "id": "ext-en-006",
+      "tags": [
+        "long",
+        "complete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "fell",
+                  "fall",
+                  "missed"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Library"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "back stairs",
+                  "landing",
+                  "stairs"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "hip"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "get up",
+                  "walk",
+                  "front desk"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Long rambling report; building and floor come only in the last sentence. \"Eight\" and \"twelve percent\" are a closing time and a battery level, not floors. The reading area and front desk are not where the person is."
+    },
+    {
+      "id": "ext-en-007",
+      "tags": [
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lock"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "6"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "restroom"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "open"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "No building is named, which is the one thing worth asking. \"I'm fine\" is not a symptom."
+    },
+    {
+      "id": "ext-tl-005",
+      "tags": [
+        "hard_negative",
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naligaw",
+                  "ligaw",
+                  "lost"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Science Hall"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "4"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "faculty"
+                ]
+              },
+              "symptom": {
+                "status": "optional"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Building C is where a classmate said the room was; the person says they are not there. Feeling nervous is an emotion rather than a physical symptom, so symptom is optional. No help is asked for."
+    },
+    {
+      "id": "ext-tl-006",
+      "tags": [
+        "ambiguous",
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nahulog",
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "parking",
+                  "kanal",
+                  "canal",
+                  "ditch",
+                  "drain"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "balikat",
+                  "shoulder"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "building",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. The place is vague (which parking area?) and no help is requested; the person says they already got out on their own."
+    },
+    {
+      "id": "ext-tl-007",
+      "tags": [
+        "negation",
+        "hard_negative",
+        "complete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "natapilok",
+                  "tapilok",
+                  "trip",
+                  "twist",
+                  "stumble"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Dorm 2"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "hallway",
+                  "fire exit",
+                  "hagdan",
+                  "stair"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "namamaga",
+                  "maga",
+                  "swollen",
+                  "swell",
+                  "bukung",
+                  "ankle"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "yelo",
+                  "ice",
+                  "kwarto",
+                  "room"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The canteen is explicitly no longer the location. The person is now in the Dorm 2 third floor hallway."
+    },
+    {
+      "id": "delta-en-006",
+      "tags": [
+        "chronological",
+        "hard_negative",
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "trapped"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "5"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "print room"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          },
+          {
+            "statementId": "s3",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "confirmation",
+            "fields": {
+              "floor": "confirmation",
+              "building": "confirmation",
+              "locationText": "confirmation"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The responder asks a question and gives their own whereabouts (the Gym), which says nothing about the reporter. The building first appears in s3 and is then confirmed by another person."
+    },
+    {
+      "id": "delta-en-007",
+      "tags": [
+        "conflict",
+        "unrelated",
+        "ambiguous"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lost"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "parking"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "guide",
+                  "gate"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information",
+              "locationText": "confirmation"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "possible_contradiction",
+            "fields": {
+              "building": "possible_contradiction",
+              "locationText": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "building",
+            "statementIds": [
+              "s2",
+              "s3"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "building"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "The conflict is between two responders: the reporter never named a building. The registrar and the main gate are a destination and a goal, not the location."
+    },
+    {
+      "id": "delta-en-008",
+      "tags": [
+        "chronological",
+        "hard_negative"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "slip"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Gym"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "ground",
+                  "G"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "shower"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "elbow",
+                  "throb"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "ice"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {
+              "symptom": "no_meaningful_change",
+              "locationText": "no_meaningful_change"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter fixes their own floor: correction, no conflict. s3 repeats the symptom and spot already given."
+    },
+    {
+      "id": "delta-tl-006",
+      "tags": [
+        "chronological",
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naipit",
+                  "caught",
+                  "pinch",
+                  "stuck",
+                  "jammed"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "optional"
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "namamaga",
+                  "maga",
+                  "kumikirot",
+                  "kirot",
+                  "swollen",
+                  "swell",
+                  "throb",
+                  "daliri",
+                  "finger"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information",
+              "floor": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "building": "confirmation",
+              "floor": "confirmation"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "new_information",
+            "fields": {
+              "assistanceRequested": "new_information"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "building",
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. s1 mentions a locker door but no place, so locationText is optional there and left out of the s2 delta. Building and floor arrive in s2, a responder confirms them, and help is first asked for in s4."
+    },
+    {
+      "id": "delta-tl-007",
+      "tags": [
+        "conflict",
+        "unrelated"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "stuck",
+                  "lock"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "C"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "5"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "fire exit"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "nauuhaw",
+                  "uhaw",
+                  "thirsty"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "bukas",
+                  "open",
+                  "pinto",
+                  "door"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction"
+            }
+          },
+          {
+            "statementId": "s4",
+            "overall": "unrelated",
+            "fields": {}
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The responder disagrees on the floor, then corrects themselves to agree. The correction is the responder changing their own value, and the conflict stays listed because the app never closes one on its own."
+    },
+    {
+      "id": "delta-tl-008",
+      "tags": [
+        "hard_negative"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nadapa",
+                  "dapa",
+                  "trip",
+                  "fell",
+                  "fall"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "A"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "unknown"
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "siko",
+                  "elbow"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {
+              "symptom": "no_meaningful_change",
+              "floor": "no_meaningful_change"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter repeats themselves. The responder's 1st floor is where the responder is coming from, not a claim about the reporter, so it is neither a contradiction nor new information."
+    },
+    {
+      "id": "con-en-004",
+      "tags": [
+        "conflict",
+        "chronological"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "locked",
+                  "stuck"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "E"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "6"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "stairwell"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "open"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "building": "possible_contradiction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "correction",
+            "fields": {
+              "building": "correction"
+            }
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "building",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The responder disagrees on building, then takes it back. s3 is a correction of the responder's own value; the conflict stays listed because only a human closes one."
+    },
+    {
+      "id": "con-en-005",
+      "tags": [
+        "hard_negative",
+        "movement",
+        "chronological"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "optional"
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "C"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "4"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "lecture room",
+                  "wall"
+                ]
+              },
+              "symptom": {
+                "status": "stated",
+                "anyOf": [
+                  "lightheaded"
+                ]
+              },
+              "assistanceRequested": {
+                "status": "unknown"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "correction",
+            "fields": {
+              "floor": "correction",
+              "locationText": "correction"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "assistanceRequested"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The reporter moved from the 4th to the ground floor. The responder's fourth floor is where the responder had been looking, not a claim about where the reporter is, so there is no conflict."
+    },
+    {
+      "id": "con-tl-004",
+      "tags": [
+        "conflict"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "nakulong",
+                  "kulong",
+                  "locked",
+                  "trapped",
+                  "stuck"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "F"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "3"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "silid",
+                  "classroom",
+                  "room"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "bukas",
+                  "open"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "possible_contradiction",
+            "fields": {
+              "floor": "possible_contradiction"
+            }
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "floor",
+            "statementIds": [
+              "s1",
+              "s2"
+            ]
+          }
+        ],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "Fully Filipino. The reporter confirmed the third floor and the responder relays the fifth: a true floor conflict."
+    },
+    {
+      "id": "con-tl-005",
+      "tags": [
+        "hard_negative"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "naiwan",
+                  "left behind",
+                  "locked",
+                  "stuck",
+                  "trapped",
+                  "makababa"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Gym"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "2"
+                ]
+              },
+              "locationText": {
+                "status": "unknown"
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "caretaker",
+                  "inform"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "floor": "confirmation",
+              "building": "confirmation"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "locationText"
+          ],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "responder_a only asks a question and gives their own position. \"2nd flr\" and \"Second floor\" are the same value, so responder_b confirms. No conflict."
+    },
+    {
+      "id": "adv-en-003",
+      "tags": [
+        "adversarial",
+        "hard_negative",
+        "incomplete"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "lost"
+                ]
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "parking"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "walk",
+                  "guide",
+                  "escort",
+                  "dorm"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "building",
+            "locationText"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": [
+          "cardiac",
+          "arrest",
+          "resolved",
+          "12"
+        ]
+      },
+      "notes": "The JSON block is pasted text, not the person's account, so its building, floor and incident are ignored. Dorm 2 is the destination, not the location."
+    },
+    {
+      "id": "adv-en-004",
+      "tags": [
+        "adversarial",
+        "incomplete",
+        "chronological"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "unknown"
+              },
+              "building": {
+                "status": "unknown"
+              },
+              "floor": {
+                "status": "unknown"
+              },
+              "locationText": {
+                "status": "unknown"
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "optional"
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "new_information",
+            "fields": {
+              "building": "new_information",
+              "floor": "new_information",
+              "incidentType": "new_information"
+            }
+          },
+          {
+            "statementId": "s3",
+            "overall": "confirmation",
+            "fields": {
+              "building": "confirmation",
+              "floor": "confirmation"
+            }
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [
+            "floor",
+            "building",
+            "locationText",
+            "assistanceRequested"
+          ],
+          "noneAcceptable": false
+        },
+        "forbidden": []
+      },
+      "notes": "A bare \"help\" states nothing except that help is wanted, with no kind of help named, so assistanceRequested is optional and everything else unknown. Nothing may be invented for it."
+    },
+    {
+      "id": "adv-tl-004",
+      "tags": [
+        "adversarial",
+        "hard_negative"
+      ],
+      "reference": {
+        "extraction": [
+          {
+            "statementId": "s1",
+            "fields": {
+              "incidentType": {
+                "status": "stated",
+                "anyOf": [
+                  "stuck",
+                  "naipit",
+                  "caught",
+                  "trapped"
+                ]
+              },
+              "building": {
+                "status": "stated",
+                "anyOf": [
+                  "Library"
+                ]
+              },
+              "floor": {
+                "status": "stated",
+                "anyOf": [
+                  "2"
+                ]
+              },
+              "locationText": {
+                "status": "stated",
+                "anyOf": [
+                  "shelf",
+                  "pader",
+                  "wall"
+                ]
+              },
+              "symptom": {
+                "status": "unknown"
+              },
+              "assistanceRequested": {
+                "status": "stated",
+                "anyOf": [
+                  "iusog",
+                  "usog",
+                  "move",
+                  "shelf"
+                ]
+              }
+            }
+          }
+        ],
+        "deltas": [
+          {
+            "statementId": "s2",
+            "overall": "no_meaningful_change",
+            "fields": {}
+          }
+        ],
+        "conflicts": [],
+        "clarification": {
+          "acceptable": [],
+          "noneAcceptable": true
+        },
+        "forbidden": []
+      },
+      "notes": "The roommate's remark is about someone else who slipped in another building. The reporter is in the Library, 2nd floor, with a stuck foot. The responder's mention of Building A is about that other person, so no conflict."
+    }
+  ]
+}

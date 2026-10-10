@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -10,11 +10,12 @@ import { Avatar, EASE, Enter, Icon, IconButton, LinkButton, LogoMark, Pill, Puls
 import { useAppMode } from '../appMode';
 import { BRAND, presentAIState, presentReadiness } from '../present';
 import { Splash } from './Splash';
+import { Text, TextInput } from '@/ui/Text';
 
 const STEPS = 5;
 const SPLASH_MS = 2200;
 
-const TITLE = { fontSize: 30, fontWeight: '700', letterSpacing: -0.9, lineHeight: 33, color: colors.ink } as const;
+const TITLE = { fontSize: 28, fontWeight: '700', letterSpacing: -0.4, lineHeight: 33, color: colors.ink } as const;
 const SUB = { fontSize: 15, lineHeight: 21, color: colors.gray1, marginTop: 10 } as const;
 
 const FOR_OPTIONS: readonly { label: string; icon: IconName }[] = [
@@ -50,7 +51,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
       style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top, paddingHorizontal: 24, paddingBottom: padBottom(insets.bottom) }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12 }}>
         <LogoMark box={28} radius={9} glyph={18} stroke={5} />
-        <Text style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.3, color: colors.ink }}>{BRAND}</Text>
+        <Text style={{ fontSize: 17, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>{BRAND}</Text>
       </View>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <View testID="welcome-orbit" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: 300, height: 300 }}>
@@ -75,10 +76,10 @@ function Welcome({ onStart }: { onStart: () => void }) {
           ))}
         </View>
       </View>
-      <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '800', letterSpacing: -1.2, lineHeight: 36.72, color: colors.ink }}>
+      <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '700', letterSpacing: -0.6, lineHeight: 37, color: colors.ink }}>
         You’re never meant to face an emergency alone.
       </Text>
-      <Text style={{ fontSize: 16, lineHeight: 23.2, color: colors.gray1, marginTop: 12 }}>Stay connected to people you trust—even when the internet isn’t.</Text>
+      <Text style={{ fontSize: 16, lineHeight: 24, color: colors.gray1, marginTop: 12 }}>Stay connected to people you trust—even when the internet isn’t.</Text>
       <View style={{ gap: 6, marginTop: 28 }}>
         <Pill testID="get-started" label="Get Started" h={58} size={17} press={0.98} onPress={onStart} />
         {demo ? null : <LinkButton testID="explore-demo" label="Explore Demo" size={16} h={50} onPress={() => setMode('demo')} />}
@@ -154,7 +155,7 @@ function PrefRow({ icon, label, desc, value, onChange, first, disabled, testID }
       <Icon name={icon} size={22} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.ink }}>{label}</Text>
-        <Text style={{ fontSize: 13, lineHeight: 17.55, color: colors.gray1, marginTop: 3 }}>{desc}</Text>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: colors.gray1, marginTop: 3 }}>{desc}</Text>
       </View>
       <Toggle testID={testID} label={label} value={value} onChange={onChange} disabled={disabled} />
     </View>
@@ -365,7 +366,7 @@ export function OnboardingScreen({ initial = 'splash' }: { initial?: 'splash' | 
             </View>
             <View style={{ flexDirection: 'row', gap: 10, backgroundColor: colors.page, borderRadius: 16, padding: 14, marginTop: 14 }}>
               <Icon name="info" size={18} color={colors.gray2} />
-              <Text testID="pref-note" style={{ flex: 1, fontSize: 13, lineHeight: 18.85, color: colors.gray2 }}>
+              <Text testID="pref-note" style={{ flex: 1, fontSize: 13, lineHeight: 19, color: colors.gray2 }}>
                 {demo
                   ? `Monitoring requires your explicit permission and may be limited while ${BRAND} isn’t active. In this prototype, monitoring is simulated.`
                   : `Nothing is monitored in the background. ${BRAND} acts only when you ask it to.`}
@@ -435,7 +436,7 @@ export function OnboardingScreen({ initial = 'splash' }: { initial?: 'splash' | 
             {failed ? (
               <View testID="onboarding-failed" accessibilityRole="alert" style={{ alignSelf: 'stretch', flexDirection: 'row', gap: 10, backgroundColor: colors.coralTint, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, marginTop: 14 }}>
                 <Icon name="error" size={18} color="#9B3532" />
-                <Text style={{ flex: 1, fontSize: 13, lineHeight: 18.2, fontWeight: '500', color: '#9B3532' }}>Your name could not be saved on this device. Try again.</Text>
+                <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, fontWeight: '500', color: '#9B3532' }}>Your name could not be saved on this device. Try again.</Text>
               </View>
             ) : null}
           </Enter>

@@ -1,12 +1,13 @@
 import { Fragment } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { Actor, EventType } from '@/domain';
 import type { IncidentView } from '@/services/api';
 import { usePulseActions } from '@/services/PulseProvider';
-import { Avatar, Icon, Pill, Sheet, colors } from '@/ui';
+import { Avatar, Banner, Icon, Pill, Sheet, colors } from '@/ui';
 
 import { displayName, EVENT_LOOK, firstName, presentDelivery, timeLabel } from '../present';
+import { Text } from '@/ui/Text';
 
 const HOP_TYPES: readonly EventType[] = ['INCIDENT_CREATED', 'PACKET_SENT_ATTEMPT', 'PACKET_RECEIVED_BY_PEER', 'CAPSULE_PREPARED', 'CAPSULE_QUEUED'];
 const AMBER_TYPES: readonly EventType[] = ['PACKET_SENT_ATTEMPT', 'CAPSULE_QUEUED'];
@@ -35,7 +36,7 @@ export function RelaySheet({ view, actor, visible, onClose }: { view: IncidentVi
   const hops = state.timeline.filter((e) => HOP_TYPES.includes(e.type));
   return (
     <Sheet testID="relay-sheet" visible={visible} onClose={onClose}>
-      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink }}>
+      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
         Relay path
       </Text>
       <Text style={{ fontSize: 14, color: colors.gray1, marginTop: 4 }}>{view.shortId} · Store-and-forward over nearby devices</Text>
@@ -98,7 +99,10 @@ export function RelaySheet({ view, actor, visible, onClose }: { view: IncidentVi
         })}
       </View>
       <View style={{ gap: 10, marginTop: 20 }}>
-        {view.pendingOutbox > 0 ? <Pill testID="retry-delivery" label="Try delivery again" tone="soft" h={50} size={14} icon="replay" iconSize={16} onPress={() => void actions.retryDelivery(view.id)} /> : null}
+        {view.sendFailure === 'packet_too_large' ? (
+          // No retry is offered here: sending again cannot get an oversized update out.
+          <Banner testID="relay-too-large" icon="warning" text="The latest update is too large to send and has not gone out. Trying again will not send it." />
+        ) : view.pendingOutbox > 0 ? <Pill testID="retry-delivery" label="Try delivery again" tone="soft" h={50} size={14} icon="replay" iconSize={16} onPress={() => void actions.retryDelivery(view.id)} /> : null}
         <Pill testID="relay-done" label="Done" h={54} size={16} onPress={onClose} />
       </View>
     </Sheet>

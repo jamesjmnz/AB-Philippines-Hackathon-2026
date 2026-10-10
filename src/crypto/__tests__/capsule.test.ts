@@ -8,13 +8,14 @@ import {
   createSequentialIds,
   prepareCapsule,
   recordAIProposal,
+  recordAssessment,
   type CommandContext,
   type CommandResult,
   type DisclosurePolicy,
   type IncidentState,
 } from '@/domain';
 
-import { buildCapsuleSections, eventTier, parseCapsuleSections, sectionsForLevel } from '../capsule';
+import { SentProjectionSchema, buildCapsuleSections, eventTier, parseCapsuleSections, sectionsForLevel } from '../capsule';
 import { createFakeCapsuleCrypto, createFakeCryptoRealm } from '../testing';
 
 const REPORT = 'I slipped in Building B on the second floor and my leg hurts.';
@@ -52,6 +53,65 @@ function incident(policy: Pick<DisclosurePolicy, 'shareDetailedLocation' | 'shar
 }
 
 const tiers = (state: IncidentState) => Object.fromEntries(state.events.map((e) => [`${e.type}:${e.actor.deviceId}`, eventTier(e, state)]));
+
+describe('STATEMENT_ASSESSED is restricted like an AI proposal', () => {
+  function assessed(policy: Pick<DisclosurePolicy, 'shareDetailedLocation' | 'shareSymptoms'>): IncidentState {
+    const state = incident(policy);
+    const report = state.reports[0]!;
+    const start = REPORT.indexOf('second floor');
+    return recordAssessment(state, ALEX, {
+      reportId: report.id,
+      promptVersion: 'delta-test-1',
+      provider: 'Simulation',
+      overall: 'new_information',
+      items: [{ field: 'floor', class: 'new_information', evidence: { start, end: start + 12, text: 'second floor' } }],
+    }).state;
+  }
+  const tierOf = (state: IncidentState, type: 'STATEMENT_ASSESSED' | 'AI_PROPOSAL_CREATED') =>
+    eventTier(state.events.find((e) => e.type === type)!, state);
+
+  it.each([
+    [{ shareDetailedLocation: true, shareSymptoms: true }, 'detail'],
+    [{ shareDetailedLocation: true, shareSymptoms: false }, 'withheld'],
+    [{ shareDetailedLocation: false, shareSymptoms: false }, 'withheld'],
+  ] as const)('policy %j -> %s, never summary', (policy, expected) => {
+    const state = assessed(policy);
+    const tier = tierOf(state, 'STATEMENT_ASSESSED');
+    expect(tier).toBe(expected);
+    expect(tier).not.toBe('summary');
+    expect(tier).toBe(tierOf(state, 'AI_PROPOSAL_CREATED'));
+  });
+
+  it('is absent from the summary section and from every projection that is sent', () => {
+    const state = assessed({ shareDetailedLocation: true, shareSymptoms: true });
+    const assessmentId = state.assessments[0]!.id;
+    for (const recipientLevel of ['relay', 'trusted', 'authorized'] as const) {
+      const sections = buildCapsuleSections({ state, senderDeviceId: 'dev-alex', recipientLevel });
+      expect(sections.summary).not.toContain('STATEMENT_ASSESSED');
+      expect(sections.summary).not.toContain(assessmentId);
+      for (const text of Object.values(sections)) {
+        const projection = (JSON.parse(text) as { projection: unknown }).projection;
+        expect(JSON.stringify(projection)).not.toContain(assessmentId);
+        expect(JSON.stringify(projection)).not.toContain('assessments');
+      }
+    }
+    // The authorized recipient gets the event itself in the detail section, as it gets proposals.
+    const authorized = buildCapsuleSections({ state, senderDeviceId: 'dev-alex', recipientLevel: 'authorized' });
+    expect(authorized.detail).toContain('STATEMENT_ASSESSED');
+    // And with nothing shared, nobody but the reporter gets it.
+    const withheld = assessed({ shareDetailedLocation: false, shareSymptoms: false });
+    const toAuthorized = buildCapsuleSections({ state: withheld, senderDeviceId: 'dev-alex', recipientLevel: 'authorized' });
+    expect(Object.values(toAuthorized).join('')).not.toContain('STATEMENT_ASSESSED');
+  });
+
+  it('the sent projection schema has no place for assessments', () => {
+    const state = assessed({ shareDetailedLocation: true, shareSymptoms: true });
+    const sections = buildCapsuleSections({ state, senderDeviceId: 'dev-alex', recipientLevel: 'trusted' });
+    const projection = (JSON.parse(sections.summary!) as { projection: Record<string, unknown> }).projection;
+    expect(SentProjectionSchema.safeParse(projection).success).toBe(true);
+    expect(SentProjectionSchema.safeParse({ ...projection, assessments: state.assessments }).success).toBe(false);
+  });
+});
 
 describe('event tiers', () => {
   it('puts the requester words, AI proposals and symptom claims in detail, coordination in summary', () => {

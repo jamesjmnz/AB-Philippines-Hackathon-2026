@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Icon, colors, type IconName } from '@/ui';
+import { Text } from '@/ui/Text';
 
 /** Section title of the incident scroll (design 497, 512, 518, 537): 13/600 grey, padding 4 4 0. */
 export function SectionTitle({ children }: { children: string }) {
@@ -55,8 +56,8 @@ export function MoreRow({ icon, label, onPress, first, testID, expanded }: MoreR
 export function SheetRow({ label, value, testID }: { label: string; value: string; testID?: string }) {
   return (
     <View testID={testID} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
-      <Text style={{ fontSize: 14.5, color: colors.gray1 }}>{label}</Text>
-      <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{value}</Text>
+      <Text style={{ fontSize: 14, color: colors.gray1 }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{value}</Text>
     </View>
   );
 }

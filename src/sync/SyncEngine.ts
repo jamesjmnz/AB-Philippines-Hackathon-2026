@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { capsuleIdFor, decodePacket, encodePacket, incidentRefFor, type PairingPacket, type SealedPacket } from './packet';
 import { PairingManager, type PairingResult, type PairingView } from './pairing';
 import { RelayStore } from './relay';
-import type { KeyValueStore, PeerRecord, Timers } from './types';
+import type { KeyValueStore, PeerRecord, SendBlockCode, Timers } from './types';
 
 /**
  * Moves incident data between devices: seals outbox rows into capsule packets, routes them directly
@@ -57,6 +57,11 @@ export interface SyncHost {
   changed(): void;
   /** Tracks background work so tests and Demo scripts can wait for the device to go quiet. */
   track<T>(work: Promise<T>): Promise<T>;
+  /**
+   * New statements from other people were stored for an incident this device owns. Called after the
+   * ledger section, never awaited: whatever the host does with it cannot delay or fail the sync.
+   */
+  statementsArrived?(incidentId: string): void;
 }
 
 export interface SyncConfig {
@@ -65,8 +70,12 @@ export interface SyncConfig {
   capsuleTtlMs: number;
   maxRelayPackets: number;
   pairingHelloTimeoutMs: number;
+  /** How long a requested connection may take to come up before the peer counts as unreachable. */
+  connectTimeoutMs: number;
   /** A send still unresolved after this long may be attempted again. */
   inFlightTimeoutMs: number;
+  /** Most events one capsule section may carry. Receivers refuse a section with more (see `@/crypto/capsule`). */
+  maxSectionEvents: number;
 }
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
@@ -74,7 +83,9 @@ export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   capsuleTtlMs: 6 * 60 * 60 * 1000,
   maxRelayPackets: 200,
   pairingHelloTimeoutMs: 8_000,
+  connectTimeoutMs: 6_000,
   inFlightTimeoutMs: 15_000,
+  maxSectionEvents: 1000,
 };
 
 export interface SyncEngineDeps {
@@ -117,6 +128,20 @@ function rawType(event: unknown): string | null {
   return typeof event.type === 'string' ? event.type : null;
 }
 
+/** True when any section holds more events than `max`. Sections are the JSON this device just built. */
+function exceedsEventCap(sections: Partial<Record<CapsuleSectionName, string>>, max: number): boolean {
+  for (const json of Object.values(sections)) {
+    if (json === undefined) continue;
+    try {
+      const body: unknown = JSON.parse(json);
+      if (typeof body === 'object' && body !== null && 'events' in body && Array.isArray(body.events) && body.events.length > max) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function settle<T>(work: Promise<CryptoResult<T>>): Promise<CryptoResult<T>> {
   try {
     return await work;
@@ -130,11 +155,14 @@ export class SyncEngine {
   readonly relay: RelayStore;
   private readonly config: SyncConfig;
   private readonly connected = new Set<string>();
+  private readonly connectWaiters = new Map<string, Set<(up: boolean) => void>>();
   private readonly discovered = new Map<string, number>();
   private readonly lastSeen = new Map<string, number>();
   private readonly inFlight = new Map<string, number>();
   /** Packet ids whose content was already built at least once; a new event needs a new row after that. */
   private readonly sealedOnce = new Set<string>();
+  /** Pending packet ids that cannot be sent as they are, with the reason. Rebuilt by the next send after a restart. */
+  private readonly blocked = new Map<string, SendBlockCode>();
   private unsubscribers: Unsubscribe[] = [];
   private lastTransportError: string | null = null;
 
@@ -155,6 +183,7 @@ export class SyncEngine {
         await deps.host.trust(record);
         void deps.host.track(this.onPeerUsable(record.deviceId));
       },
+      trusted: (peerId) => deps.host.peer(peerId),
       nowMs: () => deps.clock.nowMs(),
       changed: () => deps.host.changed(),
       helloTimeoutMs: this.config.pairingHelloTimeoutMs,
@@ -254,16 +283,51 @@ export class SyncEngine {
     if (state === 'connected') {
       this.connected.add(peerId);
       this.seen(peerId);
+      this.settleConnect(peerId, true);
+      // A pairing still waiting on this peer's confirmation asks again now that the link is back.
+      void this.deps.host.track(this.pairing.resendConfirm(peerId));
       void this.deps.host.track(this.onPeerUsable(peerId));
     } else if (state === 'disconnected') {
       this.connected.delete(peerId);
+      this.settleConnect(peerId, false);
     }
     this.deps.host.changed();
   }
 
+  private settleConnect(peerId: string, up: boolean): void {
+    const waiters = this.connectWaiters.get(peerId);
+    if (!waiters) return;
+    this.connectWaiters.delete(peerId);
+    for (const waiter of waiters) waiter(up);
+  }
+
+  /**
+   * Resolves once the link to `peerId` is up. The transport's `connect` only requests a dial, so the
+   * link is not usable when it returns; this waits for the `connected` state, bounded by a timeout.
+   */
   private async ensureConnected(peerId: string): Promise<void> {
     if (this.connected.has(peerId)) return;
-    await this.deps.transport.connect(peerId);
+    const { timers } = this.deps;
+    const up = new Promise<boolean>((resolve) => {
+      const waiters = this.connectWaiters.get(peerId) ?? new Set<(up: boolean) => void>();
+      this.connectWaiters.set(peerId, waiters);
+      const timer = timers.setTimeout(() => {
+        waiters.delete(done);
+        resolve(false);
+      }, this.config.connectTimeoutMs);
+      const done = (ok: boolean) => {
+        timers.clearTimeout(timer);
+        resolve(ok);
+      };
+      waiters.add(done);
+    });
+    try {
+      await this.deps.transport.connect(peerId);
+    } catch (error) {
+      this.settleConnect(peerId, false);
+      throw error;
+    }
+    if (!this.connected.has(peerId) && !(await up)) throw new Error('peer_unreachable');
   }
 
   /** Connects to every trusted peer that is in range. Called after pairing and when discovery starts. */
@@ -289,6 +353,18 @@ export class SyncEngine {
     }
     await this.forwardRelayed();
     await this.flush({ reconnectedPeer: peerId });
+  }
+
+  /** Why a pending packet cannot be sent at all, or null when it is merely waiting. */
+  sendBlockOf(packetId: string): SendBlockCode | null {
+    return this.blocked.get(packetId) ?? null;
+  }
+
+  /** The row stays pending and is never recorded as attempted; the incident's view says why. */
+  private block(packetId: string, code: SendBlockCode): void {
+    if (this.blocked.get(packetId) === code) return;
+    this.blocked.set(packetId, code);
+    this.deps.host.changed();
   }
 
   /** Where to hand a packet for `target`: the target itself, or every connected trusted peer as a relay. */
@@ -385,9 +461,18 @@ export class SyncEngine {
         if (!state.incident) return null;
         const level = levelForDevice(state, peer.deviceId);
         this.sealedOnce.add(row.packetId);
-        return { level, sections: buildCapsuleSections({ state, senderDeviceId: me.deviceId, recipientLevel: level }) };
+        return {
+          level,
+          eventCount: state.events.length,
+          sections: buildCapsuleSections({ state, senderDeviceId: me.deviceId, recipientLevel: level }),
+        };
       });
       if (!built) return;
+      // Only a ledger longer than the cap can overfill a section, so the count is skipped otherwise.
+      if (built.eventCount > this.config.maxSectionEvents && exceedsEventCap(built.sections, this.config.maxSectionEvents)) {
+        this.block(row.packetId, 'packet_too_large');
+        return;
+      }
       const readable = sectionsForLevel(built.level).filter((name) => built.sections[name] !== undefined);
       const sealed = await settle(
         crypto.encryptForRecipients({
@@ -405,8 +490,11 @@ export class SyncEngine {
       try {
         bytes = encodePacket({ v: 1, packetId: row.packetId, kind: 'capsule', hops: 0, to: peer.deviceId, envelope: sealed.value });
       } catch {
+        this.block(row.packetId, 'packet_too_large');
         return;
       }
+      // It fits now (it may not have before, under another disclosure level).
+      this.blocked.delete(row.packetId);
 
       let via: string | null = null;
       let sent = false;
@@ -583,8 +671,16 @@ export class SyncEngine {
           }
           await this.queueSync(tx, current, eventIds);
         }
-        return { state, fromReporter };
+        const owned = !!state?.incident && host.isLocalDevice(state.incident.reporter.deviceId);
+        return { state, fromReporter, newStatements: owned && result.applied.some((e) => e.type === 'REPORT_ADDED') };
       });
+      if (merged?.newStatements && accepted) {
+        try {
+          host.statementsArrived?.(accepted.incidentId);
+        } catch {
+          // Analysis is optional; the statements are stored and synced regardless.
+        }
+      }
       if (merged && accepted) {
         if (merged.fromReporter && accepted.projection) await host.storeProjection(accepted.incidentId, accepted.projection);
         if (via) await host.noteVia(accepted.incidentId, via);
@@ -710,6 +806,11 @@ export class SyncEngine {
 
   cancelPairing(): Promise<void> {
     return this.pairing.cancel();
+  }
+
+  /** Called on the retry tick: a pairing whose last confirmation was lost converges instead of staying one-sided. */
+  retryPairing(): Promise<void> {
+    return this.pairing.resendConfirm();
   }
 
   async forgetPeer(peerId: string): Promise<void> {

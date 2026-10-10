@@ -1,6 +1,6 @@
 # Phase plan
 
-Current status of each phase is tracked in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md). As of 2026-10-09: P0 `IN PROGRESS`, P1 scaffold install `IN PROGRESS`, everything else `NOT STARTED`. No gate has been passed.
+Current status of each phase is tracked in [AGENTIC_PROGRESS.md](AGENTIC_PROGRESS.md). As of 2026-10-10: G0 is passed and no other gate is. Code for P1 to P7 is committed, `IMPLEMENTED` and `UNIT-TESTED`, and the native parts are `BUILT` (EAS development build `fbc85457`); G2 and G3 are `IN PROGRESS` and undecided, and the device gates G1 (device part), G4, G5, G6 (device part) and G7 are `BLOCKED` on the human steps listed under "What needs the human", because nothing has run on a physical iPhone. P8 and P9 are `NOT STARTED`.
 
 ## Rules for every phase
 
@@ -46,7 +46,7 @@ Checks run in every phase once the scaffold exists: `npm run typecheck`, `npm ru
 | | |
 | --- | --- |
 | Owner | `pulse-domain-engineer`; review by `pulse-qa-reviewer` |
-| Deliverables | Zod contracts, 20-event vocabulary, append-only ledger, pure reducers and replay, idempotent apply, duplicate suppression, task and resolution authorization, outbox and inbox with retry. `createManualSOS` in one transaction with no AI, transport or permission dependency. |
+| Deliverables | Zod contracts, the event vocabulary (20 planned, 22 as built, see D-P2-1), append-only ledger, pure reducers and replay, idempotent apply, duplicate suppression, task and resolution authorization, outbox and inbox with retry. `createManualSOS` in one transaction with no AI, transport or permission dependency. |
 | **Gate G2** | Complete domain test suite and persistent replay tests pass, with the actual command output recorded. |
 | Git check | Standard. Contracts are frozen after this phase. |
 
@@ -120,7 +120,7 @@ Checks run in every phase once the scaffold exists: `npm run typecheck`, `npm ru
 | iPhone 17 Pro Max unlocked, Developer Mode on, Apple Intelligence enabled and model downloaded; trust the developer certificate on first install | G1 device build, G4 |
 | Pair the iPhone 14 Pro Max and iPhone 13 with the Mac once they are on iOS 26 | G5, G6, G7 |
 | Run the offline scenes (airplane mode with Wi-Fi and Bluetooth radios on) and report what the phones show | G4, G5, G7 |
-| `eas login`, only if cloud builds are wanted | Nothing; local Xcode builds do not need it |
+| `eas login` (done 2026-10-10) | Every build so far: local Xcode device builds fail on this Mac (no iOS 26.2 platform component), so builds go through EAS |
 
 ## Delegation
 

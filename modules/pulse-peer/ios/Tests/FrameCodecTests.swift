@@ -49,4 +49,31 @@ final class FrameCodecTests: XCTestCase {
     XCTAssertEqual(decoded, hello)
     XCTAssertEqual(decoded.v, 1)
   }
+
+  func testFrameCapCoversTheSyncPacketCap() {
+    // src/sync/packet.ts MAX_PACKET_BYTES
+    XCTAssertGreaterThanOrEqual(FrameCodec.maxFrameLength, 512 * 1024)
+  }
+
+  func testBothSidesKeepTheSameLinkAfterASimultaneousDial() {
+    let low = "dev-aaaaaaaa", high = "dev-bbbbbbbb"
+    // The link dialed by the lower id is outbound on `low` and inbound on `high`.
+    for lowSeesItsDialFirst in [true, false] {
+      for highSeesItsDialFirst in [true, false] {
+        let lowKeepsLowDial = lowSeesItsDialFirst
+          ? !LinkArbiter.keepsNew(localId: low, peerId: high, newIsOutbound: false, existingIsOutbound: true)
+          : LinkArbiter.keepsNew(localId: low, peerId: high, newIsOutbound: true, existingIsOutbound: false)
+        let highKeepsLowDial = highSeesItsDialFirst
+          ? LinkArbiter.keepsNew(localId: high, peerId: low, newIsOutbound: false, existingIsOutbound: true)
+          : !LinkArbiter.keepsNew(localId: high, peerId: low, newIsOutbound: true, existingIsOutbound: false)
+        XCTAssertTrue(lowKeepsLowDial)
+        XCTAssertTrue(highKeepsLowDial)
+      }
+    }
+  }
+
+  func testANewerLinkInTheSameDirectionReplacesAStaleOne() {
+    XCTAssertTrue(LinkArbiter.keepsNew(localId: "dev-bbbbbbbb", peerId: "dev-aaaaaaaa", newIsOutbound: true, existingIsOutbound: true))
+    XCTAssertTrue(LinkArbiter.keepsNew(localId: "dev-bbbbbbbb", peerId: "dev-aaaaaaaa", newIsOutbound: false, existingIsOutbound: false))
+  }
 }

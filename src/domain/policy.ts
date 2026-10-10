@@ -59,8 +59,22 @@ export function canAddReport(view: PolicyView, actor: Actor, kind: 'report' | 'o
   return kind === 'report' ? requireReporter(view, actor) : requireParticipant(view, actor);
 }
 
+/**
+ * Only the incident's owner records model output about it. A proposal shows on the owner's screen
+ * (a field with no human value is displayed as `ai_proposed`), so another device must not be able
+ * to put one there. The owner's device runs the model (ADR 0005).
+ */
 export function canRecordAIProposal(view: PolicyView, actor: Actor): Decision {
-  return requireParticipant(view, actor);
+  return requireReporter(view, actor);
+}
+
+/**
+ * Only the incident's owner records an assessment, for the same reason as a proposal and one more:
+ * the assessment id is deterministic, so another device that could record one would both replace
+ * what the owner sees and block the owner's own assessment as a duplicate.
+ */
+export function canRecordAssessment(view: PolicyView, actor: Actor): Decision {
+  return requireReporter(view, actor);
 }
 
 export function canRequestClarification(view: PolicyView, actor: Actor): Decision {

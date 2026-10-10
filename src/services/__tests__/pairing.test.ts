@@ -148,6 +148,165 @@ describe('pairing', () => {
     expect(a.core.getSnapshot().pairing?.stage).toBe('failed');
   });
 
+  it('waits for the link before sending its hello when connect returns early', async () => {
+    net = await createTestNet({ devices: ['a', 'b'] });
+    const a = dev(net, 'a');
+    const b = dev(net, 'b');
+    // The native transport resolves `connect` as soon as the dial is requested; the link comes up later.
+    const dial = a.transport.connect.bind(a.transport);
+    let finishDial: (() => Promise<void>) | null = null;
+    a.transport.connect = async (peerId) => {
+      finishDial = () => dial(peerId);
+    };
+
+    const started = a.core.actions.startPairing(b.id);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(finishDial).not.toBeNull();
+    await finishDial!();
+    must(await started);
+    await net.settle();
+    expect(a.core.getSnapshot().pairing).toMatchObject({ peerDeviceId: b.id, stage: 'compare' });
+    expect(b.core.getSnapshot().pairing).toMatchObject({ peerDeviceId: a.id, stage: 'compare' });
+  });
+
+  it('gives up when the link never comes up', async () => {
+    net = await createTestNet({ devices: ['a', 'b'] });
+    const a = dev(net, 'a');
+    a.transport.connect = async () => undefined;
+    const started = a.core.actions.startPairing(dev(net, 'b').id);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    a.timers.fireTimeouts();
+    expect(await started).toMatchObject({ ok: false, code: 'peer_unreachable' });
+    expect(a.core.getSnapshot().pairing).toBeNull();
+  });
+
+  describe('a lost confirmation', () => {
+    const confirms = (from?: string) => net.wire.filter((p) => p.packet?.kind === 'pair_confirm' && (from === undefined || p.from === from));
+    const trusts = (name: string, other: string) =>
+      dev(net, name).core.getSnapshot().peers.some((p) => p.deviceId === dev(net, other).id && p.trusted);
+
+    /** Both compare, a confirms, then b's confirmation is lost: b trusts a, a is still waiting. */
+    async function oneSided(): Promise<void> {
+      net = await createTestNet({ devices: ['a', 'b', 'c'], trust: [['b', 'c', 'trusted', 'trusted']] });
+      const a = dev(net, 'a');
+      const b = dev(net, 'b');
+      must(await a.core.actions.startPairing(b.id));
+      await net.settle();
+      must(await a.core.actions.confirmPairing());
+      await net.settle();
+      net.hub.setFault(b.id, a.id, { drop: true });
+      must(await b.core.actions.confirmPairing());
+      await net.settle();
+      net.hub.setFault(b.id, a.id, {});
+      expect(trusts('b', 'a')).toBe(true);
+      expect(trusts('a', 'b')).toBe(false);
+      expect(a.core.getSnapshot().pairing?.stage).toBe('awaiting_peer');
+    }
+
+    it('is repeated on the retry tick until both sides trust each other, and then stops', async () => {
+      await oneSided();
+      const a = dev(net, 'a');
+      const b = dev(net, 'b');
+      a.timers.fireIntervals();
+      await net.settle();
+      expect(trusts('a', 'b')).toBe(true);
+      expect(trusts('b', 'a')).toBe(true);
+      expect(a.core.getSnapshot().pairing).toBeNull();
+      expect(b.core.getSnapshot().pairing).toBeNull();
+      // a's confirmation, b's lost one, a's repeat, b's answer. An answer is never answered.
+      expect(confirms()).toHaveLength(4);
+      a.timers.fireIntervals();
+      b.timers.fireIntervals();
+      await net.settle();
+      expect(confirms()).toHaveLength(4);
+
+      // A duplicated repeat arriving after both finished is answered, and the answers end there.
+      const repeat = confirms(a.id)[1];
+      net.hub.inject(a.id, b.id, repeat?.bytes ?? new Uint8Array());
+      await net.settle();
+      expect(confirms()).toHaveLength(5);
+
+      const { incidentId } = must(await a.core.actions.sendSOS());
+      await net.settle();
+      expect(a.incident(incidentId)?.state.status.status).toBe('delivered');
+    });
+
+    it('is repeated when the link comes back', async () => {
+      await oneSided();
+      const a = dev(net, 'a');
+      const b = dev(net, 'b');
+      net.hub.setLink(a.id, b.id, false);
+      await net.settle();
+      net.hub.setLink(a.id, b.id, true);
+      await net.settle();
+      expect(trusts('a', 'b')).toBe(true);
+      expect(trusts('b', 'a')).toBe(true);
+      expect(a.core.getSnapshot().pairing).toBeNull();
+    });
+
+    it('converges when the first confirmation is the one that was lost', async () => {
+      net = await createTestNet({ devices: ['a', 'b'] });
+      const a = dev(net, 'a');
+      const b = dev(net, 'b');
+      must(await a.core.actions.startPairing(b.id));
+      await net.settle();
+      net.hub.setFault(a.id, b.id, { drop: true });
+      must(await a.core.actions.confirmPairing());
+      await net.settle();
+      net.hub.setFault(a.id, b.id, {});
+      must(await b.core.actions.confirmPairing());
+      await net.settle();
+      // a finished on b's confirmation; b never saw a's.
+      expect(trusts('a', 'b')).toBe(true);
+      expect(trusts('b', 'a')).toBe(false);
+      expect(b.core.getSnapshot().pairing?.stage).toBe('awaiting_peer');
+
+      b.timers.fireIntervals();
+      await net.settle();
+      expect(trusts('b', 'a')).toBe(true);
+      expect(b.core.getSnapshot().pairing).toBeNull();
+    });
+
+    it('is not answered, and creates no trust, when the repeat is forged or belongs to another pairing', async () => {
+      await oneSided();
+      const a = dev(net, 'a');
+      const b = dev(net, 'b');
+      const c = dev(net, 'c');
+      const fromA = confirms(a.id)[0];
+      const fromB = confirms(b.id)[0];
+      const before = net.wire.length;
+      const peersOf = (name: string) => dev(net, name).kv.dump().peers;
+      const stored = { b: peersOf('b'), c: peersOf('c') };
+      const packet = (to: string, pairing: unknown, kind = 'pair_confirm') =>
+        utf8ToBytes(JSON.stringify({ v: 1, packetId: `pair-x-${net.wire.length}-${Math.random().toString(16).slice(2, 8)}`, kind, hops: 0, to, pairing }));
+
+      // Not signed by the stored key of the device b trusts.
+      net.hub.inject(a.id, b.id, packet(b.id, { signature: 'sim-sig-forged-forged-forged' }));
+      // b's real confirmation of its pairing with a, replayed at c (which trusts b): another transcript.
+      net.hub.inject(b.id, c.id, packet(c.id, (fromB?.packet as { pairing?: unknown } | null)?.pairing));
+      // a's real confirmation replayed at c, which never paired with a.
+      net.hub.inject(a.id, c.id, packet(c.id, (fromA?.packet as { pairing?: unknown } | null)?.pairing));
+      // A hello for a's device id with other keys does not replace what b stored.
+      net.hub.inject(a.id, b.id, packet(b.id, { material: { ...a.material, signKey: `${a.material.signKey}ff` }, name: 'a' }, 'pair_hello'));
+      await net.settle();
+
+      expect(net.wire).toHaveLength(before);
+      expect(peersOf('b')).toBe(stored.b);
+      expect(peersOf('c')).toBe(stored.c);
+      expect(trusts('c', 'a')).toBe(false);
+      expect(trusts('a', 'b')).toBe(false);
+      expect(trusts('a', 'c')).toBe(false);
+      expect(b.core.getSnapshot().pairing).toBeNull();
+      expect(c.core.getSnapshot().pairing).toBeNull();
+
+      // A forged answer fails the waiting side instead of completing it.
+      net.hub.inject(b.id, a.id, packet(a.id, { signature: 'sim-sig-forged-forged-forged', answer: true }));
+      await net.settle();
+      expect(a.core.getSnapshot().pairing).toMatchObject({ stage: 'failed', error: 'pairing_bad_confirmation' });
+      expect(trusts('a', 'b')).toBe(false);
+    });
+  });
+
   it('reports an unreachable device instead of hanging', async () => {
     net = await createTestNet({ devices: ['a', 'b'], links: [] });
     const result = await dev(net, 'a').core.actions.startPairing(dev(net, 'b').id);

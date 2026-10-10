@@ -1,0 +1,16 @@
+{
+  "frozenAt": "2026-10-09T23:09:35.572Z",
+  "note": "Initial freeze of 48 scenarios, written from the text alone before any rule or model was scored against them",
+  "files": {
+    "datasets/extraction.json": "3fe5f436820b4c760165effadfb5ab696f0c5a062d9053c8e2d3c4dd4355cf4c",
+    "datasets/incident_deltas.json": "da4c312a70ce77b28502fa34161109c1422c741307fcc9493417c82e0d9d1f35",
+    "datasets/contradictions.json": "66e6b8e5f4e91289a73751b6109c7f3353113880abaa83b908daddd07abc4bcd",
+    "datasets/adversarial.json": "f2b0482b74db9150cd3d6f0e02ddfd09b2ca87b9e313afaf20f9fdeff3c8c59a",
+    "fixtures/development/inputs.json": "a77ed009e0ca3969f863f18c3567e41371db50bada5b031f0dfb3987cae6e8e8",
+    "fixtures/development/reference.json": "facab153785b5a2f397d66876c2cf1652875fc34240a3466c01b1639f84eb89b",
+    "fixtures/validation/inputs.json": "1afd491c1b92415a19cc978f0ee5462eac7f17fb3ed8e58dad20044f6604deb5",
+    "fixtures/validation/reference.json": "d4c399a9464fc91bc55e28e99e57586ae0a4c04c20d911f130fe0161cee78564",
+    "fixtures/held_out/inputs.json": "bc9c31ed6c9f9116929a0dcc1604a7bdab2925cccc42ffb70a83b153e22ee872",
+    "fixtures/held_out/reference.json": "b0f6873feb637be55b9d48a60c4dea3ed751c7f4fda3bce69c3a73444cd6615f"
+  }
+}

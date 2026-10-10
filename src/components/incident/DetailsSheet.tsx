@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { IncidentView } from '@/services/api';
 import { usePulse } from '@/services/PulseProvider';
@@ -6,6 +6,7 @@ import { Pill, Sheet, colors } from '@/ui';
 
 import { FIELD_LABELS, whenLabel } from '../present';
 import { SheetRow } from './parts';
+import { Text } from '@/ui/Text';
 
 const CAPS = { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, color: colors.gray1, textTransform: 'uppercase' } as const;
 
@@ -22,14 +23,14 @@ export function DetailsSheet({ view, visible, onClose }: { view: IncidentView; v
         {view.shortId}
         {incident ? ` · ${whenLabel(incident.createdAtMs)}` : ''}
       </Text>
-      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink, marginTop: 4 }}>
+      <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink, marginTop: 4 }}>
         {headline}
       </Text>
       {view.originalReport !== null ? (
         <View style={{ marginTop: 16 }}>
           <Text style={CAPS}>Original report</Text>
           <View style={{ backgroundColor: colors.page, borderRadius: 16, padding: 14, marginTop: 8 }}>
-            <Text testID="details-report" style={{ fontSize: 15, lineHeight: 21.75, color: colors.ink }}>
+            <Text testID="details-report" style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>
               “{view.originalReport}”
             </Text>
           </View>

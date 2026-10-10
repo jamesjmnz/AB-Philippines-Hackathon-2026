@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { canAcknowledge, canDeclineRequest } from '@/domain';
@@ -15,6 +15,7 @@ import { useRun } from '../incident/useRun';
 import { IncidentMap, locationProtected, mapLabel } from '../map/IncidentMap';
 import { routes } from '../nav';
 import { firstName, isOpen, LEVEL_LABELS, presentIntelligenceLine, presentNetwork, presentReadiness, presentStatus, whenLabel, type Me } from '../present';
+import { Text } from '@/ui/Text';
 
 function greeting(name: string, hour: number): string {
   const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -25,6 +26,7 @@ function greeting(name: string, hour: number): string {
 /** Incoming request (design 173–232). */
 function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: string } }) {
   const actions = usePulseActions();
+  const withMap = usePulse().mode === 'demo';
   const { busy, run } = useRun();
   const [declining, setDeclining] = useState(false);
   const reporter = view.state.incident?.reporter;
@@ -55,7 +57,7 @@ function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: s
           </View>
           <Text style={{ fontSize: 12, fontWeight: '500', color: colors.gray1 }}>{view.shortId}</Text>
         </View>
-        <IncidentMap view={view} radius={16} />
+        {withMap ? <IncidentMap view={view} radius={16} /> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Avatar name={reporter?.userName ?? '?'} size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -70,8 +72,8 @@ function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: s
         <View style={{ borderTopWidth: 1, borderTopColor: colors.hairline }}>
           {rows.map((r) => (
             <View key={r.l} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
-              <Text style={{ fontSize: 13.5, color: colors.gray1 }}>{r.l}</Text>
-              <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
+              <Text style={{ fontSize: 13, color: colors.gray1 }}>{r.l}</Text>
+              <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.ink, textAlign: 'right' }}>{r.v}</Text>
             </View>
           ))}
         </View>
@@ -84,7 +86,7 @@ function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: s
             disabled={!mayAck || busy !== null}
             onPress={() => void run('ack', () => actions.acknowledge(view.id))}
             style={{ flex: 1, minHeight: 46, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: acknowledged ? design.softer : design.soft }}>
-            <Text style={{ fontSize: 14.5, fontWeight: '600', color: acknowledged ? colors.gray1 : colors.ink }}>{acknowledged ? 'Seen' : 'Mark as seen'}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: acknowledged ? colors.gray1 : colors.ink }}>{acknowledged ? 'Seen' : 'Mark as seen'}</Text>
           </Pressable>
           <Pill
             testID={`incoming-open-${view.id}`}
@@ -119,9 +121,14 @@ function IncomingCard({ view, me }: { view: IncidentView; me: Me & { userName: s
   );
 }
 
-/** Own open request (design 236–282). */
+/**
+ * Own open request (design 236–282). LIVE has no map position, so the card is a status row with the
+ * reported place in words; the map is drawn only in Demo, where it is part of the simulation.
+ */
 function ActiveCard({ view, me }: { view: IncidentView; me: Me }) {
   const status = presentStatus(view.state, me);
+  const withMap = usePulse().mode === 'demo';
+  const place = locationProtected(view) ? 'Location protected' : mapLabel(view);
   return (
     <Enter kind="popIn" duration={400}>
       <Pressable
@@ -129,18 +136,23 @@ function ActiveCard({ view, me }: { view: IncidentView; me: Me }) {
         accessibilityRole="button"
         accessibilityLabel={`Your request ${view.shortId}. ${status.title}. ${status.sub}`}
         onPress={() => router.push(routes.incident(view.id))}
-        style={{ backgroundColor: '#FFFFFF', borderRadius: 26, padding: 8 }}>
-        <IncidentMap view={view} radius={20} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12, paddingHorizontal: 8, paddingBottom: 6 }}>
+        style={{ backgroundColor: '#FFFFFF', borderRadius: withMap ? 26 : 22, padding: 8 }}>
+        {withMap ? <IncidentMap view={view} radius={20} /> : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: withMap ? 12 : 8, paddingHorizontal: 8, paddingBottom: withMap ? 6 : 8 }}>
           <View style={{ width: 10, height: 10 }}>
             <PulseRing size={10} color={status.ring} durationMs={1800} />
             <View style={{ position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: status.ring }} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 15.5, fontWeight: '600', color: colors.ink }}>{status.title}</Text>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.ink }}>{status.title}</Text>
             <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>
               {view.shortId} · {status.chip}
             </Text>
+            {!withMap && place ? (
+              <Text testID={`active-place-${view.id}`} numberOfLines={1} style={{ fontSize: 13, color: colors.gray2, marginTop: 2 }}>
+                {place}
+              </Text>
+            ) : null}
           </View>
           <Icon name="chevron_right" size={22} color={colors.gray5} />
         </View>
@@ -221,14 +233,14 @@ export function HomeScreen() {
   return (
     <View testID="home-screen" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 30 }}>
-        <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 20 }}>
+        <Enter kind="fadeUp" duration={350} style={{ paddingTop: 8, paddingHorizontal: 20, gap: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 6 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '500', color: colors.gray1 }}>{greeting(snapshot.me.name, new Date().getHours())}</Text>
-              <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, lineHeight: 33, color: colors.ink, marginTop: 4 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.gray1 }}>{greeting(snapshot.me.name, new Date().getHours())}</Text>
+              <Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, lineHeight: 32, color: colors.ink, marginTop: 2 }}>
                 Your safety, connected.
               </Text>
-              <Text style={{ fontSize: 15, lineHeight: 20.25, color: colors.gray1, marginTop: 6 }}>Local intelligence. Trusted people. Even offline.</Text>
+              <Text style={{ fontSize: 14, lineHeight: 20, color: colors.gray1, marginTop: 4 }}>Local intelligence. Trusted people. Even offline.</Text>
             </View>
             <Pressable testID="home-profile" accessibilityRole="button" accessibilityLabel="Profile and settings" onPress={() => router.navigate(routes.settings)} hitSlop={4} style={{ width: 40, height: 40 }}>
               <Avatar name={snapshot.me.name.length > 0 ? snapshot.me.name : '?'} size={40} self />
@@ -270,24 +282,24 @@ export function HomeScreen() {
             accessibilityHint="Opens the SOS countdown"
             onPress={() => router.push(routes.sos)}
             press={0.98}
-            style={{ minHeight: 64, borderRadius: 999, backgroundColor: colors.coral, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            style={{ minHeight: 56, borderRadius: 999, backgroundColor: colors.coral, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
             <Icon name="sos" size={22} color="#FFFFFF" filled />
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>Request Assistance</Text>
+            <Text style={{ fontSize: 17, fontWeight: '600', color: '#FFFFFF' }}>Request Assistance</Text>
           </Press>
 
           <View
             testID="readiness-card"
             accessible
             accessibilityLabel={`${readiness.title}. ${readiness.facts.map((f) => `${f.label}: ${f.ok ? 'done' : 'not yet'}`).join('. ')}`}
-            style={{ backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 16, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            <Ring size={60} r={26} stroke={6} progress={readiness.progress}>
-              <Icon name="shield" size={22} filled />
+            style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Ring size={48} r={21} stroke={5} progress={readiness.progress}>
+              <Icon name="shield" size={20} filled />
             </Ring>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text testID="readiness-title" style={{ fontSize: 22, fontWeight: '700', letterSpacing: -0.5, color: colors.ink }}>
+              <Text testID="readiness-title" style={{ fontSize: 17, fontWeight: '600', color: colors.ink }}>
                 {readiness.title}
               </Text>
-              <Text testID="readiness-line" style={{ fontSize: 13, lineHeight: 17.55, color: colors.gray1, marginTop: 3 }}>
+              <Text testID="readiness-line" style={{ fontSize: 13, lineHeight: 18, color: colors.gray1, marginTop: 2 }}>
                 {readiness.line}
               </Text>
             </View>
@@ -310,7 +322,7 @@ export function HomeScreen() {
                     <Icon name={o.icon} size={20} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 15.5, fontWeight: '600', color: colors.ink }}>{o.label}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>{o.label}</Text>
                     <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>{o.sub}</Text>
                   </View>
                   {o.dot ? <View testID={`overview-dot-${o.key}`} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: o.dot }} /> : null}

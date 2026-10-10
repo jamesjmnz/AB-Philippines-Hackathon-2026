@@ -10,6 +10,8 @@ afterEach(async () => {
 
 const REPORT = 'Nadulas ako sa hagdan sa Building B. Masakit paa ko at kailangan ko ng tulong.';
 
+const SYMPTOM_WORDS = 'Masakit paa ko at kailangan ko ng tulong';
+
 describe('AI-backed actions', () => {
   it('returns the proposal unchanged, records it only as AI-proposed, and promotes a field only when the reporter confirms', async () => {
     net = await createTestNet({ devices: ['a', 'b'], trust: [['a', 'b', 'authorized', 'trusted']] });
@@ -19,7 +21,7 @@ describe('AI-backed actions', () => {
 
     const analysis = await a.core.actions.analyzeReport(incidentId, reportId);
     if (!analysis.ok) throw new Error(analysis.state);
-    expect(analysis.meta).toEqual({ source: 'simulated', latencyMs: 0 });
+    expect(analysis.meta).toMatchObject({ source: 'simulated', latencyMs: 0 });
     expect(Object.keys(analysis.value.fields).sort()).toEqual(['assistanceRequested', 'building', 'incidentType', 'symptom']);
     expect(analysis.value.unknown).toEqual(expect.arrayContaining(['floor', 'locationText']));
     // Analysing records nothing.
@@ -29,17 +31,18 @@ describe('AI-backed actions', () => {
     const proposed = a.incident(incidentId)?.state;
     expect(proposed?.aiFindings).toHaveLength(4);
     expect(proposed?.aiFindings.every((f) => f.evidenceVerified === true)).toBe(true);
-    expect(proposed?.claims.symptom).toMatchObject({ value: 'Leg pain', tag: 'ai_proposed' });
+    // A label the model made up ("Leg pain") is not recorded: the field carries the person's own words.
+    expect(proposed?.claims.symptom).toMatchObject({ value: SYMPTOM_WORDS, tag: 'ai_proposed' });
     // A human statement is never replaced by a proposal.
     expect(proposed?.claims.incidentType).toMatchObject({ value: 'Manual SOS', tag: 'user_reported' });
     expect(proposed?.claims.floor).toMatchObject({ value: null, tag: 'unknown' });
     const symptomFact = a.incident(incidentId)?.facts.find((f) => f.field === 'symptom');
-    expect(symptomFact).toMatchObject({ tag: 'ai_proposed', evidence: 'Masakit paa ko at kailangan ko ng tulong' });
+    expect(symptomFact).toMatchObject({ tag: 'ai_proposed', evidence: SYMPTOM_WORDS });
 
-    must(await a.core.actions.confirmFact(incidentId, 'symptom', 'Leg pain'));
+    must(await a.core.actions.confirmFact(incidentId, 'symptom', SYMPTOM_WORDS));
     must(await a.core.actions.confirmFact(incidentId, 'incidentType', 'Possible slip or fall'));
     const confirmed = a.incident(incidentId)?.state;
-    expect(confirmed?.claims.symptom).toMatchObject({ value: 'Leg pain', tag: 'user_confirmed' });
+    expect(confirmed?.claims.symptom).toMatchObject({ value: SYMPTOM_WORDS, tag: 'user_confirmed' });
     expect(confirmed?.claims.incidentType).toMatchObject({ value: 'Possible slip or fall', tag: 'user_confirmed' });
     expect(confirmed?.aiFindings.find((f) => f.field === 'symptom')?.confirmedByEventId).not.toBeNull();
 

@@ -38,13 +38,14 @@ describe('Home readiness card', () => {
 });
 
 describe('Home map cards', () => {
-  it('Live: draws the map under the veil with the reported words and no pins', () => {
+  it('Live: shows a status row with no map, because there is no map position', () => {
     const view = viewOf(sosQueued().state);
     renderWithApp(<HomeScreen />, createFakePulseApp({ incidents: [view], peers: [peer(MIKA)] }));
     const card = screen.getByTestId(`active-${view.id}`);
-    expect(within(card).getByTestId('map-veil')).toBeTruthy();
-    expect(within(card).getByTestId('map-label')).toHaveTextContent('Location not stated');
+    expect(within(card).queryByTestId(`map-${view.id}`)).toBeNull();
     expect(within(card).queryByTestId('map-pin-request')).toBeNull();
+    // Nothing was stated, so no place line is invented.
+    expect(within(card).queryByTestId(`active-place-${view.id}`)).toBeNull();
   });
 
   it('Demo: draws the request pin and no veil', () => {
@@ -56,12 +57,12 @@ describe('Home map cards', () => {
     expect(within(card).queryByTestId('map-veil')).toBeNull();
   });
 
-  it('shows the map on an incoming request in Live with the veil as well', () => {
+  it('shows no map on an incoming request in Live and keeps the reported location row', () => {
     const view = viewOf(sosDelivered().state, MIKA);
     renderWithApp(<HomeScreen />, createFakePulseApp({ me: { deviceId: MIKA.deviceId, name: MIKA.userName, onboarded: true, hardwareBackedKeys: true }, incidents: [view] }));
     const card = screen.getByTestId(`incoming-${view.id}`);
-    expect(within(card).getByTestId('map-veil')).toBeTruthy();
-    expect(within(card).queryByTestId('map-pin-request')).toBeNull();
+    expect(within(card).queryByTestId(`map-${view.id}`)).toBeNull();
+    expect(card).toHaveTextContent(/Reported location/);
   });
 });
 

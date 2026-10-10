@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Icon, type IconName } from './Icon';
 import { colors, design } from './theme';
+import { Text } from './Text';
 
 type PressProps = Omit<PressableProps, 'style'> & { style?: StyleProp<ViewStyle>; /** `style-active` scale from the design. 1 = none. */ press?: number };
 

@@ -1,4 +1,4 @@
-import type { AIState, CapabilityMatrix, ProposalField } from '@/ai';
+import type { AISource, AIState, CapabilityMatrix, ProposalField } from '@/ai';
 import type {
   ClaimField,
   DeliveryState,
@@ -8,7 +8,7 @@ import type {
   ProvenanceTag,
   TaskStatus,
 } from '@/domain';
-import type { DiscoveryState, IncidentView, PeerView, PulseSnapshot } from '@/services/api';
+import type { DiscoveryState, IncidentView, PeerView, PulseSnapshot, UpdateView } from '@/services/api';
 import type { IconName, Step, Tone } from '@/ui';
 
 /**
@@ -237,6 +237,7 @@ export const EVENT_LOOK: Record<EventType, EventLook> = {
   INCIDENT_CREATED: { label: 'Request saved on this device', icon: 'sos', tone: 'coral' },
   REPORT_ADDED: { label: 'Statement added', icon: 'description', tone: 'neutral' },
   AI_PROPOSAL_CREATED: { label: 'AI proposal recorded', icon: 'auto_awesome', tone: 'indigo', meta: 'A proposal, not a fact' },
+  STATEMENT_ASSESSED: { label: 'AI compared an update', icon: 'auto_awesome', tone: 'indigo', meta: 'A proposal, not a fact' },
   CLARIFICATION_REQUESTED: { label: 'Clarification requested', icon: 'help', tone: 'indigo' },
   CLARIFICATION_SKIPPED: { label: 'Clarification skipped', icon: 'help', tone: 'gray' },
   CLAIM_CONFIRMED: { label: 'Detail confirmed', icon: 'check', tone: 'green' },
@@ -305,6 +306,14 @@ export function presentAIState(state: AIState): { label: string; tone: Tone } {
       return { label: 'Invalid output', tone: 'amber' };
     case 'native_error':
       return { label: 'Error', tone: 'amber' };
+    case 'cancelled':
+      return { label: 'Cancelled', tone: 'amber' };
+    case 'queue_full':
+      return { label: 'Busy', tone: 'amber' };
+    case 'context_overflow':
+      return { label: 'Report too long', tone: 'amber' };
+    case 'superseded':
+      return { label: 'Replaced by a newer request', tone: 'amber' };
   }
 }
 
@@ -455,4 +464,58 @@ export function presentIntelligenceLine(caps: CapabilityMatrix | null): string {
   if (caps.source === 'simulated') return caps.text.state === 'ready' ? 'Simulation · no cloud AI' : 'Simulation off · manual SOS still works';
   if (caps.text.state === 'ready') return 'Ready offline · no cloud AI needed';
   return `${presentAIState(caps.text.state).label} · manual SOS still works`;
+}
+
+/**
+ * How a later statement relates to what was already known, in plain words. Each is a reading of the
+ * wording, never a finding: a difference is named as a difference and nothing here says who is right.
+ */
+export const UPDATE_LABELS: Record<UpdateView['overall'], string> = {
+  new_information: 'Added a detail',
+  confirmation: 'Same as reported',
+  correction: 'Updated own earlier statement',
+  possible_contradiction: 'Differs from what was reported',
+  no_meaningful_change: 'Nothing new',
+  unrelated: 'Not about this request',
+  not_assessed: 'Not compared',
+};
+
+export type UpdatePresentation = {
+  label: string;
+  /** The affected fields, e.g. "Floor, Building"; empty when the statement touched none. */
+  fields: string;
+  /** Amber while a person still has to look, green only for a second source the rules matched, never coral. */
+  tone: Tone;
+  /** Short pill text for the amber and green cases; null otherwise. */
+  flag: string | null;
+  /** Where the reading came from. */
+  basis: string;
+  fromModel: boolean;
+  accessibilityLabel: string;
+};
+
+/** One row of the Intelligence tab's "Updates" card. `role` is this device's role on the incident. */
+export function presentUpdate(update: UpdateView, role: IncidentView['role']): UpdatePresentation {
+  const label = UPDATE_LABELS[update.overall];
+  const fields = [...new Set(update.fields.map((f) => FIELD_LABELS[f.field]))].join(', ');
+  const fromModel = update.basis === 'model';
+  const basis = fromModel ? 'On-device AI reading · not a fact' : 'From the wording rules';
+  // A model reading is not evidence, so it is never shown in green.
+  const matched = update.overall === 'confirmation' && !fromModel;
+  const tone: Tone = update.needsVerification ? 'amber' : matched ? 'green' : 'neutral';
+  const flag = update.needsVerification ? (role === 'reporter' ? 'Needs your check' : 'Requester to check') : matched ? 'Second source' : null;
+  const accessibilityLabel = [`${update.by}: ${label}`, fields, flag, basis].filter((part): part is string => part !== null && part.length > 0).join('. ');
+  return { label, fields, tone, flag, basis, fromModel, accessibilityLabel };
+}
+
+/** Where an AI result or capability reading came from. A simulated one is always named as such. */
+export function presentAISource(source: AISource): { label: string; simulated: boolean } {
+  switch (source) {
+    case 'callstack-apple':
+      return { label: 'Apple on-device model', simulated: false };
+    case 'simulated':
+      return { label: 'SIMULATED', simulated: true };
+    case 'none':
+      return { label: 'No provider loaded', simulated: false };
+  }
 }

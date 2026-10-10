@@ -1,5 +1,6 @@
-import type { AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, ProposalField, TaskKind, TaskProposal } from '@/ai';
-import type { ClaimField, DisclosureLevel, IncidentState, ProvenanceTag } from '@/domain';
+import type { Split as EvaluationSplit, Variant as EvaluationVariant } from '@/eval';
+import type { AICallRecord, AIGuardStats, AIResult, CapabilityMatrix, ClarifiableField, ClarificationProposal, IncidentProposal, OutputProbeLine, ProposalField, TaskKind, TaskProposal } from '@/ai';
+import type { ClaimField, DeltaClass, DisclosureLevel, FieldDeltaClass, IncidentState, ProvenanceTag } from '@/domain';
 
 /**
  * The single contract between screens and everything underneath them.
@@ -22,6 +23,11 @@ export type PeerView = {
   trusted: boolean;
   reach: PeerReach;
   lastSeenMs: number | null;
+  /**
+   * What this device shares with the peer on a new SOS. Present on trusted peers only. A `relay` peer
+   * carries ciphertext for others and is sent nothing of its own. Changed with `setPeerLevel`.
+   */
+  level?: DisclosureLevel;
 };
 
 /** One displayed incident fact. `value: null` means unknown; `protected` means this device may not read it. */
@@ -38,6 +44,19 @@ export type FactView = {
   candidates: { value: string; by: string }[];
 };
 
+/** How one later statement relates to what was already known. Derived on every read; nothing here is a fact by itself. */
+export type UpdateView = {
+  reportId: string;
+  by: string;
+  kind: 'report' | 'observation';
+  overall: DeltaClass | 'not_assessed';
+  /** 'model' when an on-device assessment is on record for this statement; 'rules' when only the deterministic rules spoke. */
+  basis: 'rules' | 'model';
+  /** A person has to look: two people disagree, or a confirmed detail is contradicted. */
+  needsVerification: boolean;
+  fields: { field: ClaimField; class: FieldDeltaClass }[];
+};
+
 export type IncidentView = {
   id: string;
   /** Short human reference, e.g. "PULSE-7F3A". Never contains personal data. */
@@ -48,12 +67,22 @@ export type IncidentView = {
   /** What this device may read. 'relay' incidents are never listed. */
   access: 'owner' | DisclosureLevel;
   facts: FactView[];
+  /** One entry per statement after the first, oldest first. */
+  updates: UpdateView[];
   /** The requester's own words, or null if this device may not read them. */
   originalReport: string | null;
   /** How this incident reached this device: null when created here or received directly. */
   receivedViaName: string | null;
   pendingOutbox: number;
+  /**
+   * Set while an update for this incident cannot be sent at all because it exceeds what one packet
+   * may carry. It stays queued (counted in `pendingOutbox`) and is not retried into success by waiting.
+   * Null or absent when nothing is blocked.
+   */
+  sendFailure?: SendFailureCode | null;
 };
+
+export type SendFailureCode = 'packet_too_large';
 
 export type DiscoveryState = 'off' | 'starting' | 'on' | 'permission_denied' | 'error';
 
@@ -87,6 +116,12 @@ export type PulseSnapshot = {
   incidents: IncidentView[];
   pairing: PairingSession | null;
   settings: AppSettings;
+  /**
+   * `settingsPersistent` is false when the profile, pairings and settings are held in memory only and
+   * will be gone after a restart (the device key-value store could not be loaded, or this is the Demo
+   * Lab). Incidents are stored separately and are not covered by this flag.
+   */
+  storage?: { settingsPersistent: boolean };
   /** Demo-only state. Null in live mode. */
   demo: DemoState | null;
 };
@@ -109,6 +144,10 @@ export type RecipientPolicyInput = {
   levels: Record<string, DisclosureLevel | 'off'>;
 };
 
+export type EvaluationOutcome =
+  | { ok: true; fileUri: string; fileName: string; scenarios: number; calls: number; failedCalls: number }
+  | { ok: false; reason: 'unavailable' | 'busy' | 'export_failed' };
+
 export interface PulseActions {
   completeOnboarding(input: { name: string }): Promise<void>;
 
@@ -121,6 +160,25 @@ export interface PulseActions {
   addReport(incidentId: string, text: string, inputMode: 'typed' | 'transcribed'): Promise<ActionResult<{ reportId: string }>>;
   /** Runs on-device extraction for a stored report. The result is a proposal; nothing is recorded as fact. */
   analyzeReport(incidentId: string, reportId: string): Promise<AIResult<IncidentProposal>>;
+  /**
+   * Diagnostics: runs the same on-device extraction on arbitrary text. Creates no incident, writes
+   * nothing and sends nothing. The text is trimmed and cut to 4000 characters (the report limit);
+   * empty text returns `invalid_output` / `empty_input` without calling the model.
+   */
+  diagnoseExtraction(text: string): Promise<AIResult<IncidentProposal>>;
+  /** Device probe on a built-in sentence: which output shapes the provider can produce. Empty when there is no real provider. */
+  probeLocalAI(): Promise<OutputProbeLine[]>;
+  /**
+   * Diagnostics: runs one split of the synthetic evaluation scenarios through the on-device pipeline, in
+   * memory, and writes the outputs and timings to a file to be shared off the phone for scoring. It
+   * creates no incident and sends nothing. Only where the real provider is loaded on a physical iPhone.
+   */
+  runEvaluation(input: { split: EvaluationSplit; variant: EvaluationVariant; conditions: string }, onProgress?: (done: number, total: number) => void): Promise<EvaluationOutcome>;
+  /**
+   * Diagnostics: what the model lane has done since launch. Timings, states and counts only: no report
+   * text, model output or error message is kept. Synchronous and safe to poll.
+   */
+  aiDiagnostics(): { stats: AIGuardStats; recent: readonly AICallRecord[] };
   /** Records the proposal in the ledger as AI-proposed claims. */
   attachProposal(incidentId: string, reportId: string, proposal: IncidentProposal): Promise<ActionResult>;
   /** A human confirms (optionally editing) one proposed or reported field. */
@@ -163,6 +221,11 @@ export interface PulseActions {
   cancelPairing(): Promise<void>;
   removePeer(peerDeviceId: string): Promise<void>;
   renamePeer(peerDeviceId: string, name: string): Promise<void>;
+  /**
+   * Sets the default disclosure level for a trusted peer. It applies to incidents created afterwards;
+   * an incident already sent keeps its recipients and levels until `updateCapsule` changes them.
+   */
+  setPeerLevel(peerDeviceId: string, level: DisclosureLevel): Promise<ActionResult>;
 
   /** On-device transcription of a recorded WAV file. Returns unsupported_locale etc. rather than throwing. */
   transcribe(wavFileUri: string, locale: string): Promise<AIResult<{ text: string }>>;

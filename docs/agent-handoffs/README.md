@@ -2,7 +2,7 @@
 
 A handoff is the short report a delegated agent returns to the lead orchestrator when it finishes or stops a task. The lead reviews it, checks the work independently, and only then stages and commits.
 
-No handoff has been filed yet (2026-10-09).
+Handoffs filed so far: [P2-domain](P2-domain.md), [P3-ui](P3-ui.md), [P7-integration](P7-integration.md). Each describes the code at the time it was written; later commits may have changed it.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 # Test plan
 
-Status: plan only. **No tests exist and none has been run** (2026-10-09). Result columns are empty on purpose. A result is entered only with the command that was run and a summary of its real output, or a dated device observation.
+Status (2026-10-10): automated tests exist and pass (`npm test`: 42 suites, 450 tests; `swift test`: 6 in `modules/pulse-peer`, 15 in `modules/pulse-crypto`). **The Result columns below have not been filled in case by case yet**, so an empty cell means "not mapped to a test here", not "untested"; [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) lists the test files per feature. The adversarial and per-device checklists are untouched: nothing has run on a physical iPhone. A result is entered only with the command that was run and a summary of its real output, or a dated device observation.
 
 ## Tooling
 
@@ -12,7 +12,7 @@ Status: plan only. **No tests exist and none has been run** (2026-10-09). Result
 | Lint | `npm run lint` (includes the restricted-import rule for the AI packages) |
 | Project health | `npm run doctor` |
 | Swift | `swift test` on macOS for the pure crypto core |
-| Device | Manual probes on the three iPhones; no simulator runtimes are installed |
+| Device | Manual probes on the three iPhones. One simulator runtime (iOS 26.3) is installed and is used to look at screens in Demo mode; it is not device verification |
 
 Fixtures use synthetic text only. No real incident, location or health data.
 

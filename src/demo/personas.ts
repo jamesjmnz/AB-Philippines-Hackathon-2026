@@ -34,6 +34,18 @@ export const DEMO_LEVELS: Record<DemoDevice, Partial<Record<DemoDevice, Disclosu
 export const SAMPLE_REPORT = 'Nadulas ako sa hagdan sa Building B. Masakit paa ko at kailangan ko ng tulong.';
 
 /**
+ * Statements for the incident-updates scenario. Synthetic. The move is in the first person because the
+ * wording rules read nothing else as a move.
+ */
+export const DELTA_STATEMENTS = {
+  report: 'I slipped on the stairs. I am on the second floor of Building B.',
+  sameFloor: 'I think Alex is on the second floor.',
+  moved: 'I moved from the second floor to the third floor.',
+  otherFloor: 'I think Alex is on the fourth floor.',
+  resolvedFloor: 'Third floor',
+} as const;
+
+/**
  * Simulated radio topology, as in the design: Alex reaches Mika directly, and Noah only through
  * Mika. `links.mika` is the Alex–Mika link and `links.noah` is the Mika–Noah link.
  */

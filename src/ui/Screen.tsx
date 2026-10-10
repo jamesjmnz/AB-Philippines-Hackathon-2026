@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from './Button';
+import { Text } from './Text';
 
 type Props = {
   title?: string;
@@ -36,7 +37,7 @@ export function Screen({ title, subtitle, onBack, headerRight, children, footer,
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: (tabbed ? 110 : 32) + (footer ? 0 : insets.bottom), gap: 18 }}>
         {title ? (
           <View className="gap-1">
-            <Text accessibilityRole="header" className="text-[30px] font-bold leading-[33px] tracking-[-0.9px] text-ink">
+            <Text accessibilityRole="header" className="text-[28px] font-bold leading-[33px] tracking-[-0.4px] text-ink">
               {title}
             </Text>
             {subtitle ? <Text className="text-[15px] leading-[21px] text-gray-1">{subtitle}</Text> : null}

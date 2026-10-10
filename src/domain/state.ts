@@ -2,7 +2,8 @@ import type { Claim, ClaimEvidence, ClaimField } from './claims';
 import type { DisclosureLevel, DisclosurePolicy } from './disclosure';
 import type { DomainErrorCode } from './errors';
 import type { DomainEvent, EventType, TaskKind } from './events';
-import type { Actor } from './primitives';
+import type { Actor, TextSpan } from './primitives';
+import type { DeltaClass, FieldDeltaClass } from './rules/delta';
 
 /**
  * Derived state of one incident. Nothing here is stored: it is recomputed by `replay` from the
@@ -44,6 +45,32 @@ export interface AIFinding {
   eventId: string;
   /** The human CLAIM_CONFIRMED event that promoted this finding, if any. */
   confirmedByEventId: string | null;
+}
+
+export interface StatementAssessmentItem {
+  field: ClaimField;
+  class: FieldDeltaClass;
+  /** The earlier human revision the model compared the statement with, when it named one. */
+  againstRevisionId: string | null;
+  /** A span of the assessed statement's own text. */
+  evidence: TextSpan | null;
+  /** true/false: the span was checked against the stored statement text. null: no span was given. */
+  evidenceVerified: boolean | null;
+}
+
+/**
+ * The on-device model's verdict on how one statement relates to earlier evidence. Advisory: it is
+ * kept beside the claims and changes no claim, no contradiction and no status.
+ */
+export interface StatementAssessment {
+  id: string;
+  reportId: string;
+  provider: string;
+  overall: DeltaClass;
+  items: StatementAssessmentItem[];
+  recordedBy: Actor;
+  eventId: string;
+  wallClockMs: number;
 }
 
 /** One optional question put to the reporter. */
@@ -225,6 +252,8 @@ export interface IncidentState {
   reports: OriginalReport[];
   claims: Record<ClaimField, Claim>;
   aiFindings: AIFinding[];
+  /** Model verdicts on statements, in replay order. Never sent in a projection. */
+  assessments: StatementAssessment[];
   questions: ClarificationQuestion[];
   contradictions: Contradiction[];
   tasks: AssistanceTask[];

@@ -11,11 +11,15 @@ export const mockRouter = {
   canGoBack: jest.fn(() => true),
 };
 
+/** The route the app is on, as `usePathname` reports it. Tests set `current`. */
+export const mockPathname = { current: '/' };
+
 export const mockOpenURL = jest.fn(async (_url: string) => true);
 
 jest.mock('expo-router', () => ({
   router: mockRouter,
   useRouter: () => mockRouter,
+  usePathname: () => mockPathname.current,
   useLocalSearchParams: () => ({}),
   Redirect: () => null,
 }));

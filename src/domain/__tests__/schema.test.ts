@@ -15,7 +15,7 @@ import { fullScenario } from '../testing/fixtures';
 const FORBIDDEN = ['severity', 'priority', 'diagnosis', 'triage', 'medicalSeverity', 'urgency', 'injury', 'treatment'];
 
 describe('vocabulary', () => {
-  it('has exactly the 20 specified event names plus the two documented additions', () => {
+  it('has exactly the 20 specified event names plus the three documented additions, appended in order', () => {
     expect(CORE_EVENT_TYPES).toEqual([
       'INCIDENT_CREATED',
       'REPORT_ADDED',
@@ -38,7 +38,9 @@ describe('vocabulary', () => {
       'INCIDENT_RESOLVED',
       'INCIDENT_CANCELLED',
     ]);
-    expect(ADDED_EVENT_TYPES).toEqual(['CLARIFICATION_SKIPPED', 'RESPONDER_DECLINED']);
+    expect(ADDED_EVENT_TYPES).toEqual(['CLARIFICATION_SKIPPED', 'RESPONDER_DECLINED', 'STATEMENT_ASSESSED']);
+    expect(EVENT_TYPES).toHaveLength(23);
+    expect(EVENT_TYPES.indexOf('STATEMENT_ASSESSED')).toBe(22);
     expect(new Set(DomainEventSchema.options.map((o) => o.shape.type.value))).toEqual(new Set(EVENT_TYPES));
   });
 

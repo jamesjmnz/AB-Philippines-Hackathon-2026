@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PROPOSAL_FIELDS, type AIFailureState, type AISource, type ClarificationProposal, type IncidentProposal, type ProposalField } from '@/ai';
@@ -13,6 +13,7 @@ import { useRun } from '../incident/useRun';
 import { routes } from '../nav';
 import { BRAND, FIELD_LABELS, presentAIState, PROVENANCE, TAG_LOOK } from '../present';
 import { startRecording, type Recording } from './voice';
+import { Text, TextInput } from '@/ui/Text';
 
 /**
  * Local AI analysis of an optional report (design 704–807). The SOS already exists before this
@@ -310,7 +311,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
 
   const heading = (title: string, sub?: string) => (
     <View>
-      <Text accessibilityRole="header" style={{ fontSize: 30, lineHeight: 33, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+      <Text accessibilityRole="header" style={{ fontSize: 28, lineHeight: 33, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
         {title}
       </Text>
       {sub ? <Text style={{ fontSize: 15, lineHeight: 21, color: colors.gray1, marginTop: 8 }}>{sub}</Text> : null}
@@ -339,13 +340,13 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
         {savedBanner}
         <Enter kind="fadeUp" duration={300} style={{ alignItems: 'center', gap: 24, paddingTop: 16 }}>
           <Ring size={150} r={64} stroke={10} progress={phase.step / STEPS.length} track={colors.fillSeg} durationMs={800} ease="spring">
-            <Text testID="processing-percent" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text testID="processing-percent" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               {Math.round((phase.step / STEPS.length) * 100)}%
             </Text>
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray1 }}>on-device</Text>
           </Ring>
           <View style={{ alignItems: 'center' }}>
-            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8, color: colors.ink }}>
+            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               Understanding locally
             </Text>
             <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 4, textAlign: 'center' }}>{badgeText}</Text>
@@ -391,14 +392,14 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
           <Text testID="ai-unavailable-reason" style={{ fontSize: 15, fontWeight: '600', color: colors.ink }}>
             {presentAIState(phase.reason).label}
           </Text>
-          <Text style={{ fontSize: 13.5, lineHeight: 19.6, color: colors.gray2 }}>
+          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.gray2 }}>
             Your words are attached to the request exactly as you wrote them. No details were extracted and nothing was guessed. The request itself was already saved.
           </Text>
         </View>
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16 }}>
           <Text style={{ fontSize: 15, fontWeight: '700', color: colors.ink }}>Your report</Text>
           <View style={{ backgroundColor: colors.page, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 }}>
-            <Text style={{ fontSize: 14, lineHeight: 20.3, color: colors.ink }}>“{text.trim()}”</Text>
+            <Text style={{ fontSize: 14, lineHeight: 21, color: colors.ink }}>“{text.trim()}”</Text>
           </View>
         </View>
       </>,
@@ -458,7 +459,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
             <Text style={{ fontSize: 14, fontWeight: '700', color: colors.greenText }}>Analysis complete</Text>
           </View>
           <View style={{ marginTop: -6 }}>
-            <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.9, color: colors.ink }}>
+            <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
               Incident understood
             </Text>
             <Text testID="result-meta" style={{ fontSize: 13, color: colors.gray1, marginTop: 2 }}>
@@ -474,7 +475,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontSize: 13, fontWeight: '500', color: colors.gray1 }}>Incident</Text>
-                  <Text testID="proposal-incidentType" style={{ fontSize: 24, lineHeight: 27.6, fontWeight: '800', letterSpacing: -0.8, color: colors.ink }}>
+                  <Text testID="proposal-incidentType" style={{ fontSize: 24, lineHeight: 28, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>
                     {type}
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
@@ -511,7 +512,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
                 <Icon name="auto_awesome" size={16} color={colors.indigo} />
                 <Text style={{ fontSize: 12, fontWeight: '700', color: colors.indigo }}>Suggested by AI · Missing context</Text>
               </View>
-              <Text style={{ fontSize: 21, fontWeight: '800', letterSpacing: -0.6, color: colors.ink }}>One more detail could help.</Text>
+              <Text style={{ fontSize: 21, fontWeight: '700', letterSpacing: -0.4, color: colors.ink }}>One more detail could help.</Text>
               <Text style={{ fontSize: 16, color: colors.gray3 }}>“{clarification.question}”</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {clarification.field === 'floor'
@@ -586,7 +587,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
             {evidenceOpen ? (
               <Enter kind="fadeUp" duration={300} style={{ marginTop: 12, gap: 10 }}>
                 <View style={{ backgroundColor: colors.page, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 }}>
-                  <Text testID="evidence-report" style={{ fontSize: 14, lineHeight: 20.3, color: colors.ink }}>
+                  <Text testID="evidence-report" style={{ fontSize: 14, lineHeight: 21, color: colors.ink }}>
                     “{text.trim()}”
                   </Text>
                 </View>
@@ -602,13 +603,13 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
                           </Text>
                           <TagPill small label={tag.label} fg={tag.fg} bg={tag.bg} />
                         </View>
-                        <Text style={{ fontSize: 12.5, fontStyle: 'italic', color: colors.gray1, marginTop: 3 }}>{original ? `“${original.evidence}”` : 'Not mentioned in the report'}</Text>
+                        <Text style={{ fontSize: 13, fontStyle: 'italic', color: colors.gray1, marginTop: 3 }}>{original ? `“${original.evidence}”` : 'Not mentioned in the report'}</Text>
                       </View>
                     );
                   })}
                 </View>
                 {proposal.dropped.length > 0 ? (
-                  <Text testID="evidence-dropped" style={{ fontSize: 12.5, lineHeight: 17.5, color: colors.gray1 }}>
+                  <Text testID="evidence-dropped" style={{ fontSize: 13, lineHeight: 18, color: colors.gray1 }}>
                     Discarded because your words did not support it: {proposal.dropped.map((f) => FIELD_LABELS[f].toLowerCase()).join(', ')}.
                   </Text>
                 ) : null}
@@ -680,7 +681,7 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
             </Text>
             {text.length > 0 && voice.k !== 'recording' ? (
               <Enter kind="fadeUp" duration={300} style={{ alignSelf: 'stretch', backgroundColor: colors.page, borderRadius: 16, padding: 14 }}>
-                <Text testID="voice-text" style={{ fontSize: 15, lineHeight: 21.75, color: colors.ink }}>
+                <Text testID="voice-text" style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>
                   “{text}”
                 </Text>
               </Enter>
@@ -703,9 +704,9 @@ export function ReportScreen({ incidentId }: { incidentId: string }) {
               placeholderTextColor={colors.gray4}
               multiline
               textAlignVertical="top"
-              style={{ minHeight: 140, fontSize: 16, lineHeight: 23.2, color: colors.ink, padding: 0 }}
+              style={{ minHeight: 140, fontSize: 16, lineHeight: 24, color: colors.ink, padding: 0 }}
             />
-            {inputMode === 'transcribed' ? <Text style={{ fontSize: 12.5, color: colors.gray1, marginTop: 6 }}>Transcribed on this device. Check it and correct anything before sending.</Text> : null}
+            {inputMode === 'transcribed' ? <Text style={{ fontSize: 13, color: colors.gray1, marginTop: 6 }}>Transcribed on this device. Check it and correct anything before sending.</Text> : null}
             {demo ? (
               <View style={{ alignSelf: 'flex-start', marginTop: 8 }}>
                 <Pill testID="use-sample" label="Use sample report (Filipino)" tone="soft" h={34} size={13} px={12} icon="translate" iconSize={16} onPress={() => setText(SAMPLE)} />

@@ -1,0 +1,949 @@
+import {
+  addObservation,
+  addReport,
+  confirmClaim,
+  flagDetectedConflicts,
+  offerTask,
+  recordAIProposal,
+  resolveConflict,
+} from '../commands';
+import type { DomainEvent } from '../events';
+import { applyEvents, replay } from '../reducer';
+import {
+  DELTA_CLASSES,
+  anchorEventId,
+  classifyStatementDelta,
+  comparisonOrder,
+  detectFieldConflicts,
+  type StatementDelta,
+} from '../rules';
+import type { IncidentState } from '../state';
+import { ALEX, MIKA, NOAH, forgeEvent, makeWorld, shuffled, sosWithPeers, type World } from '../testing/fixtures';
+
+/** Synthetic statements only. ALEX is the reporter; MIKA and NOAH are responders. */
+
+function start(): { world: World; state: IncidentState } {
+  const world = makeWorld('delta');
+  return { world, state: sosWithPeers(world).state };
+}
+
+function flagged(events: readonly DomainEvent[]): DomainEvent[] {
+  return events.filter((e) => e.type === 'CONFLICT_FLAGGED');
+}
+
+/**
+ * The invariant every delta in this file is held to. A field needs verification exactly while its
+ * revision is in dispute:
+ * - a revision that is in an open contradiction, or in a proposal the conflict rule has pending,
+ *   always needs verification;
+ * - a revision that needs verification is always on a field that has an open contradiction or a
+ *   pending proposal. It may not be a member itself: the rule records one contradiction per
+ *   disagreeing value, so a second statement of an already-disputed value is in dispute without
+ *   being named in any event.
+ */
+function expectVerificationMatchesConflicts(state: IncidentState, delta: StatementDelta): void {
+  const pending = detectFieldConflicts(state);
+  const open = state.contradictions.filter((c) => c.status === 'open');
+  for (const f of delta.fields) {
+    const member =
+      open.some((c) => c.revisionIds.includes(f.revisionId)) || pending.some((p) => p.revisionIds.includes(f.revisionId));
+    const fieldDisputed = open.some((c) => c.field === f.field) || pending.some((p) => p.field === f.field);
+    if (member) expect({ revisionId: f.revisionId, needsVerification: f.needsVerification }).toEqual({ revisionId: f.revisionId, needsVerification: true });
+    if (f.needsVerification) expect({ revisionId: f.revisionId, fieldDisputed }).toEqual({ revisionId: f.revisionId, fieldDisputed: true });
+  }
+  expect(delta.needsVerification).toBe(delta.fields.some((f) => f.needsVerification));
+}
+
+function deltaOf(state: IncidentState, reportId: string): StatementDelta | null {
+  const delta = classifyStatementDelta(state, reportId);
+  if (delta) expectVerificationMatchesConflicts(state, delta);
+  return delta;
+}
+
+function allDeltas(state: IncidentState): (StatementDelta | null)[] {
+  return state.reports.map((r) => deltaOf(state, r.id));
+}
+
+function lastDelta(state: IncidentState): StatementDelta {
+  const report = state.reports[state.reports.length - 1];
+  const delta = report ? deltaOf(state, report.id) : null;
+  if (!delta) throw new Error('fixture: no report to classify');
+  return delta;
+}
+
+/** Same events in any order: same state, same deltas, same pending conflict proposals and ids. */
+function expectDeterministic(state: IncidentState, seeds: readonly number[] = [1, 2, 3, 4, 5]): void {
+  const deltas = allDeltas(state);
+  const proposals = detectFieldConflicts(state);
+  const conflictIds = state.contradictions.map((c) => c.id);
+  for (const seed of seeds) {
+    const replayed = replay(state.incidentId, shuffled(state.events, seed));
+    expect(replayed).toEqual(state);
+    expect(allDeltas(replayed)).toEqual(deltas);
+    expect(detectFieldConflicts(replayed)).toEqual(proposals);
+    expect(replayed.contradictions.map((c) => c.id)).toEqual(conflictIds);
+  }
+  const restored = replay(state.incidentId, JSON.parse(JSON.stringify(state.events)) as DomainEvent[]);
+  expect(allDeltas(restored)).toEqual(deltas);
+  expect(detectFieldConflicts(restored)).toEqual(proposals);
+}
+
+describe('same-author supersession in conflict detection', () => {
+  it('a reporter who corrects their own floor raises no CONFLICT_FLAGGED and the field follows the correction', () => {
+    const { world, state } = start();
+    const first = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' });
+    const second = addReport(first.state, world.as(ALEX), { text: 'Sorry, I am on the third floor.' });
+
+    expect(flagged(second.events)).toEqual([]);
+    expect(second.state.contradictions).toEqual([]);
+    expect(detectFieldConflicts(second.state)).toEqual([]);
+    expect(second.state.claims.floor).toMatchObject({ value: 'Third floor', tag: 'user_reported', candidates: [] });
+    // Nothing is removed: the superseded statement stays in the history.
+    expect(second.state.claims.floor.revisions.map((r) => r.value)).toEqual(['Second floor', 'Third floor']);
+
+    expect(lastDelta(second.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      duplicateOfReportId: null,
+      fields: [
+        {
+          field: 'floor',
+          class: 'correction',
+          reason: 'self_correction',
+          value: 'Third floor',
+          previousValue: 'Second floor',
+          againstRevisionId: first.state.claims.floor.revisions[0]?.id,
+          needsVerification: false,
+        },
+      ],
+    });
+  });
+
+  it('a reporter correction that a responder’s earlier agreement now disagrees with is flagged and needs verification', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'Alex is on the second floor.' }).state;
+    const corrected = addReport(s, world.as(ALEX), { text: 'Sorry, the third floor.' });
+    expect(flagged(corrected.events)).toHaveLength(1);
+    expect(lastDelta(corrected.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: true,
+      fields: [{ class: 'correction', reason: 'self_correction', needsVerification: true }],
+    });
+    // The responder's statement is now in dispute too, and both clear when the reporter resolves.
+    expect(deltaOf(corrected.state, corrected.state.reports[1]!.id)).toMatchObject({ overall: 'confirmation', needsVerification: true });
+    const resolved = resolveConflict(corrected.state, world.as(ALEX), {
+      conflictId: corrected.state.contradictions[0]!.id,
+      value: 'Third floor',
+    }).state;
+    expect(allDeltas(resolved).map((d) => d?.needsVerification)).toEqual([false, false, false]);
+    expectDeterministic(corrected.state);
+  });
+
+  it('a repeat of a value already in an open contradiction needs verification without a second flag', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'I think Alex is on the first floor.' }).state;
+    const repeat = addObservation(s, world.as(NOAH), { text: 'First floor, I agree with Mika.' });
+    expect(flagged(repeat.events)).toEqual([]);
+    expect(repeat.state.contradictions).toHaveLength(1);
+    expect(lastDelta(repeat.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+  });
+
+  it('a responder who corrects themselves is compared only by their latest statement', () => {
+    const { world, state } = start();
+    let s = addObservation(state, world.as(MIKA), { text: 'Alex is on the first floor.' }).state;
+    const corrected = addObservation(s, world.as(MIKA), { text: 'Correction: the second floor.' });
+    expect(flagged(corrected.events)).toEqual([]);
+    expect(lastDelta(corrected.state)).toMatchObject({ overall: 'correction', fields: [{ reason: 'self_correction' }] });
+
+    // Another responder is compared with that latest statement, not the superseded one.
+    s = corrected.state;
+    const agrees = addObservation(s, world.as(NOAH), { text: 'Second floor, I can see Alex.' });
+    expect(flagged(agrees.events)).toEqual([]);
+    const differs = addObservation(s, world.as(NOAH), { text: 'I think it is the first floor.' });
+    expect(flagged(differs.events)).toHaveLength(1);
+  });
+
+  it('a responder naming a different floor is a possible contradiction and is still flagged', () => {
+    const { world, state } = start();
+    const reported = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' });
+    const observed = addObservation(reported.state, world.as(MIKA), { text: 'I think Alex is on the first floor.' });
+
+    expect(flagged(observed.events)).toHaveLength(1);
+    expect(observed.state.contradictions).toHaveLength(1);
+    expect(observed.state.claims.floor).toMatchObject({ tag: 'unresolved', value: null });
+    expect(lastDelta(observed.state)).toMatchObject({
+      overall: 'possible_contradiction',
+      needsVerification: true,
+      fields: [
+        {
+          field: 'floor',
+          class: 'possible_contradiction',
+          reason: 'differs_from_other',
+          value: 'First floor',
+          previousValue: 'Second floor',
+          againstRevisionId: reported.state.claims.floor.revisions[0]?.id,
+          needsVerification: true,
+        },
+      ],
+    });
+  });
+
+  it('a statement that differs from a reporter-confirmed value is flagged even when the reporter makes it', () => {
+    const { world, state } = start();
+    const confirmed = confirmClaim(state, world.as(ALEX), { field: 'floor', value: 'Second floor' }).state;
+    const confirmation = confirmed.claims.floor.revisions[0];
+
+    for (const [actor, add] of [
+      [ALEX, addReport],
+      [MIKA, addObservation],
+    ] as const) {
+      const result = add(confirmed, world.as(actor), { text: 'It is the third floor.' });
+      expect(flagged(result.events)).toHaveLength(1);
+      expect(result.state.claims.floor.tag).toBe('unresolved');
+      expect(lastDelta(result.state)).toMatchObject({
+        overall: 'possible_contradiction',
+        needsVerification: true,
+        fields: [
+          {
+            class: 'possible_contradiction',
+            reason: 'differs_from_confirmed',
+            againstRevisionId: confirmation?.id,
+            previousValue: 'Second floor',
+            needsVerification: true,
+          },
+        ],
+      });
+    }
+  });
+
+  it('a responder who corrects themselves to agree with the reporter leaves the open contradiction open', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'I think Alex is on the first floor.' }).state;
+    expect(s.contradictions.map((c) => c.status)).toEqual(['open']);
+
+    const corrected = addObservation(s, world.as(MIKA), { text: 'My mistake, the second floor.' });
+    expect(flagged(corrected.events)).toEqual([]);
+    expect(corrected.state.contradictions.map((c) => c.status)).toEqual(['open']);
+    expect(corrected.state.claims.floor).toMatchObject({ tag: 'unresolved', value: null });
+    expect(lastDelta(corrected.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      fields: [{ reason: 'self_correction', value: 'Second floor', previousValue: 'First floor' }],
+    });
+
+    // Only the reporter's explicit event closes it.
+    const resolved = resolveConflict(corrected.state, world.as(ALEX), {
+      conflictId: corrected.state.contradictions[0]!.id,
+      value: 'Second floor',
+    }).state;
+    expect(resolved.contradictions.map((c) => c.status)).toEqual(['resolved']);
+  });
+
+  it('a responder who changes their mind to a value the reporter did not state is still flagged', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'Alex is on the second floor.' }).state;
+    const changed = addObservation(s, world.as(MIKA), { text: 'Actually the fourth floor.' });
+    expect(flagged(changed.events)).toHaveLength(1);
+    expect(lastDelta(changed.state)).toMatchObject({
+      overall: 'possible_contradiction',
+      needsVerification: true,
+      fields: [{ reason: 'differs_from_other', previousValue: 'Second floor' }],
+    });
+  });
+
+  it('a previously recorded CONFLICT_FLAGGED between one author’s statements still replays', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'I am on the third floor.' }).state;
+    expect(s.contradictions).toEqual([]);
+
+    // What a build before this change recorded: a rule flag between the reporter's own statements.
+    const [older, newer] = s.claims.floor.revisions;
+    const legacy = forgeEvent(s, world.as(ALEX), {
+      type: 'CONFLICT_FLAGGED',
+      payload: {
+        conflictId: 'conflict:floor:legacy',
+        field: 'floor',
+        revisionIds: [newer!.id, older!.id],
+        detectedBy: 'rule',
+      },
+    });
+    const after = applyEvents(s, [legacy]);
+    expect(after.notApplied).toEqual([]);
+    expect(after.contradictions).toHaveLength(1);
+    expect(after.contradictions[0]).toMatchObject({ status: 'open', revisionIds: [newer!.id, older!.id] });
+    expect(after.claims.floor).toMatchObject({ tag: 'unresolved', candidates: ['Second floor', 'Third floor'] });
+    // Same ledger, any order, same state; and the rule neither repeats nor withdraws the flag.
+    expect(replay(after.incidentId, shuffled(after.events, 11))).toEqual(after);
+    expect(detectFieldConflicts(after)).toEqual([]);
+
+    const resolved = resolveConflict(after, world.as(ALEX), { conflictId: 'conflict:floor:legacy', value: 'Third floor' }).state;
+    expect(resolved.claims.floor).toMatchObject({ value: 'Third floor', tag: 'user_confirmed' });
+  });
+});
+
+describe('movement phrasing', () => {
+  it.each([
+    ['English', 'I moved from the first floor to the second floor', 'second floor'],
+    ['Taglish', 'Lumipat ako mula first floor papunta sa second floor', 'second floor'],
+    ['Taglish, nasa ... na ako', 'Galing ako sa 1st floor, nasa 2nd floor na ako', '2nd floor'],
+    ['elided destination', "I was on the first floor, now I'm on the second", 'second'],
+  ])('%s: the destination is the floor, as a correction with reason moved', (_label, text, spanText) => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    const moved = addReport(s, world.as(ALEX), { text });
+
+    expect(flagged(moved.events)).toEqual([]);
+    expect(moved.state.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported' });
+    const revision = moved.state.claims.floor.revisions.at(-1);
+    expect(revision).toMatchObject({ extraction: 'rule', evidence: { text: spanText } });
+    expect(text.slice(revision?.evidence?.start, revision?.evidence?.end)).toBe(spanText);
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      fields: [{ field: 'floor', class: 'correction', reason: 'moved', value: 'Second floor', previousValue: 'First floor' }],
+    });
+  });
+
+  it('a movement statement with nothing earlier is new information, not a correction', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    expect(s.claims.floor.value).toBe('Second floor');
+    expect(lastDelta(s)).toMatchObject({ overall: 'new_information', fields: [{ reason: 'first_value', previousValue: null }] });
+  });
+
+  it('an explicit floor still wins over the movement rule', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), {
+      text: 'I moved from the first floor to the second floor',
+      claims: [{ field: 'floor', value: 'Fifth floor' }],
+    }).state;
+    expect(s.claims.floor.revisions.map((r) => [r.value, r.extraction])).toEqual([['Fifth floor', 'explicit']]);
+  });
+});
+
+describe('an explicit move does not conflict with an earlier statement of its origin', () => {
+  const MOVES: [label: string, text: string][] = [
+    ['English', 'I moved from the first floor to the second floor'],
+    ['Taglish', 'Lumipat ako mula first floor papunta sa second floor'],
+  ];
+
+  function beforeMove(observation: string): { world: World; state: IncidentState } {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: observation }).state;
+    return { world, state: s };
+  }
+
+  it.each(MOVES)('%s: a responder who had confirmed the origin is not contradicted by the move', (_label, text) => {
+    const { world, state } = beforeMove('I see them on the first floor');
+    expect(lastDelta(state)).toMatchObject({ overall: 'confirmation' });
+
+    const moved = addReport(state, world.as(ALEX), { text });
+    expect(flagged(moved.events)).toEqual([]);
+    expect(moved.state.contradictions).toEqual([]);
+    expect(detectFieldConflicts(moved.state)).toEqual([]);
+    expect(moved.state.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported', candidates: [] });
+    // The responder's statement is still in the history.
+    expect(moved.state.claims.floor.revisions.map((r) => r.value)).toEqual(['First floor', 'First floor', 'Second floor']);
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      fields: [{ class: 'correction', reason: 'moved', previousValue: 'First floor', needsVerification: false }],
+    });
+
+    // Any arrival order of the same events gives the same state, with no conflict to flag.
+    expectDeterministic(moved.state);
+  });
+
+  it('a contradiction opened before the move, about a third floor, stays open and nothing is withdrawn', () => {
+    const { world, state } = beforeMove('I think they are on the third floor');
+    expect(state.contradictions.map((c) => c.status)).toEqual(['open']);
+    const before = state.contradictions[0];
+
+    const moved = addReport(state, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    expect(flagged(moved.events)).toEqual([]);
+    expect(moved.state.contradictions).toEqual([before]);
+    expect(moved.state.claims.floor).toMatchObject({ tag: 'unresolved', value: null });
+    expect(moved.state.events.filter((e) => e.type === 'CONFLICT_RESOLVED')).toEqual([]);
+    // The move is still the reporter's correction, but the third floor is not explained by it.
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: true,
+      fields: [{ class: 'correction', reason: 'moved', needsVerification: true }],
+    });
+  });
+
+  it('a third floor named before the move and not yet flagged is flagged, not explained away', () => {
+    const { world, state } = start();
+    const alex = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' });
+    // Concurrent with the reporter's first statement, so no device has flagged it yet.
+    const noah = addObservation(state, world.as(NOAH), { text: 'I think it is the third floor.' });
+    const merged = replay(state.incidentId, [...alex.state.events, ...noah.events]);
+    expect(merged.contradictions).toEqual([]);
+    const moved = addReport(merged, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    expect(flagged(moved.events)).toHaveLength(1);
+    // Candidates are listed in replay order: the responder's statement came first.
+    expect(moved.state.claims.floor.candidates).toEqual(['Third floor', 'Second floor']);
+  });
+
+  it('a responder naming the origin floor after the move is flagged', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    const late = addObservation(s, world.as(MIKA), { text: 'I see them on the first floor' });
+    expect(flagged(late.events)).toHaveLength(1);
+    expect(late.state.claims.floor).toMatchObject({ tag: 'unresolved', candidates: ['Second floor', 'First floor'] });
+    expect(lastDelta(late.state)).toMatchObject({
+      overall: 'possible_contradiction',
+      needsVerification: true,
+      fields: [{ reason: 'differs_from_other', previousValue: 'Second floor' }],
+    });
+  });
+
+  it('a responder who restates the origin after the move is flagged even though they also said it before', () => {
+    const { world, state } = beforeMove('I see them on the first floor');
+    const s = addReport(state, world.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    const again = addObservation(s, world.as(MIKA), { text: 'Still the first floor from what I see' });
+    expect(flagged(again.events)).toHaveLength(1);
+  });
+
+  it('a move away from a reporter-confirmed floor is still flagged', () => {
+    const { world, state } = start();
+    const confirmed = confirmClaim(state, world.as(ALEX), { field: 'floor', value: 'First floor' }).state;
+    const moved = addReport(confirmed, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    expect(flagged(moved.events)).toHaveLength(1);
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'possible_contradiction',
+      needsVerification: true,
+      fields: [{ reason: 'differs_from_confirmed' }],
+    });
+  });
+
+  it('a responder describing a move, the requester’s or their own, states no floor', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    for (const text of [
+      // Third person: not the movement rule's business, and two floors name no single floor.
+      'Alex moved from the first floor to the second floor',
+      // First person, but it is the responder who moved, not the requester.
+      'I went from the first floor to the second floor to look for the stairs.',
+      'I was on the first floor, now I’m on the second',
+    ]) {
+      const seen = addObservation(s, world.as(MIKA), { text });
+      expect(flagged(seen.events)).toEqual([]);
+      expect(seen.state.claims.floor.revisions).toHaveLength(1);
+      expect(seen.state.claims.floor).toMatchObject({ value: 'First floor', tag: 'user_reported' });
+      expect(lastDelta(seen.state)).toMatchObject({ overall: 'not_assessed', fields: [], needsVerification: false });
+    }
+  });
+
+  it('a statement about something else moving is not the author’s move and hides no disagreement', () => {
+    const { world, state } = start();
+    const s = addObservation(state, world.as(MIKA), { text: 'Alex is on the first floor.' }).state;
+    const fire = addReport(s, world.as(ALEX), { text: 'The fire is going from the first floor to the second floor.' });
+    expect(flagged(fire.events)).toEqual([]);
+    expect(fire.state.claims.floor.revisions).toHaveLength(1);
+    expect(fire.state.claims.floor).toMatchObject({ value: 'First floor', tag: 'responder_reported' });
+    expect(lastDelta(fire.state)).toEqual({
+      reportId: fire.state.reports[1]!.id,
+      overall: 'not_assessed',
+      fields: [],
+      needsVerification: false,
+      duplicateOfReportId: null,
+    });
+  });
+
+  it('a second move keeps an earlier agreement explained', () => {
+    const { world, state } = beforeMove('I see them on the first floor');
+    const once = addReport(state, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    const twice = addReport(once.state, world.as(ALEX), { text: 'I moved from the second floor to the third floor' });
+    expect(flagged(twice.events)).toEqual([]);
+    expect(twice.state.contradictions).toEqual([]);
+    expect(twice.state.claims.floor).toMatchObject({ value: 'Third floor', tag: 'user_reported', candidates: [] });
+    expect(lastDelta(twice.state)).toMatchObject({
+      overall: 'correction',
+      needsVerification: false,
+      fields: [{ reason: 'moved', previousValue: 'Second floor' }],
+    });
+
+    // So does a self-correction after the move, and an agreement given between the two moves.
+    const corrected = addReport(once.state, world.as(ALEX), { text: 'Sorry, I meant the third floor.' });
+    expect(flagged(corrected.events)).toEqual([]);
+    expect(corrected.state.claims.floor.value).toBe('Third floor');
+    const agreed = addObservation(once.state, world.as(NOAH), { text: 'Yes, second floor now.' }).state;
+    const later = addReport(agreed, world.as(ALEX), { text: 'I moved from the second floor to the third floor' });
+    expect(flagged(later.events)).toEqual([]);
+    expect(later.state.claims.floor.value).toBe('Third floor');
+    expectDeterministic(later.state);
+    expectDeterministic(twice.state);
+  });
+
+  it('after two moves, a floor the reporter never stated and a statement made after the last move are still flagged', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the first floor.' }).state;
+    // Concurrent with the reporter's first statement, so not yet flagged: a floor Alex never states.
+    const noah = addObservation(state, world.as(NOAH), { text: 'I think it is the fifth floor.' });
+    s = replay(s.incidentId, [...s.events, ...noah.events]);
+    s = addReport(s, world.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    expect(s.contradictions.map((c) => c.status)).toEqual(['open']);
+    s = addReport(s, world.as(ALEX), { text: 'I moved from the second floor to the third floor' }).state;
+    expect(s.contradictions.map((c) => c.status)).toEqual(['open']);
+
+    const { world: w2, state: base } = beforeMove('I see them on the first floor');
+    let t = addReport(base, w2.as(ALEX), { text: 'I moved from the first floor to the second floor' }).state;
+    t = addReport(t, w2.as(ALEX), { text: 'I moved from the second floor to the third floor' }).state;
+    const late = addObservation(t, w2.as(MIKA), { text: 'They are on the second floor' });
+    expect(flagged(late.events)).toHaveLength(1);
+    expect(lastDelta(late.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+  });
+
+  it('a move whose stated origin is not what the author had said is a self-correction, not a move', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the third floor.' }).state;
+    const moved = addReport(s, world.as(ALEX), { text: 'I moved from the first floor to the second floor' });
+    expect(moved.state.claims.floor.value).toBe('Second floor');
+    expect(lastDelta(moved.state)).toMatchObject({
+      overall: 'correction',
+      fields: [{ class: 'correction', reason: 'self_correction', previousValue: 'Third floor' }],
+    });
+  });
+});
+
+describe('a responder’s own location is not the requester’s', () => {
+  it('a responder saying where they are raises no conflict and states no floor', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor of the Science Hall' }).state;
+    for (const text of ["I'm on the first floor, coming up to you", 'Nasa first floor ako, paakyat na ako']) {
+      const seen = addObservation(s, world.as(MIKA), { text });
+      expect(flagged(seen.events)).toEqual([]);
+      expect(seen.state.contradictions).toEqual([]);
+      expect(seen.state.claims.floor.revisions).toHaveLength(1);
+      expect(seen.state.claims.floor).toMatchObject({ value: 'Second floor', tag: 'user_reported', candidates: [] });
+      expect(seen.state.reports[1]).toMatchObject({ text, kind: 'observation' });
+      expect(lastDelta(seen.state)).toEqual({
+        reportId: seen.state.reports[1]!.id,
+        overall: 'not_assessed',
+        fields: [],
+        needsVerification: false,
+        duplicateOfReportId: null,
+      });
+      expectDeterministic(seen.state);
+    }
+  });
+
+  it('the same message can still say where the requester is', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor of the Science Hall' }).state;
+    const agrees = addObservation(s, world.as(MIKA), { text: "I'm on the first floor, they are on the second floor" });
+    expect(flagged(agrees.events)).toEqual([]);
+    expect(lastDelta(agrees.state)).toMatchObject({ overall: 'confirmation', fields: [{ value: 'Second floor' }] });
+
+    const differs = addObservation(s, world.as(MIKA), { text: 'I found them on the third floor' });
+    expect(flagged(differs.events)).toHaveLength(1);
+    expect(lastDelta(differs.state)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+  });
+
+  it('a responder’s own building is not claimed either, and a reporter’s first person still is', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: "I'm at Building B on the first floor" }).state;
+    expect(s.claims.building.value).toBe('Building B');
+    expect(s.claims.floor.value).toBe('First floor');
+    const seen = addObservation(s, world.as(MIKA), { text: "I'm at Building A, where are you?" });
+    expect(flagged(seen.events)).toEqual([]);
+    expect(seen.state.claims.building).toMatchObject({ value: 'Building B', tag: 'user_reported' });
+    expect(seen.state.claims.building.revisions).toHaveLength(1);
+    expect(lastDelta(seen.state)).toMatchObject({ overall: 'not_assessed', fields: [] });
+  });
+
+  it('an explicit claim filled in by the responder is still recorded', () => {
+    const { world, state } = start();
+    const seen = addObservation(state, world.as(MIKA), {
+      text: "I'm on the first floor, coming up to you",
+      claims: [{ field: 'floor', value: 'Second floor' }],
+    });
+    expect(seen.state.claims.floor.revisions.map((r) => [r.value, r.extraction])).toEqual([['Second floor', 'explicit']]);
+  });
+});
+
+describe('classifyStatementDelta', () => {
+  it('returns null for an unknown report and never the model-only class', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    expect(classifyStatementDelta(s, 'rpt-missing')).toBeNull();
+    expect(DELTA_CLASSES).toEqual([
+      'new_information',
+      'confirmation',
+      'correction',
+      'possible_contradiction',
+      'unrelated',
+      'no_meaningful_change',
+    ]);
+  });
+
+  it('the first report is new information, one entry per field it stated', () => {
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), {
+      text: 'Nasa 2nd floor ako ng Building B',
+      claims: [{ field: 'incidentType', value: 'Slip on stairs' }],
+    }).state;
+    const delta = lastDelta(s);
+    expect(delta).toMatchObject({ overall: 'new_information', needsVerification: false, duplicateOfReportId: null });
+    // The incident-creation revision of incidentType is not a statement to compare against.
+    expect(delta.fields.map((f) => [f.field, f.class, f.reason, f.againstRevisionId])).toEqual([
+      ['incidentType', 'new_information', 'first_value', null],
+      ['building', 'new_information', 'first_value', null],
+      ['floor', 'new_information', 'first_value', null],
+    ]);
+  });
+
+  it('a responder naming the same floor is a confirmation by a second source', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    const observed = addObservation(s, world.as(MIKA), { text: 'Alex is on the 2nd floor.' });
+    s = observed.state;
+    expect(flagged(observed.events)).toEqual([]);
+    expect(lastDelta(s)).toMatchObject({
+      overall: 'confirmation',
+      needsVerification: false,
+      fields: [{ class: 'confirmation', reason: 'second_source', value: 'Second floor', previousValue: 'Second floor' }],
+    });
+    // It is not a reporter confirmation: the tag stays user_reported.
+    expect(s.claims.floor.tag).toBe('user_reported');
+  });
+
+  it('a reporter restating the same floor is no meaningful change', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'Still here, 2nd floor by the stairs.' }).state;
+    expect(lastDelta(s)).toMatchObject({
+      overall: 'no_meaningful_change',
+      needsVerification: false,
+      duplicateOfReportId: null,
+      fields: [{ class: 'no_meaningful_change', reason: 'restated' }],
+    });
+  });
+
+  it('restating a confirmed value is a restatement for the reporter and a second source for a responder', () => {
+    const { world, state } = start();
+    const confirmed = confirmClaim(state, world.as(ALEX), { field: 'floor', value: 'Second floor' }).state;
+    const own = addReport(confirmed, world.as(ALEX), { text: 'second floor' }).state;
+    expect(lastDelta(own)).toMatchObject({ overall: 'no_meaningful_change', fields: [{ reason: 'restated' }] });
+    const other = addObservation(confirmed, world.as(MIKA), { text: 'second floor' }).state;
+    expect(lastDelta(other)).toMatchObject({ overall: 'confirmation', fields: [{ reason: 'second_source' }] });
+  });
+
+  it('the overall class is the highest-priority field class', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor of Building B.' }).state;
+    // Same building (confirmation), different floor (possible contradiction), new location text.
+    s = addObservation(s, world.as(MIKA), {
+      text: 'Alex is in Building B on the first floor.',
+      claims: [{ field: 'locationText', value: 'near the stairs' }],
+    }).state;
+    const delta = lastDelta(s);
+    expect(delta.fields.map((f) => [f.field, f.class])).toEqual([
+      ['building', 'confirmation'],
+      ['floor', 'possible_contradiction'],
+      ['locationText', 'new_information'],
+    ]);
+    expect(delta).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+
+    // Correction outranks new information and confirmation.
+    s = addObservation(s, world.as(MIKA), { text: 'Sorry, Building B, second floor.' }).state;
+    expect(lastDelta(s).fields.map((f) => [f.field, f.class])).toEqual([
+      ['building', 'no_meaningful_change'],
+      ['floor', 'correction'],
+    ]);
+    expect(lastDelta(s).overall).toBe('correction');
+  });
+
+  it('an AI proposal is neither classified nor compared against', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I fell near the stairs.' }).state;
+    s = recordAIProposal(s, world.as(ALEX), {
+      provider: 'synthetic-test-model',
+      reportId: s.reports[0]!.id,
+      findings: [{ field: 'floor', value: 'Fifth floor' }],
+    }).state;
+    expect(classifyStatementDelta(s, s.reports[0]!.id)).toMatchObject({ overall: 'not_assessed', fields: [] });
+
+    s = addReport(s, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    expect(lastDelta(s)).toMatchObject({
+      overall: 'new_information',
+      fields: [{ reason: 'first_value', againstRevisionId: null, previousValue: null }],
+    });
+  });
+
+  it('a statement with no extractable field is not assessed', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'Please hurry, it is getting dark.' }).state;
+    expect(lastDelta(s)).toEqual({
+      reportId: s.reports[1]!.id,
+      overall: 'not_assessed',
+      fields: [],
+      needsVerification: false,
+      duplicateOfReportId: null,
+    });
+  });
+
+  it('only an exact repeat of the author’s own earlier words is no meaningful change', () => {
+    const { world, state } = start();
+    const original = 'Nadulas ako sa hagdan, masakit paa ko at kailangan ko ng tulong';
+    let s = addReport(state, world.as(ALEX), { text: original }).state;
+    const firstId = s.reports[0]!.id;
+
+    const cases: [text: string, duplicate: boolean][] = [
+      // Case, spacing and punctuation are ignored; the words and their order are not.
+      ['  nadulas ako sa hagdan,  MASAKIT paa ko at kailangan ko ng tulong!! ', true],
+      ['Masakit paa ko, kailangan ko ng tulong', false],
+      ['nadulas ako sa hagdan masakit paa ko at kailangan ko ng tulong po', false],
+      ['kailangan ko ng tulong, masakit paa ko at nadulas ako sa hagdan', false],
+      ['tulong', false],
+    ];
+    for (const [text, duplicate] of cases) {
+      const next = addReport(s, world.as(ALEX), { text }).state;
+      expect(lastDelta(next)).toMatchObject({
+        overall: duplicate ? 'no_meaningful_change' : 'not_assessed',
+        duplicateOfReportId: duplicate ? firstId : null,
+        fields: [],
+        needsVerification: false,
+      });
+    }
+
+    // Somebody else saying the same words is not a duplicate of the reporter's statement.
+    s = addObservation(s, world.as(MIKA), { text: original }).state;
+    expect(lastDelta(s)).toMatchObject({ overall: 'not_assessed', duplicateOfReportId: null });
+    s = addObservation(s, world.as(MIKA), { text: 'On my way' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'on my way.' }).state;
+    expect(lastDelta(s)).toMatchObject({ overall: 'no_meaningful_change', duplicateOfReportId: s.reports.at(-2)?.id });
+  });
+
+  it.each([
+    ['a dropped negation', 'I am not hurt and the door is stuck', 'I am hurt'],
+    ['a subset with the opposite meaning', 'The fire is spreading, we cannot get out', 'The fire is out'],
+    ['a changed number', 'We are five people here at the back of the house', 'We are two people here at the back of the house'],
+    ['swapped roles', 'Mika has the keys, not Noah', 'Noah has the keys, not Mika'],
+  ])('%s is not a duplicate', (_label, first, second) => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: first }).state;
+    s = addReport(s, world.as(ALEX), { text: second }).state;
+    expect(lastDelta(s)).toEqual({
+      reportId: s.reports[1]!.id,
+      overall: 'not_assessed',
+      fields: [],
+      needsVerification: false,
+      duplicateOfReportId: null,
+    });
+  });
+
+  it('gives the same deltas for any arrival order of the same events', () => {
+    const { world, state } = start();
+    let s = addReport(state, world.as(ALEX), { text: 'I am on the first floor of Building B.' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'Alex is on the first floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'Lumipat ako mula first floor papunta sa second floor' }).state;
+    s = addObservation(s, world.as(NOAH), { text: 'I think it is the third floor.' }).state;
+    s = addObservation(s, world.as(NOAH), { text: 'Sorry, the second floor.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'Please hurry.' }).state;
+    s = addReport(s, world.as(ALEX), { text: 'please hurry' }).state;
+    s = confirmClaim(s, world.as(ALEX), { field: 'building', value: 'Building B' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'Looks like Building C to me.' }).state;
+
+    const expected = allDeltas(s);
+    expect(expected.map((d) => d?.overall)).toEqual([
+      'new_information',
+      'confirmation',
+      'correction',
+      'possible_contradiction',
+      'correction',
+      'not_assessed',
+      'no_meaningful_change',
+      'possible_contradiction',
+    ]);
+    expect(s.contradictions.length).toBeGreaterThan(0);
+    expectDeterministic(s, [1, 2, 3, 4, 5, 6, 7, 8]);
+    // Classifying is read-only.
+    expect(replay(s.incidentId, s.events)).toEqual(s);
+  });
+});
+
+describe('the requester’s first report is the anchor, whatever its replay position', () => {
+  /**
+   * A responder who never received the report writes with a logical clock below the report's, so
+   * the observation replays first. Built the way it happens: the observation is authored on the
+   * state before the report, and the report after one more event on the requester's device.
+   */
+  function unseen(reportText: string, observationText: string) {
+    const { world, state: sos } = start();
+    const observation = addObservation(sos, world.as(MIKA), { text: observationText });
+    const busy = offerTask(sos, world.as(ALEX), { kind: 'communicate', title: 'Call the front desk' }).state;
+    const report = addReport(busy, world.as(ALEX), { text: reportText });
+    const merged = replay(sos.incidentId, [...report.state.events, ...observation.events]);
+    const [first, second] = merged.reports;
+    // The premise: the observation is ahead of the report in replay order.
+    expect([first?.kind, second?.kind]).toEqual(['observation', 'report']);
+    expect(merged.notApplied).toEqual([]);
+    return { world, merged, observationId: first!.id, reportId: second!.id };
+  }
+
+  it.each([
+    ['floor', 'I am on the second floor.', 'She is on the first floor.', 'Second floor', 'First floor'],
+    ['building', 'I am in Building B.', 'She is in Building A.', 'Building B', 'Building A'],
+  ] as const)('%s: the observation differs from the report, not the other way round', (field, reportText, observationText, reported, observed) => {
+    const { world, merged, observationId, reportId } = unseen(reportText, observationText);
+    expect(anchorEventId(merged)).toBe(merged.reports[1]!.eventId);
+    // Replay order is untouched; only the order the rules compare in puts the anchor first.
+    expect(merged.claims[field].revisions.map((r) => r.value)).toEqual([observed, reported]);
+    expect(comparisonOrder(merged, field).map((r) => r.value)).toEqual([reported, observed]);
+    const anchorRevision = merged.claims[field].revisions[1]!;
+
+    // Nothing is flagged yet (the two devices had not met), and the rule proposes one conflict.
+    const proposals = detectFieldConflicts(merged);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ field, revisionIds: [anchorRevision.id, merged.claims[field].revisions[0]!.id] });
+
+    for (const state of [merged, flagDetectedConflicts(merged, world.as(ALEX)).state]) {
+      expect(deltaOf(state, observationId)).toMatchObject({
+        overall: 'possible_contradiction',
+        needsVerification: true,
+        fields: [
+          {
+            field,
+            class: 'possible_contradiction',
+            reason: 'differs_from_other',
+            value: observed,
+            previousValue: reported,
+            againstRevisionId: anchorRevision.id,
+            needsVerification: true,
+          },
+        ],
+      });
+      // The anchor is the first account: it is compared with nothing and is never the one that "differs".
+      expect(deltaOf(state, reportId)).toMatchObject({
+        overall: 'new_information',
+        fields: [{ field, class: 'new_information', reason: 'first_value', previousValue: null, againstRevisionId: null }],
+      });
+      expectDeterministic(state);
+    }
+    const flaggedState = flagDetectedConflicts(merged, world.as(ALEX)).state;
+    expect(flaggedState.contradictions).toEqual([expect.objectContaining({ field, status: 'open', detectedBy: 'rule' })]);
+    expect(flaggedState.claims[field]).toMatchObject({ value: null, tag: 'unresolved' });
+  });
+
+  it('an unseen observation that agrees is a confirmation of the report', () => {
+    const { merged, observationId, reportId } = unseen('I am on the second floor.', 'She is on the 2nd floor.');
+    expect(detectFieldConflicts(merged)).toEqual([]);
+    expect(deltaOf(merged, observationId)).toMatchObject({
+      overall: 'confirmation',
+      needsVerification: false,
+      fields: [{ reason: 'second_source', previousValue: 'Second floor' }],
+    });
+    expect(deltaOf(merged, reportId)).toMatchObject({ overall: 'new_information', fields: [{ reason: 'first_value' }] });
+    expectDeterministic(merged);
+  });
+
+  it('the conflict flagged is the same pair, with the same id, as when the report replays first', () => {
+    const early = unseen('I am on the second floor.', 'She is on the first floor.');
+    const proposal = detectFieldConflicts(early.merged)[0]!;
+    const anchorRevision = early.merged.claims.floor.revisions.find((r) => r.source.role === 'reporter')!;
+    const observed = early.merged.claims.floor.revisions.find((r) => r.source.role === 'responder')!;
+    expect(proposal.revisionIds).toEqual([anchorRevision.id, observed.id]);
+
+    // The ordinary order, for comparison: report first, then the observation.
+    const { world, state } = start();
+    const s = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    const seen = addObservation(s, world.as(MIKA), { text: 'She is on the first floor.' });
+    const recorded = flagged(seen.events)[0]!;
+    if (recorded.type !== 'CONFLICT_FLAGGED') throw new Error('fixture: expected a flag');
+    expect(recorded.payload.revisionIds.map((id) => seen.state.claims.floor.revisions.find((r) => r.id === id)?.source.role)).toEqual(['reporter', 'responder']);
+    expect(comparisonOrder(seen.state, 'floor')).toEqual(seen.state.claims.floor.revisions);
+  });
+
+  it('a second report by the requester is not an anchor: replay order decides', () => {
+    const { world, state } = start();
+    const anchored = addReport(state, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    // Concurrent with the requester's second report, and ahead of it in replay order.
+    const observation = addObservation(anchored, world.as(MIKA), { text: 'She is on the third floor.' });
+    const busy = offerTask(anchored, world.as(ALEX), { kind: 'communicate', title: 'Call the front desk' }).state;
+    const second = addReport(busy, world.as(ALEX), { text: 'Sorry, the third floor.' });
+    const merged = replay(state.incidentId, [...second.state.events, ...observation.events]);
+    expect(merged.reports.map((r) => r.kind)).toEqual(['report', 'observation', 'report']);
+    expect(comparisonOrder(merged, 'floor')).toEqual(merged.claims.floor.revisions);
+
+    // The observation is read against the anchor, not against the later report it happens to match.
+    expect(deltaOf(merged, merged.reports[1]!.id)).toMatchObject({
+      overall: 'possible_contradiction',
+      fields: [{ reason: 'differs_from_other', previousValue: 'Second floor' }],
+    });
+    expect(deltaOf(merged, merged.reports[2]!.id)).toMatchObject({
+      overall: 'correction',
+      fields: [{ reason: 'self_correction', previousValue: 'Second floor' }],
+    });
+    expect(deltaOf(merged, merged.reports[0]!.id)).toMatchObject({ overall: 'new_information' });
+    expectDeterministic(merged);
+  });
+
+  it('with observations but no report yet there is no anchor and replay order decides, as before', () => {
+    const { world, state } = start();
+    let s = addObservation(state, world.as(MIKA), { text: 'She is on the first floor.' }).state;
+    const second = addObservation(s, world.as(NOAH), { text: 'I think it is the second floor.' });
+    s = second.state;
+    expect(anchorEventId(s)).toBeNull();
+    expect(comparisonOrder(s, 'floor')).toEqual(s.claims.floor.revisions);
+    expect(flagged(second.events)).toHaveLength(1);
+    expect(deltaOf(s, s.reports[0]!.id)).toMatchObject({ overall: 'new_information', fields: [{ reason: 'first_value' }] });
+    expect(deltaOf(s, s.reports[1]!.id)).toMatchObject({
+      overall: 'possible_contradiction',
+      fields: [{ reason: 'differs_from_other', previousValue: 'First floor' }],
+    });
+    expectDeterministic(s);
+
+    // When the report then arrives it becomes the anchor, and both observations are read against it.
+    const reported = addReport(s, world.as(ALEX), { text: 'I am on the second floor.' }).state;
+    expect(comparisonOrder(reported, 'floor').map((r) => r.value)).toEqual(['Second floor', 'First floor', 'Second floor']);
+    expect(allDeltas(reported).map((d) => [d?.overall, d?.fields[0]?.reason])).toEqual([
+      ['possible_contradiction', 'differs_from_other'],
+      ['confirmation', 'second_source'],
+      ['new_information', 'first_value'],
+    ]);
+    expectDeterministic(reported);
+  });
+
+  it('the anchor is not moved across a confirmation the reporter had already given', () => {
+    const { world, state } = start();
+    let s = confirmClaim(state, world.as(ALEX), { field: 'floor', value: 'Second floor' }).state;
+    s = addObservation(s, world.as(MIKA), { text: 'She is on the first floor.' }).state;
+    expect(s.contradictions).toHaveLength(1);
+    const reported = addReport(s, world.as(ALEX), { text: 'I am on the second floor.' });
+    expect(flagged(reported.events)).toEqual([]);
+    expect(comparisonOrder(reported.state, 'floor').map((r) => [r.authority, r.value])).toEqual([
+      ['confirmation', 'Second floor'],
+      ['statement', 'Second floor'],
+      ['statement', 'First floor'],
+    ]);
+    // The anchor is compared with the confirmation only, never with the observation.
+    expect(lastDelta(reported.state)).toMatchObject({ overall: 'no_meaningful_change', fields: [{ reason: 'restated' }] });
+    expect(deltaOf(reported.state, reported.state.reports[0]!.id)).toMatchObject({
+      overall: 'possible_contradiction',
+      fields: [{ reason: 'differs_from_confirmed' }],
+    });
+    expectDeterministic(reported.state);
+  });
+
+  it('an observation ahead of a first report that is itself a move is read as made after it, and is flagged', () => {
+    // The anchor precedes every other statement, so the observation cannot count as an earlier
+    // statement of the floor the requester left.
+    const { world, merged, observationId, reportId } = unseen('I moved from the first floor to the second floor', 'She is on the first floor.');
+    expect(merged.claims.floor.revisions.map((r) => r.value)).toEqual(['First floor', 'Second floor']);
+    expect(detectFieldConflicts(merged)).toHaveLength(1);
+    const flaggedState = flagDetectedConflicts(merged, world.as(ALEX)).state;
+    expect(deltaOf(flaggedState, observationId)).toMatchObject({ overall: 'possible_contradiction', needsVerification: true });
+    expect(deltaOf(flaggedState, reportId)).toMatchObject({ overall: 'new_information', fields: [{ reason: 'first_value' }] });
+    expectDeterministic(flaggedState);
+  });
+});

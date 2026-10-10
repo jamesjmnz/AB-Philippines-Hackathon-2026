@@ -1,4 +1,5 @@
 export * from './Avatar';
+export * from './Backdrop';
 export * from './Banner';
 export * from './Button';
 export * from './Card';
@@ -15,3 +16,4 @@ export * from './Rule';
 export * from './Screen';
 export * from './Timeline';
 export * from './theme';
+export * from './Text';

@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePulse, usePulseActions } from '@/services/PulseProvider';
@@ -10,6 +10,7 @@ import { Banner, Icon, IconButton, LinkButton, Pill, PulseRing, Ring, colors, de
 
 import { routes } from '../nav';
 import { BRAND } from '../present';
+import { Text } from '@/ui/Text';
 
 type Phase = 'counting' | 'sending' | 'failed';
 
@@ -91,7 +92,7 @@ export function SOSScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 8 }}>
           <IconButton testID="sos-close" icon="close" label="Close without sending" onPress={() => router.back()} onCard size={40} />
         </View>
-        <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '800', letterSpacing: -1.2, color: colors.ink, marginTop: 4 }}>
+        <Text accessibilityRole="header" style={{ fontSize: 34, fontWeight: '700', letterSpacing: -0.6, color: colors.ink, marginTop: 4 }}>
           Do you need help?
         </Text>
         <Text accessibilityLiveRegion="polite" style={{ fontSize: 15, lineHeight: 21, color: colors.gray1, marginTop: 8 }}>
@@ -103,7 +104,7 @@ export function SOSScreen() {
             <PulseRing size={130} color={colors.coral} active={counting} durationMs={1600} style={{ left: 20, top: 20 }} />
             <Ring size={170} r={74} stroke={10} progress={counting ? count / total : 0} color={colors.coral} track={design.coralRingTrack} fill="#FFFFFF" durationMs={1000} ease="linear">
               <View accessible accessibilityRole="timer" accessibilityLabel={counting ? `${count} seconds until the request is saved` : 'Countdown stopped'} style={{ alignItems: 'center' }}>
-                <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 56, lineHeight: 56, fontWeight: '800', letterSpacing: -2, color: colors.coral, fontVariant: ['tabular-nums'] }}>
+                <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 56, lineHeight: 56, fontWeight: '700', letterSpacing: -0.6, color: colors.coral, fontVariant: ['tabular-nums'] }}>
                   {counting ? count : '–'}
                 </Text>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray1, marginTop: 4 }}>{counting ? 'seconds' : phase === 'sending' ? 'saving' : 'stopped'}</Text>
@@ -174,7 +175,7 @@ export function SOSScreen() {
           onPress={() => void Linking.openURL('tel:911')}
           style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Icon name="call" size={14} color={colors.coralText} />
-          <Text style={{ fontSize: 13.5, fontWeight: '600', color: colors.coralText }}>Call emergency number</Text>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.coralText }}>Call emergency number</Text>
         </Pressable>
       </ScrollView>
     </View>

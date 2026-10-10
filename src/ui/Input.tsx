@@ -1,6 +1,7 @@
-import { Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
 
 import { colors } from './theme';
+import { Text, TextInput } from './Text';
 
 type Props = {
   value: string;

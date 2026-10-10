@@ -6,13 +6,15 @@ import {
   projectForLevel,
   type Actor,
   type ClaimField,
+  type ClaimRevision,
   type DisclosureLevel,
   type DisclosurePolicy,
   type IncidentProjection,
   type IncidentState,
 } from '@/domain';
 
-import type { FactView, IncidentView, RecipientPolicyInput } from './api';
+import type { FactView, IncidentView, RecipientPolicyInput, SendFailureCode, UpdateView } from './api';
+import { analyzeWithRules } from './deltaPipeline';
 
 /** Short human reference derived from the incident id. Carries no personal data. */
 export function shortIdFor(incidentId: string): string {
@@ -50,11 +52,58 @@ export function ownerFacts(state: IncidentState, nameOf: NameOf): FactView[] {
       field,
       value: claim.value,
       tag: claim.tag,
-      by: displayed ? nameOf(displayed.source.actor) : null,
+      // A value the model read is attributed to whoever wrote the words it was read from, not to the
+      // device that ran the model.
+      by: displayed ? nameOf(saidBy(state, displayed)) : null,
       evidence: evidence && evidence.length > 0 ? evidence : null,
       protected: false,
       candidates,
     };
+  });
+}
+
+function saidBy(state: IncidentState, revision: ClaimRevision): Actor {
+  if (revision.source.kind !== 'ai_proposal') return revision.source.actor;
+  return state.reports.find((r) => r.id === revision.evidence?.reportId)?.author ?? revision.source.actor;
+}
+
+const UPDATE_PRIORITY = ['possible_contradiction', 'correction', 'new_information', 'confirmation', 'no_meaningful_change'] as const;
+
+/**
+ * How each statement after the first relates to what was known before it. The deterministic rules
+ * answer for every statement on every device; where the on-device model's assessment is on record it
+ * is shown instead, and is still only a proposal.
+ */
+export function statementUpdates(state: IncidentState, nameOf: NameOf): UpdateView[] {
+  // The requester's first report is what later statements are updates to. Replay order is not arrival
+  // order: an observation can sort ahead of a report this device received later, so position is not used.
+  const first = state.reports.find((r) => r.kind === 'report') ?? null;
+  // "Needs a check" is about now: once nothing on that field is open, the person has settled it.
+  const open = (field: ClaimField) =>
+    state.contradictions.some((c) => c.field === field && c.status === 'open') || state.questions.some((q) => q.field === field && q.status === 'open' && q.origin === 'ai');
+  return state.reports.filter((r) => r !== first).flatMap((report) => {
+    const rules = analyzeWithRules(state, report.id);
+    if (!rules) return [];
+    const assessed = [...state.assessments].reverse().find((a) => a.reportId === report.id);
+    // An assessment may add to what the rules found; it can never remove or soften it. For every field
+    // the rules read, the rules' class stands, and the overall class is the stronger of the two.
+    const ruled = new Set(rules.items.map((i) => i.field));
+    const added = (assessed?.items ?? []).filter((i) => !ruled.has(i.field));
+    const fields = [...rules.items, ...added].map((i) => ({ field: i.field, class: i.class }));
+    const strongest = UPDATE_PRIORITY.find((c) => fields.some((f) => f.class === c));
+    const contributed = added.length > 0 || (rules.overall === 'not_assessed' && assessed !== undefined);
+    const overall = strongest ?? (rules.overall !== 'not_assessed' ? rules.overall : (assessed?.overall ?? 'not_assessed'));
+    return [
+      {
+        reportId: report.id,
+        by: nameOf(report.author),
+        kind: report.kind,
+        overall,
+        basis: contributed ? ('model' as const) : ('rules' as const),
+        needsVerification: rules.items.some((i) => i.needsVerification && open(i.field)) || (assessed?.items.some((i) => i.class === 'possible_contradiction' && open(i.field)) ?? false),
+        fields,
+      },
+    ];
   });
 }
 
@@ -118,6 +167,7 @@ export interface IncidentViewInput {
   stored: SentProjection | null;
   viaName: string | null;
   pendingOutbox: number;
+  sendFailure: SendFailureCode | null;
 }
 
 /** Null when this device may not list the incident (unknown incident, or relay-only access). */
@@ -130,6 +180,7 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
     state,
     receivedViaName: input.viaName,
     pendingOutbox: input.pendingOutbox,
+    sendFailure: input.sendFailure,
   };
   if (isLocal(state.incident.reporter.deviceId)) {
     const own = state.reports.filter((r) => r.kind === 'report' && r.role === 'reporter').map((r) => r.text);
@@ -138,6 +189,7 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
       role: 'reporter',
       access: 'owner',
       facts: ownerFacts(state, nameOf),
+      updates: statementUpdates(state, nameOf),
       originalReport: own.length > 0 ? own.join('\n') : null,
       receivedViaName: null,
     };
@@ -155,6 +207,8 @@ export function buildIncidentView(input: IncidentViewInput): IncidentView | null
     role: 'responder',
     access,
     facts: projectionFacts(projection, state, nameOf),
+    // A responder sees only what the rules derive from statements this device was allowed to read.
+    updates: statementUpdates({ ...state, assessments: [] }, nameOf),
     originalReport: projectionReportText(projection),
   };
 }

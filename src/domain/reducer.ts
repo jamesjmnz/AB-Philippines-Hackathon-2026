@@ -25,6 +25,7 @@ import {
   canPrepareCapsule,
   canQueueCapsule,
   canRecordAIProposal,
+  canRecordAssessment,
   canRecordTransport,
   canReportCompletion,
   canReportProgress,
@@ -50,6 +51,8 @@ import type {
   OriginalReport,
   PacketState,
   RecipientState,
+  StatementAssessment,
+  StatementAssessmentItem,
   TimelineEntry,
 } from './state';
 import { deriveStatus } from './status';
@@ -70,6 +73,7 @@ interface Draft {
   reports: OriginalReport[];
   revisions: ClaimRevision[];
   aiFindings: AIFinding[];
+  assessments: StatementAssessment[];
   questions: ClarificationQuestion[];
   contradictions: Contradiction[];
   tasks: AssistanceTask[];
@@ -96,6 +100,7 @@ function emptyDraft(incidentId: string): Draft {
     reports: [],
     revisions: [],
     aiFindings: [],
+    assessments: [],
     questions: [],
     contradictions: [],
     tasks: [],
@@ -283,6 +288,43 @@ function applyEvent(d: Draft, e: DomainEvent): DomainErrorCode | null {
           evidence,
           confirmsRevisionId: null,
         });
+      });
+      return null;
+    }
+
+    case 'STATEMENT_ASSESSED': {
+      // Records the verdict and nothing else: no revision, no contradiction, no finding, no task.
+      const auth = canRecordAssessment(d, e.actor);
+      if (!auth.ok) return auth.code;
+      if (d.assessments.some((a) => a.id === e.payload.assessmentId)) return 'duplicate_entity';
+      const report = d.reports.find((r) => r.id === e.payload.reportId);
+      if (!report) return 'unknown_report';
+      const items: StatementAssessmentItem[] = [];
+      for (const item of e.payload.items) {
+        const againstRevisionId = item.againstRevisionId ?? null;
+        if (againstRevisionId !== null) {
+          const against = d.revisions.find((r) => r.id === againstRevisionId);
+          if (!against || against.field !== item.field || !isHumanRevision(against)) return 'unknown_revision';
+        }
+        const evidence = item.evidence ?? null;
+        items.push({
+          field: item.field,
+          class: item.class,
+          againstRevisionId,
+          evidence,
+          // A span that does not match the stored text is kept and marked, as for AI findings.
+          evidenceVerified: evidence ? report.text.slice(evidence.start, evidence.end) === evidence.text : null,
+        });
+      }
+      d.assessments.push({
+        id: e.payload.assessmentId,
+        reportId: report.id,
+        provider: e.payload.provider,
+        overall: e.payload.overall,
+        items,
+        recordedBy: e.actor,
+        eventId: e.id,
+        wallClockMs: e.clock.wallClockMs,
       });
       return null;
     }
@@ -799,6 +841,7 @@ export function replay(incidentId: string, events: readonly DomainEvent[]): Inci
     reports: d.reports,
     claims: deriveClaims(d),
     aiFindings: d.aiFindings,
+    assessments: d.assessments,
     questions: d.questions,
     contradictions: d.contradictions,
     tasks: d.tasks,

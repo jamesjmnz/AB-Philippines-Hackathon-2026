@@ -1,6 +1,6 @@
 # Product requirements
 
-Status: requirements document. No part of the product is built yet (2026-10-09). See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+Status: requirements document. As of 2026-10-10 the code for these requirements is written and unit-tested, and none of it has been verified on a physical iPhone. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for what exists and what is unverified.
 
 ## What PULSE is
 
