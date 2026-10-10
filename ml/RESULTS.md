@@ -43,7 +43,7 @@ Run under Node on the development Mac. These involve no language model and are n
 
 ### mac-baseline · rules · development
 
-Source file `benchmarks/mac-results/baseline-rules-development.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `8ffd1be`, prompt version `none`, started 2026-10-09T23:53:12.824Z.
+Source file `benchmarks/mac-results/baseline-rules-development.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `3ec7758`, prompt version `none`, started 2026-10-10T00:03:32.694Z.
 Conditions: Deterministic rules only, no model, run under Node on the development Mac.
 
 | metric | English (9 scenarios) | Taglish (9 scenarios) |
@@ -96,7 +96,7 @@ Delta confusion, Taglish:
 
 ### mac-baseline · rules · validation
 
-Source file `benchmarks/mac-results/baseline-rules-validation.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `8ffd1be`, prompt version `none`, started 2026-10-09T23:53:12.854Z.
+Source file `benchmarks/mac-results/baseline-rules-validation.json`. Mac (Node), OS v22.23.2, physical device: no. Commit `3ec7758`, prompt version `none`, started 2026-10-10T00:03:32.725Z.
 Conditions: Deterministic rules only, no model, run under Node on the development Mac.
 
 | metric | English (6 scenarios) | Taglish (6 scenarios) |
