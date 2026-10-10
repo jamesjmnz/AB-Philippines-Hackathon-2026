@@ -1,7 +1,7 @@
-import { CLAIM_FIELDS, isHumanRevision, type ClaimField, type ClaimRevision } from '../claims';
+import { CLAIM_FIELDS, type ClaimField, type ClaimRevision } from '../claims';
 import { normalizeValue } from '../primitives';
 import type { IncidentState, OriginalReport } from '../state';
-import { disputedRevisionIds, explainedByMove, movedFromValue } from './conflicts';
+import { anchorEventId, comparisonOrder, disputedRevisionIds, explainedByMove, movedFromValue } from './conflicts';
 
 /**
  * Deterministic statement delta: how one stored statement relates to what was already known when
@@ -10,7 +10,8 @@ import { disputedRevisionIds, explainedByMove, movedFromValue } from './conflict
  * for that.
  *
  * It is incremental: it looks only at the claim revisions the statement's own event created and
- * compares them with earlier human revisions of the same field in replay order. No other report's
+ * compares them with earlier human revisions of the same field in `comparisonOrder` (replay order,
+ * with the requester's first report ahead of every other statement). No other report's
  * text is read, except by the duplicate check for a statement that produced no revision at all.
  */
 
@@ -201,16 +202,21 @@ export function classifyStatementDelta(state: IncidentState, reportId: string): 
   const createdEventId = state.incident?.createdEventId ?? null;
 
   const fields: FieldDelta[] = [];
+  const anchor = anchorEventId(state);
+  const isAnchor = report.eventId === anchor;
   for (const field of CLAIM_FIELDS) {
-    const revisions = state.claims[field].revisions;
+    // Comparison order, not raw replay order: the requester's first report precedes every other
+    // statement, so an observation that replays before it is still read against it.
+    const revisions = comparisonOrder(state, field);
     let disputed: Set<string> | undefined;
     revisions.forEach((revision, index) => {
-      if (revision.source.eventId !== report.eventId || !isHumanRevision(revision)) return;
+      if (revision.source.eventId !== report.eventId) return;
       const earlier = revisions
         .slice(0, index)
-        .filter(
-          (r) => isHumanRevision(r) && r.source.eventId !== report.eventId && r.source.eventId !== createdEventId,
-        );
+        .filter((r) => r.source.eventId !== report.eventId && r.source.eventId !== createdEventId)
+        // The anchor is the first account: nobody's statement precedes it. Only a confirmation
+        // the reporter had already given can.
+        .filter((r) => !isAnchor || r.authority === 'confirmation');
       const delta = classifyRevision(state, revision, earlier);
       disputed ??= disputedRevisionIds(state, field);
       fields.push({ ...delta, needsVerification: disputed.has(revision.id) });

@@ -40,6 +40,48 @@ export function movedFromValue(state: IncidentState, revision: ClaimRevision): s
 }
 
 /**
+ * The event of the incident's anchor statement: the requester's first report. Null until there is one.
+ */
+export function anchorEventId(state: IncidentState): string | null {
+  return state.reports.find((r) => r.kind === 'report' && r.role === 'reporter')?.eventId ?? null;
+}
+
+/**
+ * The field's human revisions in the order the rules compare them.
+ *
+ * This is replay order with one exception. The requester's first report is the anchor of the
+ * incident: everybody else's statements are read against it. A responder who has not received
+ * that report writes with a logical clock that can tie with or fall below the report's, so their
+ * observation can replay before it. Position in the ledger then says nothing about which came
+ * first for the reader, so the anchor's revisions are placed ahead of every other statement that
+ * replays before them. They are never moved across a reporter confirmation: what a confirmation
+ * settled stays settled. With no report yet there is no anchor and this is replay order.
+ */
+export function comparisonOrder(state: IncidentState, field: ClaimField): ClaimRevision[] {
+  const human = state.claims[field].revisions.filter(isHumanRevision);
+  const anchor = anchorEventId(state);
+  const firstAnchor = anchor === null ? -1 : human.findIndex((r) => r.source.eventId === anchor);
+  if (firstAnchor <= 0) return human;
+  const created = state.incident?.createdEventId ?? null;
+  let from = 0;
+  for (let i = 0; i < firstAnchor; i += 1) {
+    if (human[i]?.authority === 'confirmation') from = i + 1;
+  }
+  let insertAt = -1;
+  for (let i = from; i < firstAnchor; i += 1) {
+    const r = human[i];
+    if (r && r.authority === 'statement' && r.source.eventId !== created) {
+      insertAt = i;
+      break;
+    }
+  }
+  if (insertAt < 0) return human;
+  const anchored = human.filter((r) => r.source.eventId === anchor);
+  const rest = human.filter((r) => r.source.eventId !== anchor);
+  return [...rest.slice(0, insertAt), ...anchored, ...rest.slice(insertAt)];
+}
+
+/**
  * True when the difference between `latest` (an author's current statement) and `other` (somebody
  * else's plain statement) is explained by that author having moved.
  *
@@ -49,7 +91,7 @@ export function movedFromValue(state: IncidentState, revision: ClaimRevision): s
  * or self-correction by the same author, explains the difference.
  *
  * Never explained: a confirmation, a statement made after the author's last move, and a floor
- * the author never stated or left. `sequence` is the field's human revisions in replay order.
+ * the author never stated or left. `sequence` is the field's human revisions in `comparisonOrder`.
  */
 export function explainedByMove(
   state: IncidentState,
@@ -84,7 +126,7 @@ export function explainedByMove(
  * contradiction per disagreement.
  */
 function disagreements(state: IncidentState, field: ClaimField): { reference: ClaimRevision; other: ClaimRevision }[] {
-  const human = state.claims[field].revisions.filter(isHumanRevision);
+  const human = comparisonOrder(state, field);
   const leading = leadingRevision(human);
   if (!leading) return [];
   const reference = leading.revision;

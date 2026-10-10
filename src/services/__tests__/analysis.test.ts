@@ -910,19 +910,11 @@ describe('an assessment forged by a responder', () => {
 
 describe('a responder names a different floor without ever having received the report', () => {
   /**
-   * DEFECT (not fixed here; tests only). With the default disclosure policy an `authorized` responder
-   * is not sent the requester's REPORT_ADDED event, so their observation is written with a logical
-   * clock no higher than the report's and replays ahead of it. `classifyStatementDelta`
-   * (src/domain/rules/delta.ts) compares a revision only with `revisions.slice(0, index)`, the ones
-   * before it in replay order, so on the owner's device the observation is classed as the first value
-   * (`new_information`) and the requester's own report as the possible contradiction. The report is
-   * the statement updates are measured from and has no row, so the owner's only row reads
-   * "new information" (with `needsVerification: true`, and the conflict itself is flagged correctly).
-   * `statementUpdates` (src/services/views.ts) and the recorded STATEMENT_ASSESSED take that class as is.
-   * The model stage already compares with "what else is on record" instead of position
-   * (`priorFor` in src/services/deltaPipeline.ts); the rule stage does not.
+   * A responder who never received the report writes with a logical clock that ties with it, so the
+   * observation can replay first. The requester's first report is the anchor every other statement is
+   * compared with, whatever the replay position, so the observation is still the one that differs.
    */
-  it.failing('shows the observation as a possible contradiction on the owner’s device', async () => {
+  it('shows the observation as a possible contradiction on the owner’s device', async () => {
     const model = stubAI(async () => answer());
     const net = await make({ devices: ['a', 'b'], trust: AB, perDevice: { a: { ai: model.ai } } });
     const a = dev(net, 'a');
