@@ -33,6 +33,16 @@ Last updated: 2026-10-10. At this date the largest limitation is that nothing ha
 - Structured output is non-streaming.
 - The model may refuse inputs that describe distressing situations. The app then sends the original report without AI interpretation.
 - AI output can be wrong. It is always shown as a proposal with its evidence, and a human decides.
+- Only the first 1200 characters of a statement reach the model. The whole statement is still stored and sent as written.
+- The model only copies phrases. A value it cannot copy exactly, a floor the wording rules cannot read, a place the text negates, and any phrase containing a word from a short fixed list of severity and diagnosis words are left out of the field. That list is literal, not a medical classifier: it lets "heart attack" through in a person's own words and removes "the elevator is broken" from its field.
+- The provider cannot cancel a generation in progress. After a timeout the model stays busy until the native call ends; other AI requests wait behind it, up to a ceiling of 45 seconds that is an estimate, not a measurement.
+- On phones without the text model, only floor, building, movement, and the relation between statements about those are read. Other details stay unknown, and most later messages show as "not compared".
+- The wording rules read a floor only from the writer's own location or a subjectless mention. They can still be wrong on sentences they were not written for; a wrong reading is shown with its words and is corrected by the person, not by the app.
+- A move is recognised only when the person writes it in the first person. Someone else writing that the person moved yields no floor.
+- A differing place detail from another person is raised as a question to the requester in fixed wording, at most three per incident. A differing description of what happened or how someone feels is treated as additional information, never as a disagreement.
+- "Not about this request" exists only where the model runs, and only for messages that state nothing.
+- Incident Delta analysis runs on the requester's phone only. If that phone has no text model, no device runs the model stage for that incident.
+- Accuracy on real reports is unknown. The evaluation in `ml/` uses 48 short synthetic scenarios written by the team; on-device model results are not measured yet (`ml/RESULTS.md`).
 
 ## Languages
 

@@ -30,7 +30,7 @@ Test paths are relative to `src/`. Counts are from `npx jest` on 2026-10-10.
 | Foundation | Expo SDK 57 scaffold, TypeScript strict, Router, NativeWind, ESLint, Jest | IMPLEMENTED, UNIT-TESTED, BUILT | No | P1 | `21226be`; typecheck, lint and `npm test` clean 2026-10-10; `expo-doctor` 21/21 on 2026-10-09 (not re-run since); build `fbc85457`. |
 | Foundation | EAS build profiles | IMPLEMENTED, BUILT | No | P1 | `eas.json` (`bd98790`, `5451416`). `development` built as `fbc85457`, `simulator` as `66901962`. The `preview` (offline, embedded bundle) profile has never been built. |
 | Foundation | Native build with `@react-native-ai/apple` on RN 0.86 | BUILT | No | P1 | Build `fbc85457` FINISHED; binary contains `AppleLLM` and links `FoundationModels`. Install on the iPhone 17 Pro Max FAILED (device locked). Local `expo run:ios --device` still fails (no iOS 26.2 platform component). |
-| Domain | Zod contracts, 22-event vocabulary | IMPLEMENTED, UNIT-TESTED | n/a | P2 | `domain/__tests__/schema.test.ts`; domain total 11 suites, 136 tests. |
+| Domain | Zod contracts, 23-event vocabulary | IMPLEMENTED, UNIT-TESTED | n/a | P2 | `domain/__tests__/schema.test.ts`; domain total 11 suites, 136 tests. |
 | Domain | Append-only event ledger (SQLite) | IMPLEMENTED, UNIT-TESTED | No | P2 | `storage/__tests__/sqliteRepository.test.ts`, `memoryRepository.test.ts` (2 suites, 44 tests) through `better-sqlite3` in Jest. The `expo-sqlite` driver (`storage/expoDriver.ts`) typechecks and has no test and no recorded run. |
 | Domain | Reducers and deterministic replay | IMPLEMENTED, UNIT-TESTED | n/a | P2 | `domain/__tests__/replay.test.ts`, `scenario.test.ts`. |
 | Domain | Idempotent apply, duplicate and out-of-order handling | IMPLEMENTED, UNIT-TESTED | n/a | P2 | `domain/__tests__/replay.test.ts`, `sync.test.ts`. |
@@ -51,16 +51,21 @@ Test paths are relative to `src/`. Counts are from `npx jest` on 2026-10-10.
 | Demo Lab | Simulated adapters and six scenarios | MOCKED, UNIT-TESTED | No | P3 / P7 | `demo/__tests__/demoApp.test.ts`, `memoryHub.test.ts`, `SimulatedAI.test.ts` (3 suites, 27 tests). See Mocked. |
 | Demo Lab | Persistent SIMULATED banner | IMPLEMENTED, UNIT-TESTED | No | P3 | `components/__tests__/shell.test.tsx`. Simulator, Demo mode. Known gap: sheets and dialogs use `Modal` and cover the bar. |
 | Demo Lab | Safety Session and unusual-movement sheet | MOCKED, UNIT-TESTED | No | P3 | `components/__tests__/session.test.tsx`, `shell.test.tsx`. Timer only; reads no sensor. Not looked at in the simulator. |
-| Local AI | `LocalAIService` and `CallstackAppleAIAdapter` | IMPLEMENTED, UNIT-TESTED | No | P4 | `ai/__tests__/CallstackAppleAIAdapter.test.ts` (24 tests, fake runtime). The native `AppleLLM` pod is `BUILT` (`fbc85457`). No real inference has been run. |
-| Local AI | Structured extraction with evidence-span check | IMPLEMENTED, UNIT-TESTED | No | P4 | Same suite (fake runtime). |
-| Local AI | Clarification (at most one) | IMPLEMENTED, UNIT-TESTED | No | P4 | Same suite; `services/__tests__/ai.test.ts`. |
-| Local AI | Conflict notes | IMPLEMENTED, UNIT-TESTED | No | P4 | Same suite. In the app the path runs only when text is `ready`, and no test shows it adding a flag the deterministic rules had not already raised. |
-| Local AI | Non-medical task proposals | IMPLEMENTED, UNIT-TESTED | No | P4 | Same suite (fake runtime). |
-| Local AI | Deterministic conflict rules engine | IMPLEMENTED, UNIT-TESTED | n/a | P2 / P4 | Lives in `src/domain/rules/`; `domain/__tests__/rules.test.ts`. |
-| Local AI | Embeddings for duplicate hints | IN PROGRESS | No | P4 | `compareSemanticReports` exists in the adapter and is unit-tested with fake vectors. Nothing in the app calls it, so there is no duplicate hint. |
-| Local AI | Transcription (`en-US`; `fil-PH` UNVERIFIED) | IMPLEMENTED, UNIT-TESTED | No | P4 / P8 | Adapter suite; `services/__tests__/ai.test.ts` with an injected file reader. Recording and the real file reader have never executed. |
-| Local AI | Diagnostics screen | IMPLEMENTED, UNIT-TESTED | No | P4 | `components/__tests__/screens.test.tsx` (local AI diagnostics). Not looked at in the simulator. |
-| Local AI | Text to speech readout | NOT STARTED | No | P8 | The capability matrix reports system speech; `LocalAIService` has no speech call. |
+| Local AI | `LocalAIService` and `CallstackAppleAIAdapter` | IMPLEMENTED, UNIT-TESTED | Partly (2026-10-10, iPhone 17 Pro Max, build `512bf15c`, JS from Metro: generation returned for seven output shapes; not a scored run) | P4 | `ai/__tests__/CallstackAppleAIAdapter.test.ts` (fake runtime); observations in `ml/benchmarks/device-results/DEVICE_RUNS.md`. |
+| Local AI | Phrase-only extraction with located evidence and grounding | IMPLEMENTED, UNIT-TESTED | No (the observations above used the earlier prompt) | P4 | Adapter suite, `ai/__tests__/evidence.test.ts`, `grounding.test.ts`. Real-model quality UNVERIFIED until a device run is scored (`ml/RESULTS.md`). |
+| Local AI | Incident Delta, deterministic rules (new information, confirmation, correction, possible contradiction, no change) | IMPLEMENTED, UNIT-TESTED | n/a (no model) | P4 | `domain/__tests__/delta.test.ts`, `rules.test.ts`; rules baseline on the Mac in `ml/RESULTS.md`. Untested on the older phones. |
+| Local AI | Incident Delta, model stage (`assessStatement`, staged or single call) and `STATEMENT_ASSESSED` | IMPLEMENTED, UNIT-TESTED | No | P4 | Adapter suite; `services/__tests__/deltaPipeline.test.ts`, `analysis.test.ts`; `domain/__tests__/assessment.test.ts`. |
+| Local AI | Background analysis on the owner's device, including arriving observations, with stale-result drop | IMPLEMENTED, UNIT-TESTED | No | P4 / P7 | `services/__tests__/analysis.test.ts` (in-memory radio, scripted model). |
+| Local AI | Guarded model lane: bounded queue, dedup, cache, cancellation, typed states | IMPLEMENTED, UNIT-TESTED | No | P4 | `ai/__tests__/GuardedLocalAI.test.ts`. Lane ceiling value and behaviour after a native timeout UNVERIFIED on device. |
+| Local AI | Clarification (at most one, fixed wording; the model picks the field) | IMPLEMENTED, UNIT-TESTED | No | P4 | Adapter suite; `services/__tests__/ai.test.ts`, `analysis.test.ts`. |
+| Local AI | Non-medical task proposals (fixed titles; the model picks the kind) | IMPLEMENTED, UNIT-TESTED | No | P4 | Adapter suite; `services/__tests__/analysis.test.ts`. |
+| Local AI | Deterministic conflict rules engine | IMPLEMENTED, UNIT-TESTED | n/a | P2 / P4 | Lives in `src/domain/rules/`; `domain/__tests__/rules.test.ts`, `delta.test.ts`. |
+| Local AI | Model conflict notes (`findConflicts`) | IMPLEMENTED, UNUSED | No | P4 | Replaced in the app by the statement assessment; the method remains and has no caller. |
+| Local AI | Embeddings for duplicate hints | IN PROGRESS | No | P4 | `compareSemanticReports` exists in the adapter and is unit-tested with fake vectors. Nothing in the app calls it; duplicates are detected as exact repeats by the rules. |
+| Local AI | Transcription (`en-US`; `fil-PH` UNVERIFIED) | IMPLEMENTED, UNIT-TESTED | No | P4 / P8 | Adapter suite; `services/__tests__/ai.test.ts` with an injected file reader. |
+| Local AI | Diagnostics screen: capabilities, output probe, model activity, evaluation run and export | IMPLEMENTED, UNIT-TESTED | Partly (probe and typed-text extraction used on the iPhone 17 Pro Max; evaluation run and export not yet used) | P4 | `components/__tests__/screens.test.tsx`. |
+| Local AI | Evaluation workspace `ml/`: 48 frozen scenarios, scorer, rules baseline, in-app runner | IMPLEMENTED, UNIT-TESTED | No device result | P9 | `ml/evaluation/__tests__/scoring.test.ts`, `src/eval/__tests__/runSplit.test.ts`; `npm run ml:verify`. Real-model results: none, see `ml/RESULTS.md`. |
+| Local AI | Text to speech readout | NOT STARTED | No | P8 | `LocalAIService` has no speech call. |
 | Transport | `modules/pulse-peer` (Network framework, Bonjour) | IMPLEMENTED, UNIT-TESTED, BUILT | No | P5 | `swift test`: 6 passed (frame codec only). The listener, browser and connection code is compiled in `fbc85457` and has never run. |
 | Transport | App-level receipts | IMPLEMENTED, UNIT-TESTED | No | P5 | `services/__tests__/delivery.test.ts`, `disclosure.test.ts` (in-memory radio, simulated crypto). |
 | Transport | Reconnect flush and dedupe | IMPLEMENTED, UNIT-TESTED | No | P5 | `services/__tests__/delivery.test.ts` (same doubles). |
@@ -75,7 +80,7 @@ Test paths are relative to `src/`. Counts are from `npx jest` on 2026-10-10.
 | Integration | Three-phone relay | IMPLEMENTED, UNIT-TESTED, BLOCKED | No | P7 | Jest only: `services/__tests__/relay.test.ts`. On phones: BLOCKED, see Blocked. |
 | Optional | Core Motion check-in | NOT STARTED | No | P8 | The Demo Lab Safety Session is a timer simulation and is not this feature. |
 | Release | Demo runbook rehearsed | NOT STARTED | No | P9 | — |
-| Release | Benchmarks measured | NOT STARTED | No | P9 | — |
+| Release | Benchmarks measured | IN PROGRESS | No | P9 | Rules baseline measured on the Mac (`ml/RESULTS.md`). On-device model: not measured. |
 
 Jest totals by directory (2026-10-10): `domain` 11 suites / 136 tests; `storage` 2 / 44; `components` 13 / 156; `ai` 1 / 24; `services` 9 / 41; `demo` 3 / 27; `crypto` 1 / 12; `sync` 1 / 7; `transport` 1 / 3. Total 42 / 450.
 

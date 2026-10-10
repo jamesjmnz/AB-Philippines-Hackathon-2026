@@ -57,15 +57,22 @@ The invariants that bound the design: model output is a proposal and never chang
 
 ## Verification
 
-Not yet verified. Nothing in this ADR has been built to completion or measured at the time of writing, and all model behaviour is unverified on a device. `src/domain/rules/delta.ts`, the `STATEMENT_ASSESSED` event and the `ml/` workspace are not in the repository yet.
+Updated 2026-10-10 after implementation. Model behaviour on a device is still unverified beyond the single observations logged in `ml/benchmarks/device-results/DEVICE_RUNS.md`; no scored device run exists yet.
 
-Evidence required:
+| Evidence required | Status |
+| --- | --- |
+| Jest for `classifyStatementDelta`: each class, self-correction, movement, a second source, a difference from a confirmed claim, `not_assessed` | Present: `src/domain/__tests__/delta.test.ts`, `rules.test.ts` |
+| Jest for the changed conflict rule | Present: `src/domain/__tests__/delta.test.ts` |
+| Jest showing `STATEMENT_ASSESSED` changes no claim or contradiction, collapses across runs, is absent from sent projections and is tiered restricted | Present: `src/domain/__tests__/assessment.test.ts`, `src/crypto/__tests__/capsule.test.ts` |
+| Jest showing a result is dropped when the state changed while the model ran, and that manual SOS does not depend on this path | Present: `src/services/__tests__/analysis.test.ts` (stale drop; SOS with the lane full, throwing and hanging) |
+| Frozen scenario hashes committed before the first model run, and the deterministic baseline result | Present: `ml/datasets/FROZEN.json`, `ml/benchmarks/mac-results/`, `ml/RESULTS.md` |
+| An export from the iPhone 17 Pro Max with external internet disabled, English and Taglish reported separately | **Missing.** The in-app runner exists; no file has been exported and scored. |
 
-- Jest output for `classifyStatementDelta` covering each class, self-correction, movement, a second source, a difference from a confirmed claim, and `not_assessed`.
-- Jest output for the changed conflict rule: a self-correction does not flag; different authors do; a difference from a confirmed claim does; an open contradiction stays open.
-- Jest output showing `STATEMENT_ASSESSED` changes no claim and no contradiction, that two devices assessing the same statement produce one event, and that it is absent from the summary section of a capsule.
-- Jest output showing a result is dropped when the state changed while the model ran, and that `createManualSOS` has no dependency on this path.
-- The frozen scenario hashes, committed before the first model run, and the deterministic baseline result file.
-- An export from the iPhone 17 Pro Max with external internet disabled, committed as a result file, with English and Taglish reported separately.
+Changes to the decision made during implementation, each after independent review:
 
-See [LOCAL_AI.md](../LOCAL_AI.md) and [DOMAIN_MODEL.md](../DOMAIN_MODEL.md).
+- Only the incident owner's device may record an assessment or an AI proposal. The original text allowed any participant.
+- An assessment can add to what the rules found for a statement but never replace or soften it in what is shown.
+- A different person's differing reading is not stored as the field's proposal; it is raised as a question in fixed wording.
+- "What is already known" for the model stage is everything else on record, not what precedes the statement in replay order.
+- The movement rule requires a first-person statement, and near-duplicate detection is exact repeats only.
+- Two held-out scenarios were exposed during rule changes and are excluded from held-out scoring (`ml/datasets/EXPOSED.json`).
