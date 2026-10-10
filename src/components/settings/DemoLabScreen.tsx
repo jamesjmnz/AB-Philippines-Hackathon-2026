@@ -71,6 +71,12 @@ export function DemoLabScreen() {
   const demo = snapshot.demo;
   const back = () => (router.canGoBack() ? router.back() : router.replace(routes.settings));
 
+  const replayOnboarding = async () => {
+    await actions.replayOnboarding();
+    // Leave this screen for the welcome step; the tabs would redirect there anyway once they are in front.
+    router.replace(routes.onboarding);
+  };
+
   return (
     <Enter testID="demo-lab-screen" kind="slideIn" duration={350} ease="spring" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: padBottom(insets.bottom, 44) }}>
@@ -100,6 +106,7 @@ export function DemoLabScreen() {
               </View>
               <Group>
                 <TriggerRow first testID="open-local-ai" icon="memory" label="Local AI diagnostics" onPress={() => router.push(routes.localAI)} />
+                <TriggerRow testID="replay-onboarding" icon="replay" label="Replay onboarding" onPress={() => void replayOnboarding()} />
               </Group>
             </>
           ) : (
@@ -144,6 +151,7 @@ export function DemoLabScreen() {
                   <TriggerRow testID="trigger-anomaly" icon="vibration" label="Simulate motion anomaly" onPress={() => useSafetySession.getState().openAnomaly()} />
                   <TriggerRow testID="trigger-session" icon="directions_walk" label="Safety Session" onPress={() => router.push(routes.session)} />
                   <TriggerRow testID="open-local-ai" icon="memory" label="Local AI diagnostics" onPress={() => router.push(routes.localAI)} />
+                  <TriggerRow testID="replay-onboarding" icon="replay" label="Replay onboarding" onPress={() => void replayOnboarding()} />
                 </Group>
               </View>
 

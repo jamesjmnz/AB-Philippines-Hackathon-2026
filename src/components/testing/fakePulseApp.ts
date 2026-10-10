@@ -101,6 +101,7 @@ export function createFakePulseApp(initial: Partial<PulseSnapshot> = {}): FakePu
   const listeners = new Set<() => void>();
   const impl: Omit<PulseActions, 'demo'> = {
     completeOnboarding: async () => undefined,
+    replayOnboarding: async () => undefined,
     sendSOS: async () => ({ ok: true as const, value: { incidentId: 'inc-test-0001' } }),
     addReport: async () => ({ ok: true as const, value: { reportId: 'rpt-test-0001' } }),
     analyzeReport: async () => aiUnavailable(),

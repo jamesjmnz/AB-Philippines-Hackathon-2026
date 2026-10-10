@@ -150,6 +150,8 @@ export type EvaluationOutcome =
 
 export interface PulseActions {
   completeOnboarding(input: { name: string }): Promise<void>;
+  /** Shows onboarding again. Keeps the name, identity, pairings and every request; only the flag changes. */
+  replayOnboarding(): Promise<void>;
 
   /**
    * Persists the incident and queues it for every trusted peer, then returns.
